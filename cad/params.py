@@ -16,7 +16,7 @@ PLUNGER_OUT_PAST_FLANGE = 113.0  # ESTIMATE from tape-measure photo (~9.3 in ove
 PLUNGER_IN_PAST_FLANGE = 14.0    # ESTIMATE from photos (plunger fully pushed in)
 FLANGE_DEPTH = 36.0          # ASSUMED short side of finger flange
 THUMB_PAD_THICK = 2.0        # ASSUMED
-PLUNGER_STEM_WIDTH = 22.0    # ASSUMED width of the cross-shaped stem just under the thumb pad
+PLUNGER_STEM_WIDTH = 27.5    # ASSUMED: 60 mL plunger fins are about as wide as the barrel bore
 
 # --- Tr8x2 brass nut (TYPICAL) ----------------------------------------------
 NUT_FLANGE_D = 22.0
@@ -44,3 +44,10 @@ MOTOR_BOSS_H = 2.0
 MOTOR_SHAFT_D = 5.0       # -0.012, D-flat 4.5 ±0.1 across, flat length 17 ±0.25
 MOTOR_SHAFT_LEN = 20.0    # ±1 from mounting face
 MOTOR_SCREW_THREAD_DEPTH = 3.0  # min: plate 5 mm + M3x8 -> 3 mm engagement
+
+# --- Layout of the syringe on the print head (nozzle-tip coordinates, see head_geometry.py)
+SYR_X = 54.0        # syringe axis, right of the nozzle
+SYR_Y = -6.0        # syringe axis, slightly toward the front
+LUER_Z = 5.0        # end of the syringe's Luer tip, above the nozzle tip.
+                    # Any dispensing tip longer than ~8 mm then hangs below the hot-end nozzle.
+SCREW_DY = -42.0    # lead screw axis offset from the syringe axis (toward the front)
