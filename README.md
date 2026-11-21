@@ -39,3 +39,16 @@ python -m pumpkinpi.allergen_check "Barefoot Moscato wine"   # exit code 1 = pri
 - Never home or run auto Z offset with food on the bed.
 - Frosting mode: heaters off, `M302 P1`, slow speed. STOP sends `M112`.
 - The allergen check is an aid, not a guarantee. Always read the label.
+
+## Touchscreen app
+
+```bash
+python -m pumpkinpi.server        # serves ui/ + API on http://localhost:8000
+chromium-browser --kiosk http://localhost:8000
+```
+
+- Step 1 checks each product against every guest's allergens (red / yellow / green, with sources).
+- Step 2 enables **Start piping** only when every checked product is green and the camera check says the pie is ready (Decider ≥ 0.9).
+- **STOP** sends `M112` at any time.
+- Opened without the server (for example as a static preview), the UI runs in demo mode with sample results and no printer.
+- Name path generation (single-line font → G-code) is not built yet; `/api/start` sets frosting mode and then returns 501.
