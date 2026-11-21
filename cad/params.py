@@ -34,3 +34,13 @@ M3_NUT_THICK = 2.4
 
 # --- Print fit ---------------------------------------------------------------
 CLEAR = 0.4         # general sliding clearance for PETG on the Ender 3 V3 SE
+
+# --- STEPPERONLINE NEMA 17 pancake (seller drawing, Amazon B0B93PNYCP) -------
+MOTOR_W = 42.3            # max, square body
+MOTOR_LEN = 23.0          # max body length
+MOTOR_HOLE_SPACING = 31.0 # ±0.2, 4x M3, thread depth 3.0 min
+MOTOR_BOSS_D = 22.0       # -0.05
+MOTOR_BOSS_H = 2.0
+MOTOR_SHAFT_D = 5.0       # -0.012, D-flat 4.5 ±0.1 across, flat length 17 ±0.25
+MOTOR_SHAFT_LEN = 20.0    # ±1 from mounting face
+MOTOR_SCREW_THREAD_DEPTH = 3.0  # min: plate 5 mm + M3x8 -> 3 mm engagement
