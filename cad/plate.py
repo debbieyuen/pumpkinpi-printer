@@ -1,6 +1,6 @@
 """Lay every part on one 220 x 220 mm Ender-3 V3 SE bed and check nothing overlaps.
 
-python3 cad/plate.py  -> out/plate_all.stl, out/plate_all.3mf, layout printed to the console.
+python3 cad/plate.py  -> out/plate_{A_syringe,B_accessories,all}.{stl,3mf}, layouts printed to the console.
 (fit_test.stl is NOT on this plate: print it on its own first.)
 """
 from pathlib import Path
@@ -14,14 +14,29 @@ MARGIN = 5.0
 GAP = 3.0
 
 # name, file, rotate-about-Z degrees, (x, y) of the bounding-box min corner
-LAYOUT = [
-    ("pie_locator",   "pie_locator.stl",   0,  (30, 5)),
+PLATES = {
+    # Plate A: the parts the syringe needs. Print this first.
+    "A_syringe": [
+        ("carriage",       "carriage.stl",       0,  (20, 66)),
+        ("plunger_pusher", "plunger_pusher.stl", 90, (128, 88)),
+    ],
+    # Plate B: camera, display and pie locator.
+    "B_accessories": [
+        ("pie_locator",    "pie_locator.stl",    0,  (30, 10)),
+        ("camera_post",    "camera_post.stl",    0,  (30, 110)),
+        ("camera_holder",  "camera_holder.stl",  0,  (100, 110)),
+        ("display_foot_1", "display_foot.stl",   90, (140, 110)),
+        ("display_foot_2", "display_foot.stl",   90, (140, 140)),
+    ],
+}
+PLATES["all"] = PLATES["A_syringe"][:0] + [
+    ("pie_locator",    "pie_locator.stl",    0,  (30, 5)),
     ("plunger_pusher", "plunger_pusher.stl", 90, (71, 56)),
-    ("carriage",      "carriage.stl",      0,  (5, 103)),
-    ("camera_post",   "camera_post.stl",   0,  (110, 103)),
-    ("display_foot_1", "display_foot.stl", 90, (140, 162)),
-    ("display_foot_2", "display_foot.stl", 90, (140, 189)),
-    ("camera_holder", "camera_holder.stl", 0,  (104, 162)),
+    ("carriage",       "carriage.stl",       0,  (5, 103)),
+    ("camera_post",    "camera_post.stl",    0,  (110, 103)),
+    ("display_foot_1", "display_foot.stl",   90, (140, 162)),
+    ("display_foot_2", "display_foot.stl",   90, (140, 189)),
+    ("camera_holder",  "camera_holder.stl",  0,  (104, 162)),
 ]
 
 
@@ -31,7 +46,7 @@ def footprint(m):
     return unary_union(polys).buffer(0)
 
 
-def main():
+def layout(tag, LAYOUT):
     placed, prints = [], []
     for name, fn, rot, (x, y) in LAYOUT:
         m = trimesh.load(OUT / fn)
@@ -53,13 +68,17 @@ def main():
             if fp.buffer(GAP / 2).intersects(placed[j][2].buffer(GAP / 2)):
                 print("TOO CLOSE:", n, placed[j][0]); ok = False
     print("\n".join(prints))
-    print("layout OK" if ok else "layout PROBLEM")
+    print(f"[{tag}] layout OK" if ok else f"[{tag}] layout PROBLEM")
     scene = trimesh.Scene()
     for n, m, _ in placed:
         scene.add_geometry(m, node_name=n, geom_name=n)
-    scene.export(OUT / "plate_all.3mf")
-    trimesh.util.concatenate([m for _, m, _ in placed]).export(OUT / "plate_all.stl")
+    scene.export(OUT / f"plate_{tag}.3mf")
+    trimesh.util.concatenate([m for _, m, _ in placed]).export(OUT / f"plate_{tag}.stl")
     return ok
+
+
+def main():
+    return all([layout(t, L) for t, L in PLATES.items()])
 
 
 if __name__ == "__main__":

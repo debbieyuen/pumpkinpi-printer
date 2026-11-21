@@ -48,7 +48,13 @@ def camera_post(h=110.0):
     post = box(-8, 8, 12, 24, 0, h)
     fork = box(-8, -3, 12, 24, h, h + 14).union(box(3, 8, 12, 24, h, h + 14))
     p = base.union(post).union(fork)
-    p = p.cut(cq.Workplane("YZ").workplane(offset=-10).center(18, h + 8).circle(1.7).extrude(20))
+    # teardrop pivot hole (point up) so it prints without support
+    k = 1.7 / math.sqrt(2)
+    hole = (cq.Workplane("YZ").workplane(offset=-10).center(18, h + 8).circle(1.7).extrude(20)
+            .union(cq.Workplane("YZ").workplane(offset=-10)
+                   .polyline([(18 + k, h + 8 + k), (18, h + 8 + 1.7 * math.sqrt(2)),
+                              (18 - k, h + 8 + k), (18, h + 8)]).close().extrude(20)))
+    p = p.cut(hole)
     return p
 
 

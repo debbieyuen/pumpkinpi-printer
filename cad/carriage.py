@@ -46,6 +46,16 @@ def box(x0, x1, y0, y1, z0, z1):
             .translate((x0, y0, z0)))
 
 
+def teardrop(x, y, r, z0, h):
+    """Vertical (Z) hole of radius r with a 45-degree point toward +X (print 'up')."""
+    import math
+    k = r / math.sqrt(2)
+    tip = (cq.Workplane("XY").workplane(offset=z0)
+           .polyline([(x + k, y + k), (x + r * math.sqrt(2), y), (x + k, y - k), (x, y)]).close()
+           .extrude(h))
+    return cq.Workplane("XY").workplane(offset=z0).center(x, y).circle(r).extrude(h).union(tip)
+
+
 def c_slot(r, mouth, z0, z1):
     """Cylinder r at the syringe axis plus a mouth opening toward +X."""
     return (cq.Workplane("XY").workplane(offset=z0).center(SX, SY).circle(r).extrude(z1 - z0)
@@ -77,9 +87,11 @@ def build():
     body = body.union(box(X0, MX - h + 0.01, SY - FL_HALF_Y - 7.0, SPINE_Y[0] + 0.01,
                           SHELF_Z0, TOP_Z))
     # gussets under the motor plate's outer corners -> keep clear of screws: thin side ribs
-    for gx in (X0, MX + h - 3.0):
-        body = body.union(box(gx, gx + 3.0, MY - h, SY - FL_HALF_Y - 3.0,
-                              MOTOR_PLATE_TOP, MOTOR_PLATE_TOP + 10.0))
+    # (both ribs start at X0 so they stand on the print bed; nothing floats when printed lying down)
+    body = body.union(box(X0, X0 + 3.0, MY - h, SY - FL_HALF_Y - 3.0,
+                          MOTOR_PLATE_TOP, MOTOR_PLATE_TOP + 10.0))       # rib along the head side
+    body = body.union(box(X0, MX + h, MY - h, MY - h + 3.0,
+                          MOTOR_PLATE_TOP, MOTOR_PLATE_TOP + 10.0))       # rib along the front edge
 
     # --- cuts ---
     body = body.cut(c_slot(R_BORE, SNAP_W, CLIP_Z[0] - 1, CLIP_Z[1] + 1))
@@ -89,13 +101,14 @@ def build():
     body = body.cut(c_slot(STEM_SLOT / 2, STEM_SLOT, FLANGE_Z + SLOT_H - 0.01, TOP_Z + 1))
 
     # Motor plate holes: centre boss / shaft + 4x M3
+    # Teardrop holes: the point faces +X, which is "up" when the part is printed lying down,
+    # so the hole tops print as 45-degree slopes and need no support.
     zc = MOTOR_PLATE_TOP - MOTOR_PLATE_T - 1
-    body = body.cut(cq.Workplane("XY").workplane(offset=zc).center(MX, MY).circle(11.6)
-                    .extrude(MOTOR_PLATE_T + 12))
+    body = body.cut(teardrop(MX, MY, 11.6, zc, MOTOR_PLATE_T + 12))
     s = MOTOR_HOLE_SPACING / 2
-    body = body.cut(cq.Workplane("XY").workplane(offset=zc)
-                    .pushPoints([(MX + a * s, MY + b * s) for a in (-1, 1) for b in (-1, 1)])
-                    .circle(1.75).extrude(MOTOR_PLATE_T + 2))
+    for a in (-1, 1):
+        for b in (-1, 1):
+            body = body.cut(teardrop(MX + a * s, MY + b * s, 1.75, zc, MOTOR_PLATE_T + 2))
 
     # Head screws: through holes along X + head pockets on the outer (+X) face
     for (y, z) in HOLES:

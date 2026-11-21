@@ -61,16 +61,21 @@ def assembly():
 
 
 def plate():
-    m = trimesh.load(OUT / "plate_all.stl")
-    fig = plt.figure(figsize=(9, 8)); ax = fig.add_subplot(projection="3d")
-    draw(ax, m, "#f28c28")
-    bed = trimesh.creation.box((220, 220, 0.5)); bed.apply_translation((110, 110, -0.3))
-    draw(ax, bed, "#333333", 0.25)
-    setup(ax, np.vstack([m.vertices, bed.vertices]), 55, -70, "All parts on the 220 x 220 mm bed")
-    plt.tight_layout(); fig.savefig(OUT / "plate.png", dpi=110); print(OUT / "plate.png")
+    plates = [("A_syringe", "Plate A: carriage + pusher (print first)"),
+              ("B_accessories", "Plate B: camera, display feet, pie locator")]
+    fig = plt.figure(figsize=(15, 7.5))
+    for k, (tag, title) in enumerate(plates):
+        m = trimesh.load(OUT / f"plate_{tag}.stl")
+        ax = fig.add_subplot(1, 2, k + 1, projection="3d")
+        draw(ax, m, "#f28c28")
+        bed = trimesh.creation.box((220, 220, 0.5)); bed.apply_translation((110, 110, -0.3))
+        draw(ax, bed, "#333333", 0.25)
+        setup(ax, np.vstack([m.vertices, bed.vertices]), 55, -70, title)
+    fig.suptitle("Two print plates on the 220 x 220 mm bed, no supports needed", fontsize=13, y=0.98)
+    plt.tight_layout(rect=(0, 0, 1, 0.93)); fig.savefig(OUT / "plate.png", dpi=110); print(OUT / "plate.png")
 
 
 if __name__ == "__main__":
     assembly()
-    if (OUT / "plate_all.stl").exists():
+    if (OUT / "plate_A_syringe.stl").exists():
         plate()

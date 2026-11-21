@@ -3,24 +3,28 @@
 Parametric CadQuery models for the 60 mL syringe add-on for the Creality Ender-3 V3 SE,
 plus the camera, display and pie-locator parts. All of them fit on one 220 x 220 mm plate.
 
-## Print it tonight
+## Print it tonight (no supports needed)
 
-| File | What | Time / PETG |
+Every part was sliced with automatic support detection turned on (40° threshold, stricter than
+the 30° default) and needed **zero** supports. Horizontal holes are teardrop-shaped for this reason.
+
+| SD-card file | What | Time / PETG |
 |---|---|---|
-| `out/fit_test_PETG.gcode` | Fit test: the screw holes and spine face. Print this first. | 13 min / 4 g |
-| `out/pumpkinpi_plate_PETG.gcode` | All 7 parts on one plate | 7 h 50 min / 144 g |
-| `out/plate_all.3mf` | The same plate, for opening in a slicer | |
+| `fittest.gcode` (`out/fit_test_PETG.gcode`) | Screw-hole fit test. Print first. | 13 min / 4 g |
+| `plateA.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage + plunger pusher | 3 h 52 min / 67 g |
+| `plateB.gcode` (`out/plate_B_accessories_PETG.gcode`) | Camera post + holder, 2 display feet, pie locator | 3 h 56 min / 75 g |
+| `plate.gcode` (`out/plate_all_PETG.gcode`) | Everything on one bed (optional) | 7 h 46 min / 142 g |
 
-Slicer settings: OrcaSlicer 2.5.1 with the stock Ender-3 V3 SE 0.4 profile. Generic PETG at 240 °C
-(the strings-free temp from Debbie's notes), bed at 70 °C, 0.20 mm layers, 4 walls, 5 top/bottom layers,
-40% gyroid infill, 3 mm brim, no supports. Every part prints flat in the orientation the model gives it.
+The printer only reads files in the card's top folder with names of 20 characters or fewer, using only letters and numbers.
+Slicer: OrcaSlicer 2.5.1 with the stock Ender-3 V3 SE 0.4 profile. Generic PETG at 240 °C, bed at 70 °C, 0.20 mm layers,
+4 walls, 5 top/bottom layers, 40% gyroid infill, 3 mm brim. The `.3mf` files open in a slicer.
 
 ## Parts
 
 | Part | Notes |
 |---|---|
 | `carriage` | A one-piece bracket. It bolts to the head's right side plate with the 2 stock screws. It has a lower snap clip for the barrel, a cradle for the flange and a plate for the motor. It prints lying on the face that goes against the head. |
-| `plunger_pusher` | A brass T8 nut goes into the screw hole. The thumb pad slides into the pocket from +X. |
+| `plunger_pusher` (v0.3) | A brass T8 nut goes on top. The thumb pad sits in a 3.6 mm recess that is open toward +X. It only pushes: there's no lip under the pad, so it prints without support. Keep retracts to 1 mm or less so the pad stays in the recess. It prints upside down. |
 | `pie_locator` | A 90° V for 6-inch pans. Tape it to the bed. |
 | `camera_post` + `camera_holder` | Holds the Camera Module 3 in grooves. The pivot uses an M3x20 bolt and nut. |
 | `display_foot` x2 | 18 mm slots with a 15° lean, for the 5" Touch Display 2. |
@@ -48,6 +52,7 @@ Slicer settings: OrcaSlicer 2.5.1 with the stock Ender-3 V3 SE 0.4 profile. Gene
 - These values are assumed: FLANGE_DEPTH 36, THUMB_PAD_THICK 2.0 and PLUNGER_STEM_WIDTH 27.5. The T8 nut sizes are typical values.
 - The head geometry comes from Michael Hilton's Ender-3 V3 SE model, which he describes as "somewhat accurate".
   The model puts the 2 right-side M3 holes 14.2 mm apart, center to center.
+- The plunger stroke is about 99 mm. With the 150 mm screw, about 24 mm of thread is left over at full fill. When the syringe is empty, the pusher stops about 1 mm above the coupler. The fully-in plunger length is an estimate, so don't drive the last few mm.
 - `check_fit.py` reports zero interference with the head, a dummy barrel, the flange, the motor and the coupler.
 
 ## Rebuild
