@@ -26,11 +26,39 @@ DECIDER_MODEL = os.environ.get("PUMPKINPI_DECIDER_MODEL", "pplx-decider-latest")
 RETRY_STATUS = (429, 500, 502, 503, 504)
 
 
+class _ViaProxy(httpx.HTTPTransport):
+    """Sends api.perplexity.ai calls to a credential proxy (web preview only; the key never enters the app)."""
+
+    def __init__(self, base: str):
+        super().__init__()
+        self.base = httpx.URL(base.rstrip("/") + "/")
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.perplexity.ai":
+            request.url = self.base.join(request.url.raw_path.decode().lstrip("/"))
+            request.headers["host"] = request.url.netloc.decode()
+        return super().handle_request(request)
+
+
 def make_client() -> httpx.Client:
+    """Bearer key from PERPLEXITY_API_KEY (the Pi). The hosted web preview instead gets a proxy URL + token
+    from its environment (PUMPKINPI_PROXY_URL_ENV / PUMPKINPI_PROXY_KEY_ENV name the variables)."""
     key = os.environ.get("PERPLEXITY_API_KEY")
-    if not key:
-        raise SystemExit("Set PERPLEXITY_API_KEY first (never hard-code it).")
-    return httpx.Client(headers={"Authorization": f"Bearer {key}"}, timeout=90.0)
+    if key:
+        return httpx.Client(headers={"Authorization": f"Bearer {key}"}, timeout=120.0)
+    url = os.environ.get(os.environ.get("PUMPKINPI_PROXY_URL_ENV", "CUSTOM_CRED_API_PERPLEXITY_AI_URL"))
+    tok = os.environ.get(os.environ.get("PUMPKINPI_PROXY_KEY_ENV", "CUSTOM_CRED_API_PERPLEXITY_AI_PROXY_AUTH_KEY"))
+    if url and tok:
+        return httpx.Client(headers={"x-api-key": tok}, transport=_ViaProxy(url), timeout=120.0)
+    raise SystemExit("Set PERPLEXITY_API_KEY first (never hard-code it).")
+
+
+def has_key() -> bool:
+    try:
+        make_client().close()
+        return True
+    except SystemExit:
+        return False
 
 
 def post(client: httpx.Client, url: str, body: dict, retries: int = 3) -> dict:

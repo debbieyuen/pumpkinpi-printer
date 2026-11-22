@@ -13,6 +13,19 @@ const DEMO_GUESTS = [
 // Sample mode (no Pi): real store products and labels from demo.json, and the pie drawn from your words
 // with the same shapes and single-stroke fonts as shapes.py (ui/shapes.json, from scripts/export_ui_shapes.py).
 const DIETS = [["vegan", "Vegan"], ["dairy-free", "Dairy-free"], ["gluten-free", "Gluten-free"], ["egg-free", "Egg-free"], ["low sugar", "Low sugar"]];
+// Three toppings, three syringes. Each behaves differently, so each has its own settings (toolpath.TOPPINGS);
+// these copies are only for sample mode. On the Pi they come from GET /api/toppings (incl. saved drip tests).
+const TOPS = {
+  chocolate: { label: "Melted chocolate", short: "Chocolate", tip: "small round tip", work_min: 12,
+    prep: "Melt chips gently and keep it under 120°F. The syringe isn't heated, so pipe within about 10-15 minutes.",
+    settings: { feed: 720, e_per_mm: 0.015, prime: 0.2, retract: 0.8, dwell: 1.0, gap: 1.0, lift_feed: 300, tip_offset: 0 } },
+  frosting: { label: "Frosting", short: "Frosting", tip: "small round tip", work_min: 0,
+    prep: "Room temperature, smooth, no air pockets.",
+    settings: { feed: 600, e_per_mm: 0.02, prime: 0.3, retract: 0.6, dwell: 0.5, gap: 1.5, lift_feed: 300, tip_offset: 0 } },
+  marshmallow: { label: "Melted marshmallow", short: "Marshmallow", tip: "wider round tip", work_min: 3,
+    prep: "Cool about 3 minutes after melting, then pipe right away: it sets fast and gets stringy.",
+    settings: { feed: 420, e_per_mm: 0.03, prime: 0.4, retract: 1.0, dwell: 1.5, gap: 2.0, lift_feed: 120, tip_offset: 0 } },
+};
 let SAMPLE = null, SHAPES = null;
 async function loadSample() {
   if (!SAMPLE) SAMPLE = await (await fetch("demo.json")).json();
@@ -34,49 +47,95 @@ function textStrokes(words, width, height, font) {
   return st.map((s) => s.map(([px, py]) => [(px - cx) * k, (py - cy) * k]));
 }
 const moveSt = (st, dy, k) => st.map((s) => s.map(([x, y]) => [x * k, y * k + dy]));
-function strokesFor(plan) {   // mirrors shapes.strokes_for
-  const words = (plan.text || "").trim(), font = plan.font === "cursive" ? "cursive" : "print";
-  if (plan.shape === "text" || !SHAPES.shapes[plan.shape]) return textStrokes(words || "Happy", 80, font === "print" ? 24 : 30, font);
+function splitLines(s) {   // mirrors shapes.split_lines: two short lines max, whole words only
+  const words = s.split(/\s+/).filter(Boolean), M = SHAPES.max_line;
+  for (let n = words.length; n > 0; n--) {
+    const w = words.slice(0, n);
+    if (w.join(" ").length <= M) return [w.join(" ")];
+    const sp = [];
+    for (let j = 1; j < n; j++) { const x = [w.slice(0, j).join(" "), w.slice(j).join(" ")]; if (Math.max(x[0].length, x[1].length) <= M) sp.push(x); }
+    if (sp.length) return sp.reduce((a, b) => (Math.max(b[0].length, b[1].length) < Math.max(a[0].length, a[1].length) ? b : a));
+  }
+  return words.length ? [words[0].slice(0, M)] : [];
+}
+function strokesFor(plan) {   // mirrors shapes.strokes_for (incl. the cookie / cupcake shrink)
+  const k = (SHAPES.bases || {})[plan.base || "pie"] ?? 1;
+  return k === 1 ? strokesForPie(plan) : moveSt(strokesForPie(plan), 0, k);
+}
+function strokesForPie(plan) {
+  const font = plan.font === "cursive" ? "cursive" : "print", cur = font === "cursive";
+  let lines = splitLines((plan.text || "").trim());
+  const T = (s, w, h, dy) => moveSt(textStrokes(s, w, h, font), dy, 1);
+  if (plan.shape === "text" || !SHAPES.shapes[plan.shape]) {
+    if (!lines.length) lines = ["Happy"];
+    if (lines.length === 1) return textStrokes(lines[0], 80, cur ? 30 : 24, font);
+    const h = cur ? 18 : 15; return T(lines[0], 72, h, 13).concat(T(lines[1], 72, h, -13));
+  }
   const art = SHAPES.shapes[plan.shape];
-  return words ? moveSt(art, 12, 0.65).concat(moveSt(textStrokes(words, 50, font === "print" ? 10 : 13, font), -28, 1)) : art;
+  if (lines.length === 1) return moveSt(art, 12, 0.65).concat(T(lines[0], 50, cur ? 13 : 10, -28));
+  if (lines.length === 2) { const h = cur ? 11 : 9; return moveSt(art, 18, 0.5).concat(T(lines[0], 60, h, -12), T(lines[1], 52, h, -29)); }
+  return art;
 }
 // Understand the common requests locally: shape, name (quoted or a guest's), cursive, brands.
 function readWords(said, cur) {
   const c = said.toLowerCase();
-  const shape = /\b(cat|kitty|kitten)/.test(c) ? "cat" : /heart/.test(c) ? "heart" : /\bstar/.test(c) ? "star" : /smil/.test(c) ? "smiley"
-    : /pumpkin/.test(c) && !/pumpkin pie/.test(c) ? "pumpkin" : /\bleaf|\bleaves/.test(c) ? "leaf"
-    : /(only|just) (the )?(name|word|text)/.test(c) ? "text" : cur ? cur.shape : null;
+  // One picture per pie (simple pipes cleanly): if several are asked for, the last one named wins.
+  const PICS = [["cat", /\b(cat|kitty|kitten)s?\b/g], ["dog", /\b(dog|puppy|pup|doggy)s?\b/g], ["heart", /\bhearts?\b/g], ["star", /\bstars?\b/g],
+    ["smiley", /\bsmil(ey|e|ing)/g], ["pumpkin", /\bpumpkins?\b(?! pie)/g], ["leaf", /\b(leaf|leaves)\b/g]];
+  const hits = PICS.flatMap(([k, re]) => [...c.matchAll(re)].map((m) => [m.index, k])).sort((a, b) => a[0] - b[0]);
+  const picks = [...new Set(hits.map((h) => h[1]))];
+  const shape0 = hits.length ? hits[hits.length - 1][1] : null;
+  const shape = shape0 || (/(only|just) (the )?(name|word|text)/.test(c) ? "text" : cur ? cur.shape : null);
   const font = /cursive|script|handwrit/.test(c) ? "cursive" : /\b(print|block letters)\b/.test(c) ? "print" : cur ? cur.font || "print" : "print";
   const guest = (n) => state.guests.find((g) => g.name.toLowerCase() === n.toLowerCase());
-  const quoted = said.match(/["“”'‘’]([^"“”'‘’]{1,24})["“”'‘’]/);
+  const quoted = said.match(/["“”]([^"“”]{1,40})["“”]/) || said.match(/(?:^|\s)['‘]([^'‘’]{1,40})['’](?:\s|$|[.,!])/)
+    || said.match(/\b(happy thanksgiving|happy turkey day|gobble gobble|happy birthday|thank you|thankful|give thanks|love you)\b/i);
   let text = cur ? cur.text || "" : "";
   if (quoted) text = guest(quoted[1].trim())?.name || quoted[1].trim();
   else { const g = state.guests.find((g) => new RegExp(`\\b${g.name}\\b`, "i").test(said)); if (g) text = g.name; }
   if (/(no|without|drop|remove)\b.*(name|text|word)/.test(c)) text = "";
   const named = state.guests.find((g) => g.name === text);
-  return { shape: shape || (text ? "text" : "smiley"), font, text: text.slice(0, SHAPES.max_text), guest: named ? named.name : "" };
+  const lines = splitLines(text), kept = lines.join(" ");
+  const notes = [];
+  if (picks.length > 1) notes.push(`One picture per pie keeps the piping clean, so it's the ${shape}.`);
+  if (text && kept !== text.split(/\s+/).filter(Boolean).join(" ")) notes.push(`Kept the words short enough to pipe: "${kept}".`);
+  return { shape: shape || (text ? "text" : "smiley"), font, text: kept, guest: named ? named.name : "", design_note: notes.join(" ") };
 }
-function samplePlan(said, cur) {
+function samplePlan(said, cur, keepBase) {
   const d = readWords(said, cur), c = said.toLowerCase();
   const keys = [/hershey/.test(c) ? "hersheys" : cur && cur.ingredients.includes(SAMPLE.products.hersheys.ingredient) && !/enjoy life/.test(c) ? "hersheys" : "enjoy", "clover"];
   if (/m\s*&\s*m|\bm and m|\bmms\b|m&amp;m/.test(c) || (cur && cur.ingredients.includes(SAMPLE.products.mms.ingredient) && !/(no|without) m/.test(c))) keys.push("mms");
   // "bake a pumpkin pie ..." -> the whole pie (crust, filling) as store products, then the topping.
-  const pie = /\bpie\b|\bbake\b/.test(c) || !!(cur && cur.pie);
+  const base = /cookie/.test(c) ? "cookie" : /cupcake/.test(c) ? "cupcake" : /\bcake\b/.test(c) ? "cake" : cur ? cur.base || "pie" : "pie";
+  const pie = base === "pie" && (/\bpie\b/.test(c) || !!(cur && cur.pie));
   if (pie) keys.unshift(...SAMPLE.pie.keys);
+  const tt = state.toppingType;
+  if (tt !== "chocolate") keys.splice(keys.indexOf(keys.find((k) => k === "hersheys" || k === "enjoy")), 1);
+  keys.splice(keys.indexOf("clover"), 1);   // melted chips need no cream
   const prods = keys.map((k) => SAMPLE.products[k]);
+  // Sample mode has no store label for these, so they stay "check the label" (the Pi looks up real products).
+  if (tt === "frosting") prods.unshift({ ingredient: "vanilla frosting (pick a brand)", brand: "", product: "vanilla frosting", probs: {}, diet: {}, sources: [] });
+  if (tt === "marshmallow") prods.unshift({ ingredient: "marshmallows (contain gelatin)", brand: "", product: "marshmallows", probs: {}, diet: {}, sources: [] });
+  const STEPS = {
+    chocolate: ["Topping: melt the chips in 20-second bursts, stirring, until smooth (under 120°F).", "Topping: spoon into the syringe and pipe within about 10-15 minutes."],
+    frosting: ["Topping: bring the frosting to room temperature and stir out air bubbles.", "Topping: spoon into the syringe."],
+    marshmallow: ["Topping: melt the marshmallows with a few drops of water, 15 seconds at a time.", "Topping: cool about 3 minutes, fill the syringe and pipe right away."],
+  };
   const notes = [SAMPLE.plan.allergy_notes];
   if (pie) notes.push("Low sugar for Dad and Mom: the Libby's recipe uses 3/4 cup sugar; many bakers cut it to 1/2 cup. Pillsbury crusts are made with lard (not vegan).");
   if (keys.includes("hersheys")) notes.unshift("Hershey's chips list natural flavor, so PumpkinPi asks you to check the label; Enjoy Life is the nut-free-facility swap.");
   if (keys.includes("mms")) notes.unshift("M&M's Milk Chocolate says \"May contain peanuts\": not for Debbie.");
-  const shapeName = { cat: "cat", heart: "heart", star: "star", smiley: "smiley", pumpkin: "pumpkin", leaf: "leaf", text: "name" }[d.shape];
+  const shapeName = { cat: "cat", dog: "dog", heart: "heart", star: "star", smiley: "smiley", pumpkin: "pumpkin", leaf: "leaf", text: "name" }[d.shape];
   return { ...SAMPLE.plan, ...d, ingredients: prods.map((p) => p.ingredient), products: prods,
-    pie, topping: pie ? `Pumpkin pie + ${SAMPLE.plan.topping.toLowerCase()}` : SAMPLE.plan.topping, sources: pie ? [...SAMPLE.pie.sources, ...(SAMPLE.plan.sources || [])] : SAMPLE.plan.sources,
-    recipe: [...(pie ? SAMPLE.pie.recipe : []), ...SAMPLE.plan.recipe, ...(keys.includes("mms") ? ["Topping: press M&M's around the edge after piping."] : [])],
-    allergy_notes: notes.join(" "), caption: `${pie ? "A pumpkin pie with a" : "A"} chocolate ${shapeName}${d.text ? ` for ${d.text}` : ""}${d.font === "cursive" ? " in cursive" : ""}` };
+    topping_type: state.toppingType, pie, base: keepBase || base, makes: base !== "pie" ? `${base[0].toUpperCase()}${base.slice(1)} topping` : "", topping: pie ? `Pumpkin pie + ${TOPS[tt].label.toLowerCase()}` : TOPS[tt].label, sources: pie ? [...SAMPLE.pie.sources, ...(SAMPLE.plan.sources || [])] : SAMPLE.plan.sources,
+    recipe: [...(pie ? SAMPLE.pie.recipe : []), ...STEPS[tt], ...(keys.includes("mms") ? ["Topping: press M&M's around the edge after piping."] : [])],
+    allergy_notes: notes.join(" "), caption: `${pie ? "A pumpkin pie with a" : "A"} ${TOPS[state.toppingType].short.toLowerCase()} ${shapeName}${d.text ? ` for ${d.text}` : ""}${d.font === "cursive" ? " in cursive" : ""}` };
 }
 
 const state = { live: false, everLive: false, guests: DEMO_GUESTS, plan: null, strokes: [], checks: {},
-  ready: 0, busy: false, open: null, job: false, photo: null, diets: [], scan: [], guide: null, openWatch: null };
+  ready: 0, busy: false, open: null, job: false, photo: null, diets: [], scan: [], guide: null, openWatch: null,
+  toppingType: "chocolate", layers: [], addLayer: false, loaded: null, workEnd: 0, tops: TOPS, drip: null };
+const topOf = () => state.plan?.topping_type || state.toppingType;
 
 const verdict = (p) => (p >= 0.7 ? "red" : p <= 0.1 ? "green" : "yellow");
 const toColor = { found: "red", unsure: "yellow", safe: "green" };
@@ -84,11 +143,16 @@ const label = { red: "Allergen", yellow: "Check label", green: "Safe", wait: "Ch
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let note = "";  // last event message; shown in the bottom bar
-function log(msg) { note = msg; $("why").textContent = msg; }
+// Printer/stop messages pop up briefly above the Send button (no permanent status line).
+let note = "", toastTimer = null;
+function log(msg) {
+  note = msg; const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+}
 
+const API = (window.API_BASE && !/^__PORT/.test(window.API_BASE)) ? window.API_BASE.replace(/\/$/, "") : "";
 async function api(path, body) {
-  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const r = await fetch(API + path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(m); }
   return r;
 }
@@ -100,7 +164,7 @@ async function refreshStatus() {
   let printer = false;
   try {
     const s = await apiJson("/api/status");
-    state.live = state.everLive = true; state.guests = s.guests; printer = !!s.printer;
+    state.live = state.everLive = true; state.guests = s.guests; printer = !!s.printer; state.noCamera = s.camera === false;
   } catch {
     // Never fall back to sample "Safe" results once the real Pi server has been seen.
     if (!state.everLive) state.live = false;
@@ -117,7 +181,7 @@ $("skipPrinter").onclick = () => { state.skipPrinter = true; $("noPrinter").hidd
 
 // ---------- screens ----------
 // The top box asks for a new idea on Recipe/Camera ("Make"), and for a change on Design ("Update").
-const PH = { make: "What should we pipe on the pie?", change: "Change the design, e.g. just a heart, no name" };
+const PH = { make: "Ask anything about food, or what to make", change: "Change the design, e.g. just a heart, no name" };
 let boxMode = "make";
 function setBox(mode) {
   if (mode === boxMode) return;
@@ -144,7 +208,7 @@ function show(view) {
 // Live Pi camera preview (MJPEG). Closing the <img> stream lets the Pi stop the camera.
 function liveCamera(on) {
   const img = $("camImg");
-  if (on && !state.live) {   // no Pi server: show a drawn sample frame so the screen can be tried anywhere
+  if (on && (!state.live || state.noCamera)) {   // no Pi server: show a drawn sample frame so the screen can be tried anywhere
     img.src = "sample-camera.jpg"; img.hidden = false; $("liveTag").hidden = false; $("liveTag").textContent = "Sample"; $("camEmpty").hidden = true;
     return;
   }
@@ -157,7 +221,7 @@ function liveCamera(on) {
   $("camEmpty").textContent = "Starting camera…";
   img.onload = () => { img.hidden = false; $("liveTag").hidden = false; $("camEmpty").hidden = true; };
   img.onerror = () => { delete img.dataset.live; img.hidden = true; $("liveTag").hidden = true; $("camEmpty").hidden = false; $("camEmpty").textContent = "Camera not available. Check the ribbon cable."; };
-  img.src = `/api/camera.mjpg?t=${Date.now()}`;
+  img.src = `${API}/api/camera.mjpg?t=${Date.now()}`;
 }
 document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".tab"); if (t) show(t.dataset.v); };
 
@@ -165,15 +229,23 @@ document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".
 async function ask() {
   const prompt = (boxMode === "make" ? $("prompt").value : state.prompt || "").trim();
   if (!prompt || state.busy) return;
+  const layering = state.addLayer && !!state.plan, before = state.plan, beforeStrokes = state.strokes;
   state.prompt = prompt; state.change = "";
-  state.busy = true; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
+  const prev = { plan: state.plan, strokes: state.strokes, path: state.path, checks: state.checks, ready: state.ready };
+  state.busy = true; state.answer = null; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
   show("recipe"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
   renderRecipe(); updateGate();
   try {
     let res;
-    if (state.live) res = await apiJson("/api/design", { prompt, diets: state.diets });
-    else { await sleep(1200); await loadSample(); const plan = samplePlan(prompt, null); res = { plan, strokes: strokesFor(plan) }; }
+    if (state.live) res = await apiJson("/api/design", { prompt, diets: state.diets, topping_type: state.toppingType, add_layer: layering });
+    else {
+      await sleep(1200); await loadSample(); const plan = samplePlan(prompt, null, layering ? before.base : null);
+      res = { plan, strokes: strokesFor(plan),
+        layers: layering ? [...state.layers, { topping_type: before.topping_type || "chocolate", strokes: beforeStrokes }] : [] };
+    }
+    if (res.question) { Object.assign(state, prev); showAnswer(res.question); return; }
+    state.addLayer = false;
     applyDesign(res);
     await checkMissing();
   } catch (e) {
@@ -185,10 +257,18 @@ async function ask() {
   }
 }
 
+// A question ("what does free-range mean?"): cited answer card on the Recipe screen; the design stays.
+function showAnswer(q) {
+  state.answer = q; window.Pie3D?.thinking(false); drawPreview(); renderRecipe();
+}
 // Show a design. res.strokes is the path read back from the real G-code (exact), res.path its length/time.
 function applyDesign(res) {
   const sameTopping = state.plan && JSON.stringify(state.plan.ingredients) === JSON.stringify(res.plan.ingredients);
+  state.answer = res.plan.answer ? { answer: res.plan.answer, sources: res.plan.sources } : null;
   state.plan = res.plan; state.strokes = res.strokes; state.path = res.path || null;
+  if (res.layers) state.layers = res.layers;
+  if (res.plan.topping_type) state.toppingType = res.plan.topping_type;
+  renderDiets(); renderLoad();
   state.scan = res.scan || (state.demo ? state.demo.scan || [] : []);
   if (!sameTopping) { state.guide = null; loadGuide(); }
   if (res.plan.text) state.name = res.plan.text;
@@ -196,12 +276,10 @@ function applyDesign(res) {
 }
 async function checkMissing() {
   const todo = state.plan.ingredients.filter((i) => !state.checks[i]);
-  if (todo.length) log(`Checking ${todo.length} ingredient${todo.length > 1 ? "s" : ""}…`);
   for (const ing of todo) await check(ing);
-  log(allSafe() ? "All ingredients safe. Tap Start Designing." : "An ingredient needs a check.");
 }
 
-// Allergy watch: cited hidden-name lists + where THESE ingredients hide nuts (Agent API, allergy sites only).
+// Allergies and Dietary Restrictions: cited hidden-name lists + where THESE ingredients hide nuts (Agent API, allergy sites only).
 async function loadGuide() {
   const plan = state.plan;
   try {
@@ -211,19 +289,20 @@ async function loadGuide() {
 }
 
 // ---------- Design changes: quick buttons (instant) or words ("just a heart, no name", Agent API) ----------
-async function revise() {
-  const change = $("prompt").value.trim();
+async function revise(said) {
+  const change = (said || $("prompt").value).trim();
   if (!change || !state.plan || state.busy || state.job) return;
   state.change = change; state.busy = true;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Updating"></span>'; window.Pie3D?.thinking(true); renderDesign();
   try {
     let res;
-    if (state.live) res = await apiJson("/api/revise", { change, diets: state.diets });
+    if (state.live) res = await apiJson("/api/revise", { change, diets: state.diets, topping_type: state.toppingType });
     else {  // sample only: understand the common changes locally
       await sleep(900); await loadSample();
       const plan = samplePlan(change, state.plan);
-      res = { plan, strokes: strokesFor(plan) };
+      res = { plan, strokes: strokesFor(plan), layers: state.layers };
     }
+    if (res.question) { window.Pie3D?.thinking(false); drawPreview(); $("prompt").value = ""; state.change = ""; syncClear(); showAnswer(res.question); show("recipe"); return; }
     applyDesign(res);
     $("prompt").value = ""; state.change = ""; syncClear();
     await checkMissing();   // only new ingredients need a new check
@@ -274,10 +353,20 @@ function counts() {
 
 function renderDiets() {
   const avoid = [...new Set(state.guests.flatMap((g) => g.avoid))];
-  $("diets").innerHTML = `<span class="chip on lock" title="${esc(avoid.join(", "))}">Allergy-safe</span>` +
+  $("diets").innerHTML = `<span class="seg" role="radiogroup" aria-label="Pipe with">${Object.entries(state.tops).map(([k, t]) =>
+    `<button type="button" role="radio" class="segb ${state.toppingType === k ? "on" : ""}" data-t="${k}" aria-checked="${state.toppingType === k}">${t.short || TOPS[k].short}</button>`).join("")}</span>` +
+    `<span class="chip on lock" title="${esc(avoid.join(", "))}">Allergy-safe</span>` +
     DIETS.map(([k, t]) => `<button type="button" class="chip ${state.diets.includes(k) ? "on" : ""}" data-d="${k}" aria-pressed="${state.diets.includes(k)}">${t}</button>`).join("");
 }
 $("diets").onclick = (e) => {
+  const t = e.target.closest("[data-t]");
+  if (t && !state.busy && !state.job) {
+    if (t.dataset.t === state.toppingType) return;
+    state.toppingType = t.dataset.t; renderDiets(); renderLoad();
+    // Same design, different topping: the recipe changes (and gets re-checked), the path settings change.
+    if (state.plan && !state.addLayer && state.plan.base !== "none") revise(`Pipe it with ${state.tops[t.dataset.t].label.toLowerCase()} instead.`);
+    return;
+  }
   const b = e.target.closest("[data-d]"); if (!b || state.busy) return;
   const d = b.dataset.d;
   state.diets = state.diets.includes(d) ? state.diets.filter((x) => x !== d) : [...state.diets, d];
@@ -313,12 +402,26 @@ const favicon = (u) => `<img class="fav" alt="" src="https://www.google.com/s2/f
 // Topping colour for the hero swatch
 const swatch = (t) => /white/.test(t) ? "#f4ead6" : /milk choc/.test(t) ? "#8a5a3c" : /choc|cocoa|ganache/.test(t) ? "#4a2a18" : /cream cheese|whipped|cream/.test(t) ? "#fbf6ea" : /caramel/.test(t) ? "#c27a32" : "#e08c3e";
 
+// Cited answer for a food question (labels, safety, how-to). Sources are the Agent API's own search results.
+function answerCard(q) {
+  if (!q || !q.answer) return "";
+  const src = (q.sources || []).slice(0, 5).map((x, i) =>
+    `<a class="src" href="${esc(x.url)}" target="_blank" rel="noopener">${favicon(x.url)}<span class="num">${i + 1}</span>${esc(host(x.url))}</a>`).join("");
+  return `<div class="answer"><p>${esc(q.answer)}</p>${src ? `<div class="asrc">${src}</div>` : ""}</div>`;
+}
+
 function renderRecipe() {
   renderDiets();
   const p = state.plan;
+  if (!p && state.answer && !state.busy) {   // just a question, no design yet
+    const q = state.answer;
+    $("ingCol").innerHTML = `<h3>Answer</h3>${answerCard(q)}`;
+    $("stepCol").innerHTML = (q.recipe || []).length ? `<h3>Steps</h3><ol class="steps">${q.recipe.map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("")}</ol>` : "";
+    $("srcCol").innerHTML = ""; return;
+  }
   if (!p) {
     $("ingCol").innerHTML = state.busy ? `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity is writing the recipe…</p>`
-      : `<p class="muted big">Type what you'd like, then tap Make.</p>`;
+      : "";
     $("stepCol").innerHTML = ""; $("srcCol").innerHTML = ""; return;
   }
   const rows = p.ingredients.map((ing) => {
@@ -344,8 +447,9 @@ function renderRecipe() {
       <span class="who">${esc(title)}${sub ? `<span class="psub">${esc(sub)}</span>` : ""}<span class="tag ${c.status}">${c.status === "wait" ? "Checking" : esc(c.tag || label[c.status])}</span></span>
       <span class="sicon ${c.status}">${st}</span></button>${detail}`;
   }).join("");
-  $("ingCol").innerHTML = `<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>
-      <span><b>${esc(p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${rows}`;
+  const dnote = p.design_note ? `<p class="dnote2">${esc(p.design_note)}</p>` : "";
+  $("ingCol").innerHTML = `${state.answer ? answerCard(state.answer) : ""}<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>
+      <span><b>${esc(p.makes || p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${dnote}${rows}`;
   const steps = (p.recipe || []).map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("");
   $("stepCol").innerHTML = `<h3>Steps</h3><ol class="steps">${steps}</ol>
     ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}
@@ -368,7 +472,7 @@ function renderWatch() {
   const blocks = scan.filter((h) => h.kind === "contains"), checks = scan.filter((h) => h.kind === "check");
   const banner = blocks.length ? `<div class="scan red">${STATUS_ICON.red}<span>The recipe names <b>${esc(blocks[0].term)}</b> (${esc(blocks[0].allergen)}) in ${esc(blocks[0].where)}. Change the design.</span></div>`
     : checks.length ? `<div class="scan yellow">${STATUS_ICON.yellow}<span><b>${esc(checks[0].term)}</b> in ${esc(checks[0].where)}: check the label for ${esc(checks[0].allergen)}.</span></div>` : "";
-  if (!g) return `<h3>Allergy watch</h3>${banner}<p class="muted small by"><span class="spin sm"></span> Researching where nuts hide in this recipe…</p>`;
+  if (!g) return `<h3>Allergies and Dietary Restrictions</h3>${banner}<p class="muted small by"><span class="spin sm"></span> Researching where nuts hide in this recipe…</p>`;
   const cards = (g.allergens || []).map((c) => {
     const k = keyFor(c.allergen), open = state.openWatch === c.allergen;
     // Closed: one line + a few hidden names. Open: every risk for this recipe, the cited facts, all names.
@@ -382,7 +486,7 @@ function renderWatch() {
         <ul class="wlines">${lines}</ul>${facts}
         <span class="names">${names.map((n) => `<i>${esc(n)}</i>`).join("")}${more ? `<i class="more">+${more} more</i>` : ""}</span></span></button>`;
   }).join("");
-  return `<h3>Allergy watch</h3>${banner}<div class="watch">${cards}</div>`;
+  return `<h3>Allergies and Dietary Restrictions</h3>${banner}<div class="watch">${cards}</div>`;
 }
 $("srcCol").onclick = (e) => {
   const b = e.target.closest(".wcard"); if (!b) return;
@@ -416,7 +520,11 @@ function renderAll() { renderRecipe(); renderDesign(); }
 // ---------- preview ----------
 function drawPreview() {
   window.pieStrokes = state.strokes || [];
-  if (window.Pie3D) window.Pie3D.show(window.pieStrokes);
+  window.pieBase = state.plan?.base || "pie";
+  $("noPipe").hidden = window.pieBase !== "none";
+  window.pieCandy = /m\s*&\s*m/i.test((state.plan?.ingredients || []).join(" "));
+  window.pieTopping = topOf(); window.pieLayers = state.layers;
+  if (window.Pie3D) { window.Pie3D.setBase?.(window.pieBase, window.pieCandy); window.Pie3D.setLayers?.(state.layers); window.Pie3D.show(window.pieStrokes, window.pieTopping); }
   // 2D fallback (only visible if WebGL is unavailable). SVG y is down; strokes use +Y away from you.
   $("strokes").innerHTML = (state.strokes || []).map((s) =>
     `<polyline points="${s.map(([x, y]) => `${x.toFixed(1)},${(-y).toFixed(1)}`).join(" ")}"/>`).join("");
@@ -435,27 +543,30 @@ function reason() {
   if (block) return `Recipe names ${block.term} (${block.allergen})`;
   if (c.wait) return "Checking ingredients…";
   if (c.red || c.yellow) return "An ingredient needs a check";
+  if (state.loaded !== topOf()) return `Load the ${state.tops[topOf()].label.toLowerCase()} syringe on Camera`;
   if (state.ready < READY_AT) return document.body.dataset.view === "recipe" ? "All ingredients checked" : "Next: check the pie on Camera";
   return "Ready. Stay next to the printer.";
 }
+const noun = () => ({ cookie: "Cookie", cake: "Cake", cupcake: "Cupcake" })[state.plan?.base] || "Pie";
 // Bottom button follows the flow: Recipe -> Start Designing, Design -> Check the Pie / Send to Printer.
 function nextStep() {
   const view = document.body.dataset.view;
   if (state.job) return "stop";
   if (view === "recipe") return "design";
-  if (view === "design" && state.ready < READY_AT) return "camera";
+  if (view === "design" && (state.ready < READY_AT || state.loaded !== topOf())) return "camera";
   return "send";
 }
 function updateGate() {
-  const p = !!state.plan;
+  const p = !!state.plan && state.plan.base !== "none";
   $("dryBtn").disabled = !p || state.job;
-  const ok = p && allSafe() && state.ready >= READY_AT;
+  $("dripBtn").disabled = !!state.job || (state.drip && state.drip.phase !== "done");
+  const ok = p && allSafe() && state.ready >= READY_AT && state.loaded === topOf();
   const b = $("sendBtn"), step = nextStep();
   b.classList.toggle("stop", step === "stop");
   if (step === "stop") { b.disabled = false; b.textContent = "Stop"; return; }
-  $("why").textContent = reason();
+  $("sendBtn").title = reason();
   if (step === "design") { b.textContent = "Start Designing"; b.disabled = !p || state.busy; }
-  else if (step === "camera") { b.textContent = "Check the Pie"; b.disabled = !p || state.busy; }
+  else if (step === "camera") { b.textContent = `Check the ${noun()}`; b.disabled = !p || state.busy; }
   else { b.textContent = "Send to Printer"; b.disabled = !ok || state.busy; }
 }
 
@@ -465,14 +576,18 @@ $("readyBtn").onclick = async () => {
     if (state.live) {
       state.ready = (await apiJson("/api/ready", {})).probability;
     } else { await sleep(800); state.ready = 0.97; }
-    $("camMsg").textContent = state.ready >= READY_AT ? `Pie looks ready (${Math.round(state.ready * 100)}%).`
-      : `Not ready (${Math.round(state.ready * 100)}%). Center the pie and clear the bed.`;
+    $("camMsg").textContent = state.ready >= READY_AT ? `${noun()} looks ready (${Math.round(state.ready * 100)}%).`
+      : `Not ready (${Math.round(state.ready * 100)}%). Center the ${noun().toLowerCase()} and clear the bed.`;
   } catch (e) { state.ready = 0; $("camMsg").textContent = `Camera error: ${e.message}`; }
   updateGate();
 };
 
 async function start(dry_run) {
-  if (!state.live) { log(dry_run ? "Sample: dry run would trace the path 15 mm above the pie." : "Sample: would pipe now."); return; }
+  if (!state.live) {
+    log(dry_run ? "Sample: dry run would trace the path 15 mm above the pie." : "Sample: piped.");
+    if (!dry_run) piped();
+    return;
+  }
   try {
     const r = await apiJson("/api/start", { dry_run });
     state.job = true; updateGate();
@@ -482,13 +597,17 @@ async function start(dry_run) {
       await sleep(500);
       const j = await apiJson("/api/job");
       $("jobFill").style.width = `${j.pct ?? Math.round((100 * j.done) / Math.max(1, j.total))}%`;
-      if (j.phase === "upload") $("why").textContent = `Saving ${j.file} to the printer's SD card…`;
-      else if (j.phase === "printing") $("why").textContent = `${what} ${j.file} from the SD card. Stay next to the printer.`;
-      else if (j.phase === "streaming") $("why").textContent = `${what} over USB (no SD card). Stay next to the printer.`;
-      if (!j.running) { log(j.error ? `Stopped: ${j.error}` : `${what} done${j.file ? ` (${j.file})` : ""}.`); break; }
+      if (j.phase === "upload") log(`Saving ${j.file} to the printer's SD card…`);
+      else if (j.phase === "printing") log(`${what} ${j.file} from the SD card. Stay next to the printer.`);
+      else if (j.phase === "streaming") log(`${what} over USB (no SD card). Stay next to the printer.`);
+      if (!j.running) {
+        log(j.error ? `Stopped: ${j.error}` : `${what} done${j.file ? ` (${j.file})` : ""}.`);
+        if (!dry_run && !j.error) piped();
+        break;
+      }
     }
   } catch (e) { log(`Send refused: ${e.message}`); }
-  state.job = false; updateGate(); if (note) $("why").textContent = note;
+  state.job = false; updateGate();
 }
 $("dryBtn").onclick = () => start(true);
 
@@ -535,8 +654,103 @@ $("kbd").onclick = (e) => {
 };
 $("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); boxMode === "change" ? revise() : ask(); };
 
+
+// ---------- syringes: one per topping, swapped by hand between layers ----------
+async function loadToppings() {
+  if (!state.live) return;
+  try { const t = await apiJson("/api/toppings"); for (const k in t) state.tops[k] = { ...TOPS[k], ...t[k] }; renderLoad(); } catch {}
+}
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const setLine = (k) => { const v = state.tops[k].settings; return `Pause ${(+v.dwell).toFixed(1)} s · pull-back ${(+v.retract).toFixed(1)}`; };
+function renderLoad() {
+  const k = topOf(), t = state.tops[k], box = $("load");
+  if (!box) return;
+  const ok = state.loaded === k, left = Math.max(0, (state.workEnd - Date.now()) / 1000);
+  box.className = `load ${ok ? "ok" : ""}`;
+  box.innerHTML = ok
+    ? `<b>${esc(t.label)} loaded</b><span>${esc(setLine(k))}</span>${state.workEnd ? `<span class="${left < 120 ? "warn" : ""}">${left > 0 ? `Pipe within ${mmss(left)}` : "May be too thick now. Rewarm it."}</span>` : ""}`
+    : `<b>${state.loaded ? "Swap syringe" : "Load syringe"}: ${esc(t.label)}</b><span>${esc(t.tip)}. ${esc(t.prep)}</span><button class="btn" type="button" id="loadedBtn">Loaded</button>`;
+  $("dripSet").textContent = `${t.short || TOPS[k].short}: ${setLine(k)}`;
+}
+$("load").onclick = (e) => {
+  if (!e.target.closest("#loadedBtn")) return;
+  const k = topOf();
+  state.loaded = k; state.workEnd = state.tops[k].work_min ? Date.now() + state.tops[k].work_min * 60000 : 0;
+  renderLoad(); updateGate();
+};
+setInterval(() => { if (state.workEnd && document.body.dataset.view === "camera") renderLoad(); }, 1000);
+
+// After a topping is piped: offer the next one on the same food (chocolate first, then frosting, ...).
+function piped() {
+  const done = topOf(), box = $("more");
+  box.hidden = false;
+  box.innerHTML = `<b>${esc(state.tops[done].short || TOPS[done].short)} done.</b> Add another topping?<span class="morebtns">${Object.keys(state.tops).filter((k) => k !== done)
+    .map((k) => `<button class="btn" type="button" data-more="${k}">${esc(state.tops[k].short || TOPS[k].short)}</button>`).join("")}</span>`;
+}
+$("more").onclick = (e) => {
+  const b = e.target.closest("[data-more]"); if (!b) return;
+  state.addLayer = true; state.toppingType = b.dataset.more; $("more").hidden = true;
+  renderDiets(); show("recipe");
+  const el = $("prompt"); el.value = ""; state.prompt = "";
+  el.placeholder = `What should the ${state.tops[b.dataset.more].label.toLowerCase()} add? e.g. Debbie in cursive`;
+  syncClear(); el.focus();
+};
+
+// ---------- drip test: pipe one line, pull back with no pause, time how long it keeps oozing ----------
+let dripTick = null;
+function drawDrip() {
+  const d = state.drip, box = $("dripBox");
+  box.hidden = !d;
+  if (!d) return;
+  const k = d.topping_type, name = state.tops[k].label.toLowerCase();
+  if (d.phase === "ask") box.innerHTML = `<span>Put a plate with parchment where the food goes. It pipes one 4 cm line of ${esc(name)}.</span><button class="btn" type="button" data-drip="go">Start drip test</button><button class="btn ghost" type="button" data-drip="cancel">Cancel</button>`;
+  else if (d.phase === "piping") box.innerHTML = `<span><span class="spin sm"></span> Piping the test line…</span>`;
+  else if (d.phase === "watching") box.innerHTML = `<span>Watch the tip. Tap when it stops dripping.</span><b class="clock" id="dripClock">${(d.secs || 0).toFixed(1)} s</b><button class="btn go" type="button" data-drip="stop">Drip stopped</button>`;
+  else if (d.phase === "result") box.innerHTML = `<span>Oozed for <b>${d.seconds.toFixed(1)} s</b>. Suggested: pause ${d.suggest.dwell.toFixed(1)} s after each line${d.suggest.retract ? `, pull-back ${d.suggest.retract.toFixed(1)}` : ""}.</span><button class="btn go" type="button" data-drip="save">Save for ${esc(state.tops[k].short || TOPS[k].short)}</button><button class="btn ghost" type="button" data-drip="cancel">Don't save</button>`;
+  else if (d.phase === "error") box.innerHTML = `<span>Drip test stopped: ${esc(d.error)}</span><button class="btn ghost" type="button" data-drip="cancel">OK</button>`;
+}
+function watch(t0) {
+  clearInterval(dripTick);
+  dripTick = setInterval(() => { state.drip.secs = (Date.now() - t0) / 1000; const c = $("dripClock"); if (c) c.textContent = `${state.drip.secs.toFixed(1)} s`; }, 100);
+}
+$("dripBtn").onclick = () => { state.drip = { topping_type: topOf(), phase: "ask" }; drawDrip(); updateGate(); };
+$("dripBox").onclick = async (e) => {
+  const a = e.target.closest("[data-drip]")?.dataset.drip, d = state.drip; if (!a) return;
+  try {
+    if (a === "cancel") { clearInterval(dripTick); state.drip = null; }
+    else if (a === "go") {
+      d.phase = "piping"; drawDrip();
+      if (!state.live) { await sleep(2500); d.phase = "watching"; watch(Date.now()); }
+      else {
+        await apiJson("/api/drip-test", { topping_type: d.topping_type }); state.job = true; updateGate();
+        for (;;) {
+          await sleep(300);
+          const s = await apiJson("/api/drip-test");
+          if (s.phase === "watching") { d.phase = "watching"; watch(Date.now() - (s.now - s.t_end) * 1000); break; }
+          if (s.phase === "error") { d.phase = "error"; d.error = s.error; break; }
+        }
+        state.job = false;
+      }
+    } else if (a === "stop") {
+      clearInterval(dripTick);
+      const secs = (state.drip.secs || 0);
+      const r = state.live ? await apiJson("/api/drip-test/result", { topping_type: d.topping_type, seconds: secs })
+        : { seconds: secs, suggest: { dwell: Math.min(8, secs + 0.3), ...(secs > 3 ? { retract: state.tops[d.topping_type].settings.retract + 0.2 } : {}) } };
+      Object.assign(d, { phase: "result", seconds: r.seconds, suggest: r.suggest });
+    } else if (a === "save") {
+      const vals = { dwell: d.suggest.dwell, ...(d.suggest.retract ? { retract: d.suggest.retract } : {}) };
+      if (state.live) await apiJson("/api/toppings", { topping_type: d.topping_type, values: vals });
+      Object.assign(state.tops[d.topping_type].settings, vals);
+      log(`Saved for ${state.tops[d.topping_type].label.toLowerCase()}: ${setLine(d.topping_type)}.`);
+      state.drip = null; renderLoad();
+    }
+  } catch (err) { state.job = false; Object.assign(d, { phase: "error", error: err.message }); }
+  drawDrip(); updateGate();
+};
+
 async function init() {
   await refreshStatus();
+  await loadToppings(); renderLoad();
   renderRecipe(); renderDesign();
   updateGate();
 }
