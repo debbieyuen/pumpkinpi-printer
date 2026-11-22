@@ -98,14 +98,26 @@ class StartReq(BaseModel):
     dry_run: bool = False
 
 
+def printer_connected() -> bool:
+    """True if the printer is on USB. Forgets a printer that was unplugged so it can reconnect."""
+    global _printer
+    if _printer is not None and not os.path.exists(_printer.port):
+        try:
+            _printer.ser.close()
+        except Exception:  # noqa: BLE001
+            pass
+        _printer = None
+    try:
+        printer()
+        return True
+    except Exception:  # noqa: BLE001 - no port, permission, or printer off
+        return False
+
+
 @app.get("/api/status")
 def status():
     g = guests()
-    try:
-        printer()
-        connected = True
-    except Exception:
-        connected = False
+    connected = printer_connected()
     # Only names and allergens go to the screen; health notes stay off camera.
     return {"event": g.get("event"), "printer": connected, "diets": DIETS,
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}

@@ -8,9 +8,8 @@
 </head>
 <body data-view="recipe">
 <header class="top">
-  <img class="sym" src="brand/perplexity-symbol-offwhite.svg" alt="" aria-hidden="true">
+  <img class="sym" src="brand/perplexity-symbol-ink.svg" alt="" aria-hidden="true">
   <h1>pumpkinpi</h1>
-  <span class="mode" id="modeBadge"><span class="mdot"></span><span id="modeText">Offline</span></span>
   <nav class="tabs" role="tablist" aria-label="Screens">
     <button class="tab on" type="button" role="tab" data-v="recipe">Recipe</button>
     <button class="tab" type="button" role="tab" data-v="design">Design</button>
@@ -62,6 +61,53 @@
   <p class="why" id="why">Make a design to start.</p>
   <div class="meter" aria-hidden="true"><div class="fill" id="jobFill"></div></div>
   <button class="btn go" id="sendBtn" type="button" disabled>Send</button>
+</div>
+
+<!-- Shown (and the app grayed out) until the Pi sees the printer on USB -->
+<div class="noprinter" id="noPrinter" hidden role="alertdialog" aria-labelledby="npTitle">
+  <div class="npcard">
+    <svg class="npart" viewBox="0 0 560 222" aria-hidden="true">
+      <!-- Raspberry Pi 5 -->
+      <g transform="translate(20 52)">
+        <rect width="170" height="112" rx="10" fill="#2f8a57"/>
+        <rect x="8" y="6" width="120" height="9" rx="2" fill="#1f5f3c"/>
+        <g fill="#d9b44a"><rect x="12" y="7.5" width="4" height="6" rx="1"/><rect x="20" y="7.5" width="4" height="6" rx="1"/><rect x="28" y="7.5" width="4" height="6" rx="1"/><rect x="36" y="7.5" width="4" height="6" rx="1"/><rect x="44" y="7.5" width="4" height="6" rx="1"/><rect x="52" y="7.5" width="4" height="6" rx="1"/><rect x="60" y="7.5" width="4" height="6" rx="1"/><rect x="68" y="7.5" width="4" height="6" rx="1"/><rect x="76" y="7.5" width="4" height="6" rx="1"/><rect x="84" y="7.5" width="4" height="6" rx="1"/><rect x="92" y="7.5" width="4" height="6" rx="1"/><rect x="100" y="7.5" width="4" height="6" rx="1"/><rect x="108" y="7.5" width="4" height="6" rx="1"/><rect x="116" y="7.5" width="4" height="6" rx="1"/></g>
+        <rect x="44" y="40" width="40" height="40" rx="4" fill="#1b1f22"/>
+        <rect x="96" y="44" width="22" height="18" rx="2" fill="#2a2f33"/>
+        <rect x="14" y="78" width="20" height="20" rx="2" fill="#2a2f33"/>
+        <circle cx="10" cy="104" r="4" fill="#cfd8d3"/><circle cx="160" cy="104" r="4" fill="#cfd8d3"/>
+        <circle cx="10" cy="22" r="4" fill="#cfd8d3"/><circle cx="160" cy="22" r="4" fill="#cfd8d3"/>
+        <g fill="#c9cfd2" stroke="#8d969b" stroke-width="1.5">
+          <rect x="150" y="30" width="34" height="22" rx="2"/><rect x="150" y="58" width="34" height="22" rx="2"/>
+          <rect x="150" y="86" width="30" height="20" rx="2"/>
+        </g>
+        <g fill="#1f6fd0"><rect x="156" y="37" width="26" height="8" rx="1"/><rect x="156" y="65" width="26" height="8" rx="1"/></g>
+      </g>
+      <text x="105" y="210" class="nplab">Raspberry Pi 5</text>
+      <text x="222" y="72" class="npport">USB-A</text>
+      <!-- cable -->
+      <path class="npcable" d="M214 103 C 280 103, 300 160, 350 160 L 372 160" fill="none"/>
+      <rect x="196" y="96" width="22" height="14" rx="2" fill="#5c6b6b"/>
+      <rect x="366" y="154" width="16" height="12" rx="4" fill="#5c6b6b"/>
+      <!-- Ender-3 V3 SE -->
+      <g transform="translate(384 20)">
+        <rect x="0" y="138" width="150" height="26" rx="4" fill="#2b2f33"/>
+        <rect x="104" y="144" width="36" height="14" rx="2" fill="#20808d"/>
+        <rect x="10" y="10" width="10" height="130" fill="#3a3f44"/><rect x="130" y="10" width="10" height="130" fill="#3a3f44"/>
+        <rect x="6" y="4" width="138" height="10" rx="2" fill="#3a3f44"/>
+        <rect x="10" y="64" width="130" height="8" fill="#55606a"/>
+        <rect x="62" y="56" width="26" height="30" rx="3" fill="#1e2226"/><path d="M71 86h8l-4 9z" fill="#c9cfd2"/>
+        <rect x="24" y="124" width="102" height="10" rx="2" fill="#7b858c"/>
+        <rect x="-6" y="148" width="8" height="10" rx="2" fill="#c9cfd2" stroke="#8d969b"/>
+      </g>
+      <text x="459" y="210" class="nplab">Ender-3 V3 SE</text>
+      <text x="350" y="146" class="npport">USB-C</text>
+    </svg>
+    <h2 id="npTitle">Printer Not Connected</h2>
+    <p class="npsub">Connect via USB-C and USB-A</p>
+    <p class="muted small">Use a data cable: USB-A into the Pi, USB-C into the printer. Then turn the printer on.</p>
+    <button class="btn npskip" id="skipPrinter" type="button">Continue without printer</button>
+  </div>
 </div>
 
 <div class="kbd" id="kbd" hidden aria-label="On-screen keyboard"></div>

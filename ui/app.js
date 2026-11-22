@@ -1,6 +1,6 @@
 // PumpkinPi touchscreen UI.
 // Online: served by pumpkinpi/server.py on the Pi (Agent API, Search API, Decider, printer).
-// Offline: used when /api/status is unreachable. Sample results only, no printer.
+// No server (not on the Pi): sample results only, behind the "Printer Not Connected" screen.
 
 const $ = (id) => document.getElementById(id);
 const READY_AT = 0.9;
@@ -41,19 +41,26 @@ async function api(path, body) {
 }
 const apiJson = async (path, body) => (await api(path, body)).json();
 
-// ---------- status pill: Online (Pi + printer) / No printer / Offline ----------
-function setMode(cls, text) { $("modeBadge").className = "mode " + cls; $("modeText").textContent = text; }
+// ---------- printer connection: gray out the app until the Pi sees the printer on USB ----------
+let statusTimer = null;
 async function refreshStatus() {
+  let printer = false;
   try {
     const s = await apiJson("/api/status");
-    state.live = state.everLive = true; state.guests = s.guests;
-    s.printer ? setMode("on", "Online") : setMode("warn", "No printer");
+    state.live = state.everLive = true; state.guests = s.guests; printer = !!s.printer;
   } catch {
     // Never fall back to sample "Safe" results once the real Pi server has been seen.
     if (!state.everLive) state.live = false;
-    setMode("off", "Offline");
   }
+  if (printer) state.skipPrinter = false;  // show the screen again if it gets unplugged later
+  const blocked = !printer && !state.skipPrinter;
+  $("noPrinter").hidden = !blocked;
+  document.body.classList.toggle("nop", blocked);
+  state.printer = printer;
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(refreshStatus, printer ? 10000 : 3000);
 }
+$("skipPrinter").onclick = () => { state.skipPrinter = true; $("noPrinter").hidden = true; document.body.classList.remove("nop"); };
 
 // ---------- screens ----------
 function show(view) {
@@ -71,7 +78,7 @@ function liveCamera(on) {
   const img = $("camImg");
   if (!on || !state.live) {
     if (img.dataset.live) { img.removeAttribute("src"); delete img.dataset.live; img.hidden = true; $("liveTag").hidden = true; $("camEmpty").hidden = false; }
-    if (on) $("camEmpty").textContent = "Offline: the live camera runs on the Pi.";
+    if (on) $("camEmpty").textContent = "The live camera runs on the Pi.";
     return;
   }
   if (img.dataset.live) return;
@@ -161,7 +168,7 @@ function renderRecipe() {
   renderDiets();
   const p = state.plan;
   if (!p) {
-    $("ingCol").innerHTML = state.busy ? `<p class="msg"><img class="think" src="brand/perplexity-symbol-offwhite.svg" alt=""> Perplexity is writing the recipe…</p>`
+    $("ingCol").innerHTML = state.busy ? `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity is writing the recipe…</p>`
       : `<p class="muted big">Type what you'd like, then tap Make.</p>`;
     $("stepCol").innerHTML = ""; $("srcCol").innerHTML = ""; return;
   }
@@ -191,7 +198,7 @@ function renderRecipe() {
   const labels = p.ingredients.flatMap((ing) => ((state.checks[ing] || {}).sources || []).slice(0, 2).map((s) => [s, ing]))
     .filter(([s]) => !seen.has(s.url) && seen.add(s.url)).slice(0, 4).map(([s, ing]) => srcItem(s, ++n, ing)).join("");
   $("srcCol").innerHTML = `<h3>Sources</h3><ol class="srcs">${recipe}${labels}</ol>
-    <p class="muted small">Found with Perplexity search. Allergen and diet checks by Decider.${state.live ? "" : " Offline: sample results."}</p>`;
+    <p class="muted small">Found with Perplexity search. Allergen and diet checks by Decider.${state.live ? "" : " Sample results."}</p>`;
 }
 $("ingCol").onclick = (e) => {
   const b = e.target.closest(".ing"); if (!b) return;
@@ -243,7 +250,7 @@ $("readyBtn").onclick = async () => {
 };
 
 async function start(dry_run) {
-  if (!state.live) { log(dry_run ? "Offline: dry run would trace the path 15 mm above the pie." : "Offline: would pipe now."); return; }
+  if (!state.live) { log(dry_run ? "Sample: dry run would trace the path 15 mm above the pie." : "Sample: would pipe now."); return; }
   try {
     const r = await apiJson("/api/start", { dry_run });
     state.job = true; updateGate();
@@ -293,8 +300,6 @@ $("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); ask(); };
 async function init() {
   await refreshStatus();
   renderRecipe();
-  if (!state.live) log("Offline: sample results only, no printer.");
-  setInterval(refreshStatus, 10000);
   updateGate();
 }
 init();

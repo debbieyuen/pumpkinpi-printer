@@ -16,7 +16,7 @@ if (renderer) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  renderer.setClearColor(0x091717, 1);  // match the page background exactly
+  renderer.setClearColor(0xfcfaf6, 1);  // match the page background exactly
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -129,11 +129,12 @@ if (renderer) {
 
   // ---- soft contact shadow on the "table" ----
   const shadowTex = canvasTex(256, (g, n) => {
-    const grd = g.createRadialGradient(n / 2, n / 2, n * 0.2, n / 2, n / 2, n / 2);
-    grd.addColorStop(0, "rgba(0,0,0,.55)"); grd.addColorStop(1, "rgba(0,0,0,0)");
+    // light page: keep the shadow tight and soft so the canvas edge never shows
+    const grd = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+    grd.addColorStop(0, "rgba(40,30,20,.34)"); grd.addColorStop(0.66, "rgba(40,30,20,.26)"); grd.addColorStop(1, "rgba(40,30,20,0)");
     g.fillStyle = grd; g.fillRect(0, 0, n, n);
   });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(170, 170),
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 140),
     new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
   floor.rotation.x = -Math.PI / 2; floor.position.y = -0.2;
   scene.add(floor);
