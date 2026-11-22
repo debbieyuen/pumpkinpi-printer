@@ -298,18 +298,18 @@ body[data-view="camera"] .ask{display:none}
 
 /* cards: menu invitation in PLA */
 body[data-view="cards"] .ask,body[data-view="cards"] #sendBtn{display:none}
-.cards{align-items:stretch;padding-bottom:.4rem}
-.cardframe{flex:none;height:100%;aspect-ratio:127/178;display:grid;place-items:center}
-#cardSvg{height:100%;width:auto;filter:drop-shadow(0 6px 18px rgba(9,23,23,.14))}
+.cards{flex-direction:column;align-items:stretch;gap:.5rem;padding-bottom:.4rem}
+.cardbar{display:flex;align-items:center;gap:.5rem}
+.guestpick{flex:1 1 auto;min-width:0;height:2.6rem;padding:0 .9rem;font:inherit;font-size:1.05rem;font-weight:600;
+  color:var(--ink,#0f2424);background:var(--surface);border:1px solid var(--line);border-radius:.7rem}
+.cardbar .chips{display:flex;gap:.35rem}
+.cardbar .chip.on{background:var(--teal);border-color:var(--teal);color:var(--on-teal)}
+.cardnote{display:flex;align-items:center;gap:1rem;font-size:.9rem}
+.cardnote .confirm{display:flex;align-items:center;gap:.45rem}
+.cardframe{flex:1 1 auto;min-height:0;display:grid;place-items:center}
+#cardSvg{height:100%;width:auto;max-width:100%;filter:drop-shadow(0 6px 18px rgba(9,23,23,.14))}
 #cardSvg .paper{fill:#fbf8f1;stroke:var(--line);stroke-width:.4}
 #cardInk path{fill:none;stroke:#e07020;stroke-width:.6;stroke-linecap:round;stroke-linejoin:round}
-.cardside{justify-content:flex-start;gap:.5rem;overflow:hidden}
-.cardside .dishes{flex:1 1 auto;min-height:0;overflow-y:auto}
-.cardside .chips{flex-wrap:nowrap!important;overflow-x:auto;padding-bottom:.2rem}
-.cardside .chip{height:2.2rem;padding:0 .85rem}
-.cardside .lbl{font-size:.85rem;font-weight:600;color:var(--muted);margin-bottom:.35rem}
-.cardside .chips{display:flex;flex-wrap:wrap;gap:.35rem}
-.cardside .chip.on{background:var(--teal);border-color:var(--teal);color:var(--on-teal)}
 .menuhead{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
 .menuhead .lbl{margin:0}
 .btn.sm{height:2.6rem;padding:0 1rem;font-size:.95rem;border-radius:.7rem}

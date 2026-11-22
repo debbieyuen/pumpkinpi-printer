@@ -822,18 +822,12 @@ async function loadCards() {
 }
 function renderCards() {
   $("cardGuests").innerHTML = cards.guests.map((g) =>
-    `<button type="button" class="chip${g === cards.guest ? " on" : ""}" data-g="${g}">${g}</button>`).join("");
-  $("dishList").innerHTML = cards.lines.length ? cards.lines.map((l) => {
-    const has = Object.values(l.terms || {}).includes("found");
-    const cls = has ? "red" : l.unsure.length ? "yellow" : "green";
-    const n = l.sources.length;
-    const why = l.unsure.length ? `unsure on ${l.unsure.join(", ")}: counts as NO` : `${n} source${n === 1 ? "" : "s"}`;
-    return `<li class="${cls}"><span class="sdot"></span><span><b>${l.text}</b><small>${why}</small></span></li>`;
-  }).join("") : `<li class="empty">Tap Check menu: Search finds each product's label, the Decider lists its allergens.</li>`;
+    `<option value="${g}"${g === cards.guest ? " selected" : ""}>${g}</option>`).join("");
+  if (!state.job) $("cardMsg").textContent = cards.lines.length ? "" : "Tap Check menu first.";
   $("cardBtn").disabled = !cards.lines.length || !!state.job;
   $("homeBtn").disabled = !!state.job;
 }
-$("cardGuests").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; cards.guest = b.dataset.g; renderCards(); drawCard(); };
+$("cardGuests").onchange = (e) => { cards.guest = e.target.value; renderCards(); drawCard(); };
 $("cardSide").onclick = (e) => {
   const b = e.target.closest(".chip"); if (!b) return; cards.side = b.dataset.s;
   $("cardSide").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c === b)); drawCard();
