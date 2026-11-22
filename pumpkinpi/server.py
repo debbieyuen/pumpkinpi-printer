@@ -39,7 +39,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
-from . import allergy_guide, label_scan, vision
+from . import allergy_guide, detail, label_scan, vision
 from .allergens import scan_blocks, scan_recipe
 from .camera import camera
 from .design import plan_design, revise_design
@@ -266,7 +266,8 @@ def publish(plan: dict, keep_checks: bool) -> dict:
         state["ready"] = 0.0
         state.pop("guide", None)
     return {"plan": plan, "strokes": path["strokes"], "path": {k: path[k] for k in ("mm", "seconds")},
-            "scan": scan, "layers": state["layers"], "fit": fit_info(plan, strokes) if strokes else None}
+            "scan": scan, "layers": state["layers"], "fit": fit_info(plan, strokes) if strokes else None,
+            "detail": detail.check(plan, strokes, path) if strokes else None}
 
 
 @app.post("/api/design")
@@ -333,8 +334,11 @@ def edit(req: EditReq):
         if req.shape not in SHAPES:
             raise HTTPException(400, f"Shape must be one of {', '.join(SHAPES)}")
         plan["shape"] = req.shape
+    plan["too_detailed"] = plan["simpler"] = ""   # the model's note was about the old design
     if req.text is not None:
-        plan["text"] = " ".join(split_lines(req.text))
+        words = " ".join(req.text.split())
+        plan["text"] = " ".join(split_lines(words))
+        plan["text_asked"] = words if plan["text"] != words else ""
     if req.font is not None:
         if req.font not in FONTS:
             raise HTTPException(400, f"Font must be one of {', '.join(FONTS)}")

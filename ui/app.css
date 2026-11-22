@@ -59,6 +59,12 @@ h1 span{color:var(--teal)}
 .preview{display:none;width:100%;height:100%}
 body:not(.webgl) .preview{display:block} body:not(.webgl) #pie3d{display:none}
 .crust{fill:#c07a3f}.filling{fill:#e08c3e}
+.toomuch{position:absolute;left:50%;top:.6rem;transform:translateX(-50%);width:min(34rem,96%);padding:.8rem 1.1rem;border-radius:16px;
+  background:#fff;border:2px solid var(--terra);box-shadow:0 6px 24px rgba(9,23,23,.15);display:flex;flex-direction:column;gap:.35rem;z-index:3}
+.toomuch.busy{border-color:var(--peach)}
+.toomuch b{font-size:1.2rem;font-weight:700;color:var(--fg)}
+.toomuch p{font-size:1rem;color:var(--fg);line-height:1.3}.toomuch p.try{color:var(--teal-hi);font-weight:600}
+.toomuch .row{display:flex;gap:.5rem;margin-top:.2rem}
 #strokes polyline{fill:none;stroke:#3a1f10;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .side{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:.8rem}
 .hint p{font-size:1.25rem;color:var(--muted);max-width:22em}

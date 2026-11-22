@@ -49,6 +49,16 @@ cd ~/pumpkinpi-printer && .venv/bin/python -m pumpkinpi.doctor
 sudo systemctl status pumpkinpi     # server logs: journalctl -u pumpkinpi -f
 ```
 
+## Too much detail
+
+A cold syringe lays a bead a few mm wide, so the Design screen says "That's too much detail to pipe" when:
+- the request is a photo, portrait, scene, shading or several pictures (the Agent API flags it in `too_detailed`),
+- the words need more than two short lines (it shows what it kept),
+- letters would be under 6 mm tall (small dish or wide crust),
+- there are more than 60 separate lines, or piping would take over 4 minutes.
+
+It offers a simpler idea ("Try that" sends it as a change) or "Keep mine". It never blocks Send. Rules: `pumpkinpi/detail.py`.
+
 ## Camera extras
 
 - **Scan label**: hold a package's ingredient list up to the camera and tap Scan label. The Agent API reads the

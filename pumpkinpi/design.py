@@ -54,8 +54,12 @@ SCHEMA = {
         "allergy_notes": {"type": "string", "description": "How the recipe avoids each guest allergen, one short line"},
         "design_note": {"type": "string", "description": "One short line if you simplified the design (one picture, shorter words), else empty"},
         "caption": {"type": "string", "description": "One short on-screen line, under 60 characters"},
+        "too_detailed": {"type": "string", "description": "Empty if the request can be piped as a few lines. Else one short "
+                         "sentence on why it is too detailed for a syringe, e.g. 'A family portrait needs shading a syringe can't pipe.'"},
+        "simpler": {"type": "string", "description": "If too_detailed: one short idea that would pipe well, e.g. "
+                    "'A cat with Debbie in cursive'. Else empty."},
     },
-    "required": ["kind", "answer", "makes", "base", "topping_type", "guest", "shape", "text", "font", "topping", "ingredients", "products", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption"],
+    "required": ["kind", "answer", "makes", "base", "topping_type", "guest", "shape", "text", "font", "topping", "ingredients", "products", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption", "too_detailed", "simpler"],
     "additionalProperties": False,
 }
 
@@ -119,6 +123,10 @@ Design rules (when base is not none):
 - Fill products[] in the same order, with a Bay Area store that sells it and the UPC if a store page shows it.
 - If a dish on the bed is given, design for it: a cookie or cupcake is small, so use a shape alone or a name of at
   most 6 letters; a pie has a crust ring, so keep the design inside the filling.
+- The tip pipes one bead a few mm wide, so only simple line art works. If the request is too detailed (a photo,
+  a portrait or face likeness, a scene, shading or texture, several pictures at once, a logo, a long message or
+  more words than two short lines), still pick the closest shape and text that fit, and fill too_detailed with why in
+  plain words and simpler with one idea that would pipe well. Otherwise leave both empty.
 - Never say an ingredient is safe; PumpkinPi checks each one separately. Do not put URLs in the JSON.
 - If diet options are given (vegan, dairy-free, gluten-free, egg-free, low sugar), every ingredient must fit them,
   e.g. vegan ganache uses dairy-free chocolate and oat or soy cream.
@@ -149,6 +157,9 @@ def tidy(plan: dict, old: dict | None = None) -> dict:
     if plan["text"] != words and "short" not in note.lower():
         note = (note + f' Kept the words short enough to pipe: "{plan["text"]}".').strip()
     plan["design_note"] = note
+    plan["text_asked"] = words if plan["text"] != words else ""   # detail.py tells the user what was cut
+    plan["too_detailed"] = (plan.get("too_detailed") or "").strip()
+    plan["simpler"] = (plan.get("simpler") or "").strip() if plan["too_detailed"] else ""
     by_name = {p.get("ingredient", "").lower(): p for p in plan.get("products") or []}
     plan["products"] = [{"ingredient": i, "brand": "", "product": i, "size": "", "store": "", "upc": "",
                          **by_name.get(i.lower(), {}), "ingredient": i} for i in plan.get("ingredients", [])]

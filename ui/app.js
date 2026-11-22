@@ -99,10 +99,33 @@ function readWords(said, cur) {
   const notes = [];
   if (picks.length > 1) notes.push(`One picture per pie keeps the piping clean, so it's the ${shape}.`);
   if (text && kept !== text.split(/\s+/).filter(Boolean).join(" ")) notes.push(`Kept the words short enough to pipe: "${kept}".`);
-  return { shape: shape || (text ? "text" : "smiley"), font, text: kept, guest: named ? named.name : "", design_note: notes.join(" ") };
+  const asked = text.split(/\s+/).filter(Boolean).join(" ");
+  return { shape: shape || (text ? "text" : "smiley"), font, text: kept, text_asked: kept !== asked ? asked : "", guest: named ? named.name : "", design_note: notes.join(" ") };
+}
+// Sample only: the Agent API does this on the Pi (design.py "too_detailed"). Things a syringe can't pipe as lines.
+const TOO_DETAILED = [[/photo|picture of (my|our|the) |realistic|lifelike|3d\b/, "A photo-real picture needs shading a syringe can't pipe."],
+  [/portrait|face of|likeness|selfie/, "A portrait needs fine detail a syringe can't pipe."],
+  [/scene|landscape|table with|cornucopia/, "A whole scene is too many small parts for one 6-inch pie."],
+  [/logo|feathers|detailed|intricate|lace|mandala|shading/, "That much fine detail blurs together with a few-mm bead."]];
+function sampleDetail(said, name) {
+  const c = said.toLowerCase(), hit = TOO_DETAILED.find(([rx]) => rx.test(c));
+  if (!hit) return { too_detailed: "", simpler: "" };
+  const pic = /turkey|feather|harvest|cornucopia/.test(c) ? "pumpkin" : "heart";
+  return { too_detailed: hit[1], simpler: name && name.length <= 7 ? `A ${pic} with "${name}"` : `A ${pic}` };
+}
+function detailFor(plan, strokes) {   // same rules as pumpkinpi/detail.py (no pipe time in the sample)
+  const reasons = []; let level = "ok";
+  const flag = (l, why) => { reasons.push(why); if (l === "too_much" || level === "ok") level = l; };
+  if (plan.too_detailed) flag("too_much", plan.too_detailed);
+  if (plan.text_asked) flag("too_much", `"${plan.text_asked}" is too long: only two short lines fit, so it says "${plan.text}".`);
+  const n = (strokes || []).length;
+  if (n > 60) flag("too_much", `${n} separate lines; each start and stop leaves a dot.`);
+  else if (n > 40) flag("busy", `${n} separate lines, so expect a few dots where the tip lifts.`);
+  const tip = plan.simpler || (plan.text ? "Try just a shape, or a shape with a short name." : "Try a simpler shape.");
+  return { level, reasons, try: level === "ok" ? "" : tip };
 }
 function samplePlan(said, cur, keepBase) {
-  const d = readWords(said, cur), c = said.toLowerCase();
+  const w = readWords(said, cur), d = { ...w, ...sampleDetail(said, w.text) }, c = said.toLowerCase();
   const keys = [/hershey/.test(c) ? "hersheys" : cur && cur.ingredients.includes(SAMPLE.products.hersheys.ingredient) && !/enjoy life/.test(c) ? "hersheys" : "enjoy", "clover"];
   if (/m\s*&\s*m|\bm and m|\bmms\b|m&amp;m/.test(c) || (cur && cur.ingredients.includes(SAMPLE.products.mms.ingredient) && !/(no|without) m/.test(c))) keys.push("mms");
   // "bake a pumpkin pie ..." -> the whole pie (crust, filling) as store products, then the topping.
@@ -273,6 +296,7 @@ function applyDesign(res) {
   state.scan = res.scan || (state.demo ? state.demo.scan || [] : []);
   if (!sameTopping) { state.guide = null; loadGuide(); }
   if (res.plan.text) state.name = res.plan.text;
+  state.detail = res.detail || detailFor(res.plan, res.strokes); state.detailHidden = false;
   window.Pie3D?.thinking(false); drawPreview(); renderAll(); renderDesign();
   if (state.dish) renderDish(state.dish);   // redraw the design inside the dish outline
 }
@@ -311,7 +335,21 @@ async function revise(said) {
   } catch (e) { window.Pie3D?.thinking(false); drawPreview(); log(`Couldn't change it: ${e.message}`); }
   state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate();
 }
-function renderDesign() {}   // Design is just the pie
+// Design is just the pie, plus a note when the design is too much for a syringe (pumpkinpi/detail.py).
+function renderDesign() {
+  const box = $("detailNote"), d = state.detail;
+  if (!state.plan || !d || d.level === "ok" || state.detailHidden || state.busy) { box.hidden = true; return; }
+  const title = d.level === "too_much" ? "That's too much detail to pipe" : "That's a lot of detail";
+  box.className = `toomuch ${d.level}`;
+  box.innerHTML = `<b>${title}</b>${d.reasons.map((r) => `<p>${esc(r)}</p>`).join("")}
+    ${d.try ? `<p class="try">Try: ${esc(d.try)}</p>` : ""}
+    <div class="row">${d.try ? '<button class="btn go sm" id="detailTry" type="button">Try that</button>' : ""}
+    <button class="btn ghost sm" id="detailKeep" type="button">Keep mine</button></div>`;
+  box.hidden = false;
+  $("detailKeep").onclick = () => { state.detailHidden = true; renderDesign(); };
+  const t = $("detailTry");
+  if (t) t.onclick = () => { setBox("change"); $("prompt").value = d.try.replace(/^Try /, ""); syncClear(); revise(); };
+}
 
 function syncClear() { $("clearBtn").hidden = !$("prompt").value; }
 $("clearBtn").addEventListener("pointerdown", (e) => e.preventDefault());
@@ -611,6 +649,7 @@ function applyFit(design) {   // the camera resized the design: same topping, so
   state.plan = design.plan; state.strokes = design.strokes; state.path = design.path || state.path;
   const f = design.fit || {};
   state.fitNote = f.small_text ? "The name will be small here. Try just a shape." : "";
+  if (design.detail) { state.detail = design.detail; state.detailHidden = false; }
   drawPreview(); renderAll();
 }
 $("readyBtn").onclick = async () => {
