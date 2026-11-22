@@ -30,8 +30,18 @@
  "menu": [
   {
    "name": "Ginger broth",
-   "recipe": "Simmer 3 qt water, 1 Mary's chicken, 3 in ginger, 4 scallions, 2 tsp salt, 1.5 hr. Strain.",
+   "recipe": "4 cartons Kettle & Fire Chicken Bone Broth (16.9 oz) + 4 cups water, 3 in ginger sliced, 4 scallions. Simmer 15 min.",
    "products": [
+    {
+     "item": "Kettle & Fire Classic Chicken Bone Broth, 16.9 oz",
+     "brand": "Kettle & Fire",
+     "tag": "Broth",
+     "short": "water, chicken bones, onions, carrots, fennel, leeks, apple cider vinegar, thyme, shiitake, tamarind paste, bay leaves, sea salt",
+     "label": "Chicken Bone Broth (Water, Chicken Bones, Onions, Carrots, Fennel, Leeks, Apple Cider Vinegar, Thyme, Shiitake Mushrooms, Tamarind Paste, Bay Leaves), Sea Salt. Certified organic ingredients.",
+     "contains": [],
+     "source": "https://www.kettleandfire.com/products/chicken-bone-broth",
+     "note": "the 32 oz carton adds vegetable broth: buy the 16.9 oz Classic, or read the carton"
+    },
     {
      "item": "Water",
      "short": "water",
@@ -39,16 +49,6 @@
      "contains": [],
      "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
      "note": "fresh, single ingredient: not on FDA's tree nut list"
-    },
-    {
-     "item": "Mary's Free Range Chicken, whole",
-     "short": "whole chicken",
-     "label": "Whole Chicken. Nothing added or injected.",
-     "contains": [],
-     "source": "https://maryschickens.com/product/marys-abf-chicken/",
-     "note": "nothing added or injected",
-     "brand": "Mary's",
-     "tag": "Chicken"
     },
     {
      "item": "Fresh ginger",
@@ -62,14 +62,6 @@
      "item": "Scallions",
      "short": "scallion",
      "label": "scallion",
-     "contains": [],
-     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
-     "note": "fresh, single ingredient: not on FDA's tree nut list"
-    },
-    {
-     "item": "Salt",
-     "short": "salt",
-     "label": "salt",
      "contains": [],
      "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
      "note": "fresh, single ingredient: not on FDA's tree nut list"

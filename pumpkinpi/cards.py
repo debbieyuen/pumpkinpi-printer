@@ -273,14 +273,15 @@ def back_rows(cfg: dict) -> list[tuple]:
     W, m = card.get("w", 127.0), card.get("margin", 10.0)
     bh = card.get("back_mm", 3.6)
     pitch = bh * card.get("back_gap", 1.6)
-    rows = [("What's in it", 6, "print", True, pitch + 4)]
+    rows = [("Ingredients", 6, "print", True, pitch + 4)]
     for d in cfg["menu"]:
         # one line per labeled product ("Tofu: water, soybeans, calcium sulfate"); whole foods share the dish line
         whole, own = [], []
         for p in d["products"]:
             short = (p.get("short") or p["item"]) if isinstance(p, dict) else p
             if isinstance(p, dict) and p.get("tag"):
-                own.append(f"{p['tag']}: {short}")
+                brand = f" ({p['brand']})" if p.get("brand") else ""
+                own.append(f"{p['tag']}{brand}: {short}")
             else:
                 whole.append(short)
         if whole and own:

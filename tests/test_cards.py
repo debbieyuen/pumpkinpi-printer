@@ -49,8 +49,8 @@ def test_prep_homes_then_parks_high():
 def test_back_lists_exact_label_ingredients_and_fits():
     cfg = cards.load()
     texts = [r[0] for r in cards.back_rows(cfg)]
-    assert any(t.startswith("Tofu: water, soybeans") for t in texts)
-    assert any(t.startswith("Soy sauce: water, soybeans, wheat") for t in texts)
+    assert any(t.startswith("Tofu (House Foods): water") for t in texts)
+    assert any(t.startswith("Soy sauce (Kikkoman): water,") for t in texts)
     st = cards.layout(cfg, [], side="ingredients")
     W, H = cfg["card"]["w"], cfg["card"]["h"]
     assert all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
