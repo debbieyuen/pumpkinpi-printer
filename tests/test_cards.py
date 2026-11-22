@@ -44,3 +44,37 @@ def test_prep_homes_then_parks_high():
     g = cards.prep_gcode(cards.Pla())
     assert g.index("G28") < g.index("M109 S205")
     assert any(ln.startswith("G0 Z40") for ln in g)
+
+
+def test_back_lists_exact_label_ingredients_and_fits():
+    cfg = cards.load()
+    texts = [r[0] for r in cards.back_rows(cfg)]
+    assert any(t.startswith("Tofu: water, soybeans") for t in texts)
+    assert any(t.startswith("Soy sauce: water, soybeans, wheat") for t in texts)
+    assert "How to hot pot" in texts
+    st = cards.layout(cfg, [], side="back")
+    W, H = cfg["card"]["w"], cfg["card"]["h"]
+    assert all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
+
+
+def test_every_labeled_product_has_a_source_and_reaches_the_decider(monkeypatch):
+    cfg = cards.load()
+    for d in cfg["menu"]:
+        for p in d["products"]:
+            if p.get("tag"):                       # packaged product: exact label + where it came from
+                assert p["label"] and p["source"].startswith("https://")
+    seen = {}
+
+    def fake(client, prod, allergens, label=None):
+        seen[prod] = label
+        return {"checks": {}, "relevance": None}
+    monkeypatch.setattr("pumpkinpi.allergen_check.check_ingredient", fake)
+    lines = cards.check_menu(None, cfg)
+    assert seen["Kikkoman Soy Sauce"]["ingredients"].startswith("Water, Soybeans, Wheat")
+    assert all(ln["text"].endswith("?") for ln in lines)     # no verdicts -> never printed as clean
+
+
+def test_recipe_label_is_evidence():
+    from pumpkinpi.allergen_check import label_evidence
+    ev = label_evidence(cards.prod_label({"item": "Tofu", "label": "Water, Soybeans", "source": "https://x"}))
+    assert "Water, Soybeans" in ev[0]["text"] and ev[0]["url"] == "https://x"

@@ -808,7 +808,7 @@ $("sendBtn").onclick = async () => {
 
 // ---------- invitation cards (PLA on watercolor paper) ----------
 // The menu check runs the Search API + Decider on every product (cards.py); each dish prints as one short line.
-const cards = { guest: "", lines: [], guests: [], homed: false };
+const cards = { guest: "", side: "front", lines: [], guests: [], homed: false };
 async function loadCards() {
   if (!state.live) { $("cardMsg").textContent = "Cards run on the Pi (Search + Decider + printer)."; return; }
   try {
@@ -830,11 +830,15 @@ function renderCards() {
   $("homeBtn").disabled = !!state.job;
 }
 $("cardGuests").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; cards.guest = b.dataset.g; renderCards(); drawCard(); };
+$("cardSide").onclick = (e) => {
+  const b = e.target.closest(".chip"); if (!b) return; cards.side = b.dataset.s;
+  $("cardSide").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c === b)); drawCard();
+};
 async function drawCard() {
   const g = $("cardInk");
   if (!cards.lines.length) { g.innerHTML = ""; return; }
   try {
-    const r = await apiJson("/api/cards/preview", { guest: cards.guest });
+    const r = await apiJson("/api/cards/preview", { guest: cards.guest, side: cards.side });
     g.innerHTML = `<path d="${r.strokes.map((s) => "M" + s.map(([x, y]) => `${x},${178 - y}`).join("L")).join("")}"/>`;
   } catch (e) { g.innerHTML = ""; log(`Card: ${e.message}`); }
 }
@@ -867,7 +871,7 @@ async function plaJob(path, body, what) {
   setTimeout(() => { if (!state.job) $("jobMeter").classList.remove("on"); }, 2000);
 }
 $("homeBtn").onclick = () => plaJob("/api/cards/prep", {}, "Heating and homing");
-$("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest }, `Drawing ${cards.guest}'s card`);
+$("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest, side: cards.side }, `Drawing ${cards.guest}'s card (${cards.side})`);
 
 // ---------- on-screen keyboard (kiosk Chromium has no OS keyboard) ----------
 const KEYS = ["qwertyuiop", "asdfghjkl'", "zxcvbnm,.", ["shift", "space", "back", "Done"]];

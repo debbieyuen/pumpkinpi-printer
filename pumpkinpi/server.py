@@ -174,6 +174,7 @@ class RecordReq(BaseModel):
 
 class CardReq(BaseModel):
     guest: str = ""
+    side: str = "front"     # "back" = exact ingredients, how to hot pot, sauces to skip
     confirm: bool = False   # "bed has no food, syringe tip is above the nozzle"
 
 
@@ -699,7 +700,8 @@ def card_lines() -> list[dict]:
 def cards_info():
     cfg = cards.load()
     return {"event": cfg.get("event", {}), "guests": cfg.get("guests", []), "card": cfg.get("card", {}),
-            "menu": [{"name": d["name"], "products": d["products"]} for d in cfg["menu"]], "lines": card_lines(),
+            "menu": [{"name": d["name"], "recipe": d.get("recipe"), "products": d["products"]} for d in cfg["menu"]],
+            "steps": cfg.get("steps", []), "skip": cfg.get("skip"), "lines": card_lines(),
             "pla": asdict(cards.Pla.load())}
 
 
@@ -713,19 +715,19 @@ def cards_check():
     return {"lines": lines}
 
 
-def card_strokes(guest: str) -> list:
+def card_strokes(guest: str, side: str = "front") -> list:
     lines = card_lines()
     if not lines:
         raise HTTPException(409, "Check the menu first")
     try:
-        return cards.layout(cards.load(), lines, guest.strip()[:16])
+        return cards.layout(cards.load(), lines, guest.strip()[:16], "back" if side == "back" else "front")
     except ValueError as e:
         raise HTTPException(400, str(e))
 
 
 @app.post("/api/cards/preview")
 def cards_preview(req: CardReq):
-    st = card_strokes(req.guest)
+    st = card_strokes(req.guest, req.side)
     return {"strokes": [[(round(x, 2), round(y, 2)) for x, y in s] for s in st]}
 
 
@@ -772,7 +774,7 @@ def cards_prep(req: CardReq):
 @app.post("/api/cards/print")
 def cards_print(req: CardReq):
     try:
-        lines = cards.card_gcode(card_strokes(req.guest), cards.Pla.load())
+        lines = cards.card_gcode(card_strokes(req.guest, req.side), cards.Pla.load())
     except ValueError as e:
         raise HTTPException(400, str(e))
     return pla_job(req, lines, "card")

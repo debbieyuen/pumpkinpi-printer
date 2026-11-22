@@ -1,17 +1,207 @@
 {
-  "event": {
-    "title": "Family Hot Pot",
-    "when": "Thu Nov 26  3 PM",
-    "unsure_note": "? = ask Debbie"
+ "event": {
+  "title": "Family Hot Pot",
+  "when": "Thu Nov 26  3 PM",
+  "for": "Debbie: no tree nuts, peanuts or fish (shellfish OK)",
+  "unsure_note": "? = check the label"
+ },
+ "card": {
+  "w": 127,
+  "h": 178,
+  "margin": 10,
+  "text_mm": 5,
+  "line_gap": 1.8,
+  "back_mm": 3.8,
+  "back_gap": 1.5
+ },
+ "guests": [
+  "Debbie",
+  "Dad",
+  "Mom",
+  "Kathy",
+  "Michael",
+  "Lily",
+  "Omar",
+  "Grace",
+  "Ben",
+  "Mia",
+  "Leo"
+ ],
+ "menu": [
+  {
+   "name": "Ginger broth",
+   "recipe": "Simmer 3 qt water, 2 lb chicken, 3 in ginger, 4 scallions, 2 tsp salt, 1.5 hr. Strain.",
+   "products": [
+    {
+     "item": "Water",
+     "short": "water",
+     "label": "water",
+     "contains": [],
+     "source": null
+    },
+    {
+     "item": "Chicken (plain, not brined)",
+     "short": "chicken",
+     "label": "chicken",
+     "contains": [],
+     "source": null,
+     "note": "fresh: check the tray label says no added solution or broth"
+    },
+    {
+     "item": "Fresh ginger",
+     "short": "ginger",
+     "label": "ginger",
+     "contains": [],
+     "source": null
+    },
+    {
+     "item": "Scallions",
+     "short": "scallion",
+     "label": "scallion",
+     "contains": [],
+     "source": null
+    },
+    {
+     "item": "Salt",
+     "short": "salt",
+     "label": "salt",
+     "contains": [],
+     "source": null
+    }
+   ]
   },
-  "card": {"w": 127, "h": 178, "margin": 10, "text_mm": 5, "line_gap": 1.8},
-  "guests": ["Dad", "Mom", "Kathy", "Michael", "Debbie", "Lily", "Omar", "Grace", "Ben", "Mia", "Leo"],
-  "menu": [
-    {"name": "Mild broth", "products": ["Little Sheep Hot Pot Soup Base, Plain"]},
-    {"name": "Beef slices", "products": ["thin-sliced beef for hot pot (check the butcher's label)"]},
-    {"name": "Tofu", "products": ["House Foods Organic Firm Tofu, 14 oz"]},
-    {"name": "Vegetables", "products": ["napa cabbage, bok choy, enoki mushrooms (fresh produce)"]},
-    {"name": "Dip", "products": ["Kikkoman Gluten-Free Tamari Soy Sauce, 10 oz", "Kadoya Pure Sesame Oil, 5.5 oz"]},
-    {"name": "Pumpkin pie", "products": ["Libby's 100% Pure Pumpkin, 15 oz"]}
-  ]
+  {
+   "name": "Beef + shrimp",
+   "recipe": "1 lb thin-sliced beef, 1 lb raw peeled shrimp. Plain, no marinade, no fish balls.",
+   "products": [
+    {
+     "item": "Thin-sliced beef for hot pot (plain)",
+     "short": "beef",
+     "label": "beef",
+     "contains": [],
+     "source": null,
+     "note": "check the butcher label: plain beef only"
+    },
+    {
+     "item": "Raw peeled shrimp",
+     "short": "shrimp",
+     "label": "shrimp",
+     "contains": [
+      "shellfish"
+     ],
+     "source": null,
+     "note": "shellfish is OK for Debbie"
+    }
+   ]
+  },
+  {
+   "name": "Tofu + noodles",
+   "recipe": "1 block firm tofu, cubed. 2 bundles bean thread, soaked 10 min.",
+   "products": [
+    {
+     "item": "House Foods Organic Firm Tofu, 14 oz",
+     "short": "water, soybeans, calcium sulfate",
+     "label": "Water, Organic Soybeans, Calcium Sulfate",
+     "contains": [
+      "soy"
+     ],
+     "source": "https://www.goodeggs.com/housefoods/organic-firm-tofu/63530b588d6c020012f2e682",
+     "tag": "Tofu"
+    },
+    {
+     "item": "Longkou Bean Thread Vermicelli",
+     "short": "pea starch, corn starch, mung bean, water",
+     "label": "Pea Starch, Corn Starch, Green Bean (9%), Water. Contains: none declared.",
+     "contains": [],
+     "source": "https://www.worldfoodshop.com/products/longkou-mung-bean-vermicelli-yuanbao-style-250g-case-of-30",
+     "note": "brands differ: check the label on the bag you buy",
+     "tag": "Noodles"
+    }
+   ]
+  },
+  {
+   "name": "Vegetables",
+   "recipe": "1 napa cabbage, 4 baby bok choy, 2 packs enoki. Washed.",
+   "products": [
+    {
+     "item": "Napa cabbage",
+     "short": "napa",
+     "label": "napa cabbage",
+     "contains": [],
+     "source": null
+    },
+    {
+     "item": "Baby bok choy",
+     "short": "bok choy",
+     "label": "bok choy",
+     "contains": [],
+     "source": null
+    },
+    {
+     "item": "Enoki mushrooms",
+     "short": "enoki",
+     "label": "enoki mushrooms",
+     "contains": [],
+     "source": null
+    }
+   ]
+  },
+  {
+   "name": "Soy dip",
+   "recipe": "Per bowl: 2 Tbsp soy sauce, 1 tsp rice vinegar, 1 clove garlic minced, scallion.",
+   "products": [
+    {
+     "item": "Kikkoman Soy Sauce",
+     "short": "water, soybeans, wheat, salt, sodium benzoate",
+     "label": "Water, Soybeans, Wheat, Salt, Sodium Benzoate",
+     "contains": [
+      "soy",
+      "wheat"
+     ],
+     "source": "https://kikkomanusa.com/foodservice/products/soy-sauce/",
+     "tag": "Soy sauce"
+    },
+    {
+     "item": "Marukan Genuine Brewed Rice Vinegar (unseasoned)",
+     "short": "water, rice",
+     "label": "Rice vinegar (water, rice)",
+     "contains": [],
+     "source": "https://www.marukan-usa.com/products/genuine-brewed-rice-vinegar/",
+     "tag": "Vinegar"
+    },
+    {
+     "item": "Garlic",
+     "short": "garlic",
+     "label": "garlic",
+     "contains": [],
+     "source": null
+    }
+   ]
+  },
+  {
+   "name": "Chili crisp",
+   "recipe": "Lao Gan Ma Spicy Chili Crisp, the classic jar. NOT the peanut one. Spoon in.",
+   "products": [
+    {
+     "item": "Lao Gan Ma Spicy Chili Crisp, 7.41 oz",
+     "short": "soybean oil, chili, onion, fermented soybean, MSG, salt, sugar, pepper, sulfites",
+     "label": "Soybean oil, chili, onion, fermented soybean, MSG, salt, sugar, pepper powder, sulfites. Contains: soybean.",
+     "contains": [
+      "soy"
+     ],
+     "source": "https://www.target.com/p/lao-gan-ma-spicy-chili-crisp-7-41oz/-/A-88708198",
+     "note": "a peanut version exists (case listing): read the jar",
+     "tag": "Chili crisp"
+    }
+   ]
+  }
+ ],
+ "steps": [
+  "1 Boil the broth",
+  "2 Beef + shrimp: cook until done",
+  "3 Tofu + vegetables",
+  "4 Noodles last",
+  "5 Dip: soy, vinegar, garlic, chili"
+ ],
+ "skip": "Skip: satay, sha cha, peanut/sesame dip, ponzu, fish balls"
 }

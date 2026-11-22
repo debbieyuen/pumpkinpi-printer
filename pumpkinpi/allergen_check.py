@@ -132,6 +132,10 @@ def label_evidence(label: dict | None) -> list[dict]:
     if not label or not (label.get("ingredients") or label.get("allergens")):
         return []
     cam = label.get("source") == "camera"
+    if label.get("source") == "recipe":   # the exact label text we typed into cards.json, with its web source
+        return [{"title": f"Label as written in the recipe: {label.get('name', '')}", "url": label.get("url"),
+                 "text": (f"Exact ingredients on the label of {label.get('name', '')}: {label.get('ingredients')}. "
+                          f"Contains: {', '.join(label.get('allergens') or []) or 'none listed'}.")}]
     missing = "none printed" if cam else "none listed (Open Food Facts often misses these)"
     text = (f"{'Photo of the package label' if cam else 'Package label'} for {label.get('brand', '')} "
             f"{label.get('name', '')} {label.get('size', '')}. "

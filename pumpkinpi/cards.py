@@ -57,11 +57,24 @@ FOUND_AT, SAFE_AT = 0.7, 0.1      # same thresholds as allergen_check
 
 
 # ---------------------------------------------------------------- checks (Search + Decider)
+def prod_name(p) -> str:
+    """A product is either a plain name or {item, short, label, contains, source} with the exact label text."""
+    return p["item"] if isinstance(p, dict) else p
+
+
+def prod_label(p) -> dict | None:
+    """The exact label we wrote down, handed to the Decider as evidence (never makes anything green alone)."""
+    if not isinstance(p, dict) or not p.get("label"):
+        return None
+    return {"source": "recipe", "name": p["item"], "ingredients": p["label"],
+            "allergens": p.get("contains") or [], "url": p.get("source")}
+
+
 def dish_line(dish: dict, results: dict[str, dict]) -> dict:
     """Combine each product's verdicts into one printed line for the dish."""
     terms = dish.get("terms") or list(TERMS)
     found, unsure, sources = [], [], []
-    for prod in dish["products"]:
+    for prod in map(prod_name, dish["products"]):
         r = results.get(prod)
         if not r:
             unsure.append(prod)
@@ -86,14 +99,17 @@ def check_menu(client, cfg: dict) -> list[dict]:
     """One Search API call + one Decider call per product, then one line per dish."""
     from .allergen_check import check_ingredient
     want: dict[str, list[str]] = {}
+    labels: dict[str, dict | None] = {}
     for dish in cfg["menu"]:
-        for prod in dish["products"]:
+        for p in dish["products"]:
+            prod = prod_name(p)
+            labels[prod] = prod_label(p)
             for t in dish.get("terms") or list(TERMS):
                 if TERMS[t] not in want.setdefault(prod, []):
                     want[prod].append(TERMS[t])
     results = {}
     for prod, allergens in want.items():
-            r = check_ingredient(client, prod, allergens)
+            r = check_ingredient(client, prod, allergens, label=labels[prod])
             results[prod] = {"checks": {a: asdict(c) for a, c in r["checks"].items()},
                              "relevance": r.get("relevance")}
     return [dish_line(d, results) for d in cfg["menu"]]
@@ -127,11 +143,80 @@ def fit_line(s: str, h: float, max_w: float, font: str = "print") -> list[Stroke
     return move(st, k=max_w / w) if w > max_w else st
 
 
-def layout(cfg: dict, lines: list[dict], guest: str = "") -> list[Stroke]:
+def wrap(s: str, h: float, max_w: float, font: str = "print", indent: str = " ") -> list[str]:
+    """Greedy word wrap so long ingredient lists keep their letter height instead of shrinking."""
+    out, cur = [], ""
+    for w in s.split():
+        nxt = f"{cur} {w}" if cur else w
+        if cur and width(text_line(nxt, h, font)) + (4 if nxt.startswith(" ") else 0) > max_w:
+            out.append(cur)
+            cur = indent + w
+        else:
+            cur = nxt
+    return out + ([cur] if cur else [])
+
+
+def back_rows(cfg: dict) -> list[tuple]:
+    """Back of the card: exactly what's in each dish (from the labels), how to eat it, sauces to skip."""
+    card = cfg.get("card", {})
+    W, m = card.get("w", 127.0), card.get("margin", 10.0)
+    bh = card.get("back_mm", 3.6)
+    pitch = bh * card.get("back_gap", 1.6)
+    rows = [("What's in it", 6, "print", True, pitch + 4)]
+    for d in cfg["menu"]:
+        # one line per labeled product ("Tofu: water, soybeans, calcium sulfate"); whole foods share the dish line
+        whole, own = [], []
+        for p in d["products"]:
+            short = (p.get("short") or p["item"]) if isinstance(p, dict) else p
+            if isinstance(p, dict) and p.get("tag"):
+                own.append(f"{p['tag']}: {short}")
+            else:
+                whole.append(short)
+        if whole and own:
+            own.append(f"Plus: {', '.join(whole)}")
+        elif whole:
+            own = [f"{d['name']}: {', '.join(whole)}"]
+        for t in own:
+            rows += [(x, bh, "print", False, pitch) for x in wrap(t, bh, W - 2 * m)]
+    if cfg.get("steps"):
+        rows[-1] = rows[-1][:4] + (pitch + 4,)
+        rows.append(("How to hot pot", 6, "print", True, pitch + 3))
+        rows += [(t, bh, "print", False, pitch) for t in cfg["steps"]]
+    if cfg.get("skip"):
+        rows[-1] = rows[-1][:4] + (pitch + 2,)
+        rows += [(t, bh, "print", False, pitch) for t in wrap(cfg["skip"], bh, W - 2 * m)]
+    return rows
+
+
+def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.0) -> tuple[list[Stroke], float]:
+    """Rows of (text, height, font, centered, step to next baseline), block centered top to bottom."""
+    total = sum(r[4] for r in rows[:-1]) + rows[-1][1] + extra
+    if total > H - 2 * m:
+        raise ValueError(f"Doesn't fit the card ({total:.0f} mm of {H - 2 * m:.0f}). Use fewer dishes or smaller text.")
+    y = H - (H - total) / 2 - rows[0][1]
+    out: list[Stroke] = []
+    for i, (txt, h, font, center, step) in enumerate(rows):
+        st = fit_line(txt, h, W - 2 * m, font)
+        dx = (W - width(st)) / 2 if center else m + (4 if txt.startswith(" ") else 0)
+        out.extend(move(st, dx=dx, dy=y))
+        if i < len(rows) - 1:
+            y -= step
+    return out, y
+
+
+def layout_back(cfg: dict) -> list[Stroke]:
+    card = cfg.get("card", {})
+    st, _ = draw_rows(back_rows(cfg), card.get("w", 127.0), card.get("h", 178.0), card.get("margin", 10.0))
+    return st
+
+
+def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -> list[Stroke]:
     """The whole card as strokes in mm. Portrait: x across the card, y from the bottom edge up.
 
     Fixed line pitch (baselines), block centered top to bottom, a small pumpkin under the menu."""
     from .shapes import pumpkin
+    if side == "back":
+        return layout_back(cfg)
     card = cfg.get("card", {})
     W, H = card.get("w", 127.0), card.get("h", 178.0)       # 5 x 7 inch
     m = card.get("margin", 10.0)
@@ -148,17 +233,7 @@ def layout(cfg: dict, lines: list[dict], guest: str = "") -> list[Stroke]:
     if any(ln.get("unsure") for ln in lines):
         rows.append((ev.get("unsure_note", "? = check with host"), 4, "print", True, 10))
     art = 16.0                                                # pumpkin height
-    total = sum(r[4] for r in rows[:-1]) + rows[-1][1] + 10 + art
-    if total > H - 2 * m:
-        raise ValueError(f"Menu doesn't fit the card: {len(lines)} lines. Use fewer dishes or a smaller text_mm.")
-    y = H - (H - total) / 2 - rows[0][1]                      # first baseline
-    out: list[Stroke] = []
-    for i, (txt, h, font, center, step) in enumerate(rows):
-        st = fit_line(txt, h, W - 2 * m, font)
-        dx = (W - width(st)) / 2 if center else m
-        out.extend(move(st, dx=dx, dy=y))
-        if i < len(rows) - 1:
-            y -= step
+    out, y = draw_rows(rows, W, H, m, extra=10 + art)
     out.extend(move(pumpkin(), dx=W / 2, dy=y - 10 - art / 2, k=art / 2 / 40 / 0.9))
     return out
 
@@ -245,6 +320,7 @@ def main() -> None:
     ap.add_argument("--check", action="store_true", help="run Search + Decider on every product (needs the API key)")
     ap.add_argument("--guest", default="", help="name printed on the card")
     ap.add_argument("--gcode", action="store_true", help="print the card's G-code")
+    ap.add_argument("--back", action="store_true", help="the back: exact ingredients, how to hot pot, sauces to skip")
     args = ap.parse_args()
     cfg = load()
     if args.check:
@@ -258,7 +334,8 @@ def main() -> None:
     else:
         raise SystemExit("Run with --check first")
     if args.gcode:
-        print("\n".join(card_gcode(layout(cfg, lines, args.guest), Pla.load())))
+        side = "back" if args.back else "front"
+        print("\n".join(card_gcode(layout(cfg, lines, args.guest, side), Pla.load())))
     else:
         for ln in lines:
             print(ln["text"], "  (check:", ", ".join(ln["unsure"]) + ")" if ln["unsure"] else "")
