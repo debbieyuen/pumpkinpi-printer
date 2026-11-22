@@ -174,7 +174,7 @@ def test_short_card_back_lists_only_nos_for_debbie():
 def test_unsure_counts_as_dont_eat():
     cfg = cards.load()
     ln = {"name": "Mystery (Brand)", "terms": {t: "unsure" for t in cards.WATCH}, "unsure": ["peanut"]}
-    assert cards.avoid_lines(cfg, [ln], "Debbie") == ["Mystery (Brand): check label"]
+    assert "Mystery (Brand): check label" in cards.avoid_lines(cfg, [ln], "Debbie")
 
 
 def test_no_allergy_guest_gets_no_avoid_list():
@@ -191,3 +191,28 @@ def test_short_card_both_sides_fit_for_every_guest():
         g = g if isinstance(g, str) else g.get("name", "")
         for side in ("front", "back"):
             assert cards.layout(cfg, L, g, side)
+
+
+def test_pie_one_line_yes_and_peanut_topping_warning():
+    cfg = cards.load()
+    L = _lines(cfg)
+    assert cards.dessert_verdict(cfg, L, "Debbie") == "YES"
+    front = [r[0] for r in cards.short_front_rows(cfg, "Debbie", L)]
+    assert "Pumpkin pie: YES" in front
+    assert "Peanut topping on pie" in cards.avoid_lines(cfg, L, "Debbie")
+    assert "Peanut topping on pie" not in cards.avoid_lines(cfg, L, "Michael")   # peanuts are OK for him
+
+
+def test_pie_verdict_no_if_any_ingredient_no():
+    cfg = cards.load()
+    bad = {"name": "Crust (X)", "part": "dessert", "terms": {**{t: "safe" for t in cards.WATCH}, "peanut": "found"},
+           "unsure": []}
+    assert cards.dessert_verdict(cfg, [bad], "Debbie") == "NO"
+
+
+def test_broth_is_haidilao_mushroom_with_label():
+    cfg = cards.load()
+    b = [p for p in cfg["menu"][0]["products"] if isinstance(p, dict) and p.get("tag") == "Broth"][0]
+    assert b["brand"] == "Haidilao" and "Mushroom" in b["item"]
+    assert b["source"].startswith("https://yihaius.com/")
+    assert "Mushroom broth (Haidilao)" in cfg["overview"]

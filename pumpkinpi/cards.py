@@ -377,6 +377,10 @@ def avoid_lines(cfg: dict, lines: list[dict], guest: str) -> list[str]:
             out.append(f"{name}: {verdict[2:].strip() or 'no'}")
         elif verdict == "check label" or (ln.get("unsure") and not verdict.startswith("YES")):
             out.append(f"{name}: check label")
+    mine = set((cfg.get("allergies") or {}).get(guest) or [])
+    for x in cfg.get("avoid_extra", []):              # e.g. "Peanut topping on pie" for peanut-allergic guests
+        if mine & set(x.get("terms", [])):
+            out.append(x["text"])
     return out
 
 
@@ -407,7 +411,21 @@ def short_back_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
     return rows
 
 
-def short_front_rows(cfg: dict, guest: str) -> list[tuple]:
+def dessert_verdict(cfg: dict, lines: list[dict], guest: str) -> str:
+    """One word for the whole pie: NO if any ingredient is NO, "check label" if any is unsure, else YES."""
+    if not (cfg.get("allergies") or {}).get(guest):
+        return ""
+    v = [ln["text"].rpartition(": ")[2] for ln in guest_lines(cfg, [x for x in lines if x.get("part") == "dessert"], guest)]
+    if not v:
+        return "check label"
+    if any(x.startswith("NO") for x in v):
+        return "NO"
+    if any(x == "check label" for x in v):
+        return "check label"
+    return "YES"
+
+
+def short_front_rows(cfg: dict, guest: str, lines: list[dict] | None = None) -> list[tuple]:
     card = cfg.get("card", {})
     W, m = card.get("w", 127.0), card.get("margin", 10.0)
     h = card.get("overview_mm", 5.5)
@@ -421,7 +439,11 @@ def short_front_rows(cfg: dict, guest: str) -> list[tuple]:
     if guest:
         rows.append((guest, 9, "cursive", True, 16))
     rows.append(section("Menu", 6.5, pitch + 3))
+    pie = (cfg.get("dessert") or {}).get("name")
     for t in cfg.get("overview", []):
+        if t == pie and lines is not None:
+            v = dessert_verdict(cfg, lines, guest)
+            t = f"{t}: {v}" if v else t
         rows += [(x, h, "print", True, pitch) for x in wrap(t, h, W - 2 * m)]
     return rows
 
@@ -461,7 +483,7 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
     if card.get("style", "short") == "short":
-        rows = short_front_rows(cfg, guest)
+        rows = short_front_rows(cfg, guest, lines)
         menu = []
     else:
         menu = [x for x in lines if x.get("part", "menu") == "menu"]

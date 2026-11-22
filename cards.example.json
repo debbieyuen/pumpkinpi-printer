@@ -34,18 +34,20 @@
  ],
  "menu": [
   {
-   "name": "Ginger broth",
-   "recipe": "4 cartons Kettle & Fire Chicken Bone Broth (16.9 oz) + 4 cups water, 3 in ginger sliced, 4 scallions. Simmer 15 min.",
+   "name": "Mushroom broth",
+   "recipe": "1 pack Haidilao Mushroom Hot Pot Soup Base + 1000-1200 ml water; add ginger and scallion.",
    "products": [
     {
-     "item": "Kettle & Fire Classic Chicken Bone Broth, 16.9 oz",
-     "brand": "Kettle & Fire",
+     "item": "Haidilao Mushroom Hot Pot Soup Base, 5.3 oz",
      "tag": "Broth",
-     "short": "water, chicken bones, onion, carrot, fennel, leek, cider vinegar, thyme, shiitake, tamarind, bay leaf, sea salt",
-     "label": "Chicken Bone Broth (Water, Chicken Bones, Onions, Carrots, Fennel, Leeks, Apple Cider Vinegar, Thyme, Shiitake Mushrooms, Tamarind Paste, Bay Leaves), Sea Salt. Certified organic ingredients.",
-     "contains": [],
-     "source": "https://www.kettleandfire.com/products/chicken-bone-broth",
-     "note": "the 32 oz carton adds vegetable broth: buy the 16.9 oz Classic, or read the carton"
+     "brand": "Haidilao",
+     "short": "MSG, water, salt, soybean oil, porcini, corn starch, shiitake, maltodextrin, sugar, soy protein, spices, flavors, potassium sorbate",
+     "label": "Monosodium glutamate, Water, Salt, Soybean oil, Porcini mushroom, Modified corn starch, Shiitake mushroom, Corn starch, Maltodextrin, Sugar, Disodium 5'-ribonucleotides, Soy protein isolate, Spices, Natural and artificial flavors, Potassium sorbate. Allergens: Soybean.",
+     "contains": [
+      "soy"
+     ],
+     "source": "https://yihaius.com/products/mushroom-hotpot-seasoning",
+     "note": "US label (Yihai US). Tomato base labels vary by store (Kroger's lists shrimp); UK mushroom base adds wheat"
     },
     {
      "item": "Water",
@@ -432,12 +434,20 @@
   ]
  },
  "overview": [
-  "Chicken bone broth",
+  "Mushroom broth (Haidilao)",
   "Beef + shrimp",
   "Tofu + noodles",
   "Vegetables",
   "Soy + chili dips",
   "Sauce bar",
   "Pumpkin pie"
+ ],
+ "avoid_extra": [
+  {
+   "text": "Peanut topping on pie",
+   "terms": [
+    "peanut"
+   ]
+  }
  ]
 }
