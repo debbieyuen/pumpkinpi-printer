@@ -768,6 +768,7 @@ async function start(dry_run) {
   try {
     const r = await apiJson("/api/start", { dry_run });
     state.job = true; updateGate(); pollRec();
+    $("jobFill").style.width = "0%"; $("jobMeter").classList.add("on");
     log(`Making G-code (${r.lines} moves)…`);
     const what = dry_run ? "Dry run" : "Piping";
     for (let i = 0; i < 7200; i++) {
@@ -785,6 +786,7 @@ async function start(dry_run) {
     }
   } catch (e) { log(`Send refused: ${e.message}`); }
   state.job = false; updateGate();
+  setTimeout(() => { if (!state.job) $("jobMeter").classList.remove("on"); }, 2000);
 }
 $("dryBtn").onclick = () => start(true);
 
