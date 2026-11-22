@@ -54,8 +54,8 @@ async function ask() {
   if (!prompt || state.busy) return;
   state.busy = true; state.checks = {}; state.ready = 0; state.open = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Planning"></span>';
-  $("result").hidden = false; state.strokes = []; drawPreview();
-  $("plan").innerHTML = `<p class="msg"><span class="spin"></span> Perplexity is planning…</p>`;
+  $("result").hidden = false; $("idle").hidden = true; state.strokes = []; drawPreview();
+  $("plan").innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-offwhite.svg" alt=""> Perplexity is planning…</p>`;
   updateGate();
   try {
     let res;
@@ -104,7 +104,7 @@ function renderPlan() {
     let detail = "";
     if (open && c.results) {
       detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)} · ${esc(r.allergen)}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div>No guest avoids an allergen for this.</div>`}
-        ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}${(c.sources || []).slice(0, 4).map((s) => `<div class="src">${esc(host(s.url))} — ${esc(s.title)}</div>`).join("")}</div>`;
+        ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}${(c.sources || []).slice(0, 4).map((s, i) => `<div class="src"><span class="num">${i + 1}</span>${esc(host(s.url))}</div>`).join("")}</div>`;
     }
     return `<button type="button" class="ing ${open ? "open" : ""}" data-ing="${esc(ing)}">
       <span class="pill ${c.status}">${c.status === "wait" ? '<span class="spin sm"></span>' : label[c.status]}</span>

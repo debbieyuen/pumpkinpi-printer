@@ -8,15 +8,24 @@
 </head>
 <body>
 <header class="top">
-  <h1>PumpkinPi</h1>
+  <img class="sym" src="brand/perplexity-symbol-offwhite.svg" alt="" aria-hidden="true">
+  <h1>pumpkinpi</h1>
   <span class="mode" id="modeBadge">Demo</span>
+  <span class="powered">powered by <img src="brand/perplexity-wordmark-offwhite.svg" alt="Perplexity"></span>
   <button class="stop" id="stopBtn" type="button" aria-label="Emergency stop">STOP</button>
 </header>
 
 <form id="askForm" class="ask" autocomplete="off">
+  <div class="box">
   <input id="prompt" name="prompt" type="text" inputmode="none" placeholder="What should we pipe on the pie?" aria-label="What should we pipe on the pie?" required>
-  <button type="submit" class="btn primary" id="askBtn">Ask</button>
+  <button type="submit" class="send" id="askBtn">Ask</button>
+  </div>
 </form>
+
+<div class="idle" id="idle">
+  <img src="brand/perplexity-symbol-offwhite.svg" alt="" aria-hidden="true">
+  <p>Perplexity designs it, then checks every ingredient for your guests' allergies.</p>
+</div>
 
 <section class="result" id="result" hidden aria-live="polite">
   <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
