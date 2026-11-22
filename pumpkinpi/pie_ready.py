@@ -31,13 +31,13 @@ def pie_ready(client: httpx.Client, photo: Path) -> float:
     body = {
         "model": MODEL,
         "state": [
-            "Overhead photo of a 3D printer bed before piping frosting onto a pie.",
+            "Overhead photo of a 3D printer bed before piping a topping onto a food item (pie, tart, cookie, cupcake or cake).",
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{data}"}},
         ],
         "questions": {
             "ready": {
                 "type": "noul",
-                "instructions": "Is there exactly one whole pie, roughly centered on the bed, with a smooth unbroken surface and nothing (hands, tools, utensils) in the way?",
+                "instructions": "Is there exactly one whole food item (pie, tart, cookie, cupcake or cake), roughly centered on the bed, with a smooth unbroken top and nothing (hands, tools, utensils) in the way?",
             }
         },
     }

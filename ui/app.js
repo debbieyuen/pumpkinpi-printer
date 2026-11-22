@@ -194,6 +194,7 @@ function applyDesign(res) {
   if (!sameTopping) { state.guide = null; loadGuide(); }
   if (res.plan.text) state.name = res.plan.text;
   window.Pie3D?.thinking(false); drawPreview(); renderAll(); renderDesign();
+  if (state.dish) renderDish(state.dish);   // redraw the design inside the dish outline
 }
 async function checkMissing() {
   const todo = state.plan.ingredients.filter((i) => !state.checks[i]);
@@ -460,15 +461,62 @@ function updateGate() {
   else { b.textContent = "Send to Printer"; b.disabled = !ok || state.busy; }
 }
 
+// ---------- Check pie: Decider "ready?" + vision (which dish, where the crust is) ----------
+const SAMPLE_DISH = { dish: "pumpkin pie", count: 1, surface: "smooth orange custard", calibrated: false, diameter_mm: 152,
+  crust_mm: 10.8, fit_r: 61.2, off_mm: null, warnings: [], edges: { w: 800, h: 600, cx: 399.8, cy: 312.1, r: 205.8, r_in: 176.6, ring: true } };
+function renderDish(v) {
+  const ov = $("dishOv"), card = $("dishCard");
+  state.dish = v || null;
+  if (!v) { ov.toggleAttribute("hidden", true); card.hidden = true; return; }
+  const e = v.edges;
+  if (e) {
+    ov.setAttribute("viewBox", `0 0 ${e.w} ${e.h}`); ov.setAttribute("preserveAspectRatio", "xMidYMid slice");
+    const ring = e.ring && e.r_in < e.r - 2;
+    const ppm = v.fit_r ? e.r_in / (v.fit_r + 4) : 0;   // px per mm (fit_r is 4 mm inside the filling edge)
+    const k = state.strokes?.length && ppm ? ppm : 0;
+    const path = k ? state.strokes.map((st) => "M" + st.map(([x, y]) => `${(e.cx + x * k).toFixed(1)},${(e.cy - y * k).toFixed(1)}`).join("L")).join("") : "";
+    const t = v.target;
+    ov.innerHTML = `<circle class="edge" cx="${e.cx}" cy="${e.cy}" r="${e.r}"/>
+      ${ring ? `<circle class="fill" cx="${e.cx}" cy="${e.cy}" r="${e.r_in}"/>` : ""}
+      ${path ? `<path class="design" d="${path}"/>` : ""}
+      ${t ? `<circle class="target" cx="${t.cx}" cy="${t.cy}" r="${e.w / 60}"/><path class="target" d="M${t.cx - e.w / 30},${t.cy}h${e.w / 15}M${t.cx},${t.cy - e.w / 30}v${e.w / 15}"/>` : ""}`;
+    ov.toggleAttribute("hidden", false);
+  } else ov.toggleAttribute("hidden", true);
+  const bits = [v.diameter_mm ? `${v.calibrated ? "" : "~"}${v.diameter_mm} mm` : "",
+    v.crust_mm ? `crust ${Math.round(v.crust_mm)} mm` : "", v.fit_r ? `room for ${Math.round(2 * v.fit_r)} mm` : "",
+    v.off_mm != null && v.off_mm <= 6 ? "centered" : ""].filter(Boolean).join(" · ");
+  const crusted = ["pumpkin pie", "pie", "tart"].includes(v.dish);
+  card.innerHTML = `<b>${esc(v.dish === "nothing" ? "Empty bed" : v.dish)}</b><span>${esc(bits)}</span>
+    ${crusted && e && state.live ? `<button class="btn" id="centerBtn" type="button">${v.calibrated ? "Re-save center" : "Save as center"}</button>` : ""}
+    ${(v.warnings || []).concat(state.fitNote ? [state.fitNote] : []).map((w) => `<span class="warn">${esc(w)}</span>`).join("")}`;
+  card.hidden = false;
+  const cb = $("centerBtn");
+  if (cb) cb.onclick = async () => {
+    try { const r = await apiJson("/api/dish/center", {}); if (r.design) applyFit(r.design); renderDish(r.dish); $("camMsg").textContent = "Saved. This spot is now the printer's center."; }
+    catch (err) { $("camMsg").textContent = `Save center: ${err.message}`; }
+  };
+}
+function applyFit(design) {   // the camera resized the design: same topping, so checks stay
+  state.plan = design.plan; state.strokes = design.strokes; state.path = design.path || state.path;
+  const f = design.fit || {};
+  state.fitNote = f.small_text ? "The name will be small here. Try just a shape." : "";
+  drawPreview(); renderAll();
+}
 $("readyBtn").onclick = async () => {
-  $("camMsg").innerHTML = '<span class="spin sm"></span> Taking a photo and asking Perplexity…';
+  $("camMsg").innerHTML = '<span class="spin sm"></span> Looking at the dish…';
+  renderLabel(null);
   try {
+    let v;
     if (state.live) {
-      state.ready = (await apiJson("/api/ready", {})).probability;
-    } else { await sleep(800); state.ready = 0.97; }
-    $("camMsg").textContent = state.ready >= READY_AT ? `Pie looks ready (${Math.round(state.ready * 100)}%).`
-      : `Not ready (${Math.round(state.ready * 100)}%). Center the pie and clear the bed.`;
-  } catch (e) { state.ready = 0; $("camMsg").textContent = `Camera error: ${e.message}`; }
+      const r = await apiJson("/api/ready", {});
+      state.ready = r.probability; v = r.dish;
+      if (r.design) applyFit(r.design);
+    } else { await sleep(900); state.ready = 0.97; v = SAMPLE_DISH; }
+    renderDish(v);
+    const what = v && v.dish && !["other", "nothing"].includes(v.dish) ? v.dish[0].toUpperCase() + v.dish.slice(1) : "Dish";
+    $("camMsg").textContent = state.ready >= READY_AT ? `${what} looks ready (${Math.round(state.ready * 100)}%).`
+      : `Not ready (${Math.round(state.ready * 100)}%). Center it and clear the bed.`;
+  } catch (e) { state.ready = 0; renderDish(null); $("camMsg").textContent = `Camera error: ${e.message}`; }
   updateGate();
 };
 

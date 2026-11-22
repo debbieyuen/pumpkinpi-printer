@@ -43,7 +43,7 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
     monkeypatch.setattr(srv, "GUESTS_FILE", f)
     monkeypatch.setattr(srv, "printer", lambda: (_ for _ in ()).throw(RuntimeError("no printer")))
     monkeypatch.setattr(srv, "make_client", lambda: __import__("contextlib").nullcontext(None))
-    monkeypatch.setattr(srv, "plan_design", lambda c, p, g, diets=None: dict(PLAN))
+    monkeypatch.setattr(srv, "plan_design", lambda c, p, g, diets=None, dish=None: dict(PLAN))
     seen_labels.clear()
     monkeypatch.setattr(srv, "enrich", lambda ps: [{**p, "label": LABEL if p["ingredient"] == "chocolate chips" else None} for p in ps])
     monkeypatch.setattr(srv, "check_ingredient", lambda c, prod, al, label=None: seen_labels.append(label) or {
@@ -52,7 +52,7 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
         "relevance": 0.9, "natural_flavor": 0.1})
     monkeypatch.setattr(srv, "run_job", lambda lines, dry_run=False: None)
     monkeypatch.setattr(srv, "recorder", FakeRecorder())
-    srv.state.update(checks={}, ready=0.0, plan=None, strokes=None, job={"running": False})
+    srv.state.update(checks={}, ready=0.0, plan=None, strokes=None, job={"running": False}, dish=None)
     return TestClient(srv.app)
 
 
@@ -149,10 +149,10 @@ def test_revise_rechecks_only_when_ingredients_change(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     c.post("/api/design", json={"prompt": "x"})
     c.post("/api/check", json={"product": "chocolate chips"})
-    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None: {**plan, "shape": "heart", "text": ""})
+    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None, dish=None: {**plan, "shape": "heart", "text": ""})
     c.post("/api/revise", json={"change": "just a heart, no name"})
     assert srv.state["plan"]["shape"] == "heart" and srv.state["checks"]
-    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None: {**plan, "ingredients": ["white chocolate chips", "heavy cream"]})
+    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None, dish=None: {**plan, "ingredients": ["white chocolate chips", "heavy cream"]})
     c.post("/api/revise", json={"change": "white chocolate"})
     assert srv.state["checks"] == {}
 
@@ -160,7 +160,7 @@ def test_revise_rechecks_only_when_ingredients_change(tmp_path, monkeypatch):
 def test_start_blocked_when_a_step_names_a_nut(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     plan = dict(PLAN, recipe=["Heat the cream.", "Add 1/4 tsp almond extract."])
-    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None: dict(plan))
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, dish=None: dict(plan))
     r = c.post("/api/design", json={"prompt": "x"}).json()
     assert r["scan"][0]["term"] == "almond extract"
     for p in PLAN["ingredients"]:

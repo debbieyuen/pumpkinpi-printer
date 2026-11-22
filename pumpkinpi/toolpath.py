@@ -39,6 +39,7 @@ class Machine:
     y_min: float = 5.0
     y_max: float = 215.0
     z_max: float = 120.0
+    pie_mm: float = 152.0       # outer diameter of the pie used for the camera "Save as center" (6-inch)
 
     @classmethod
     def load(cls, path: Path = MACHINE_FILE) -> "Machine":

@@ -9,7 +9,9 @@ Endpoints
     POST /api/design   {"prompt": "...", "diets": ["vegan"]} -> Agent API recipe + design plan + piping preview
     POST /api/check    {"product": "...", "diets": [...]} -> Open Food Facts label + Search API sources + Decider verdict per guest
                        allergen and per chosen diet (vegan, dairy-free, gluten-free, egg-free)
-    POST /api/ready    photo -> Decider: is the pie ready?  {"probability": 0.97}
+    POST /api/ready    photo -> Decider: is the pie ready? + vision: which dish, where the crust is; the design
+                       shrinks to fit inside the filling  {"probability": 0.97, "dish": {...}, "design": {...}}
+    POST /api/dish/center  one-time: the dish now sits where pie_x/pie_y was measured (camera_cal.json)
     POST /api/start    {"dry_run": bool} -> refuses until every ingredient is green and readiness >= 0.9,
                        then writes the G-code to the printer's microSD (PPMMDDNN.GCO) and prints from it
     GET  /api/photo    latest camera photo
@@ -36,7 +38,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
-from . import allergy_guide, label_scan
+from . import allergy_guide, label_scan, vision
 from .allergens import scan_blocks, scan_recipe
 from .camera import camera
 from .design import plan_design, revise_design
@@ -44,7 +46,7 @@ from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
 from .products import enrich
 from .timelapse import Recorder, clip_path
-from .shapes import FONTS, MAX_TEXT, SHAPES, strokes_for
+from .shapes import FONTS, MAX_TEXT, SHAPES, extent, strokes_for
 from .toolpath import Machine, piped_path, to_gcode
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -154,6 +156,17 @@ def status():
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}
 
 
+def fit_info(plan: dict, strokes: list) -> dict:
+    """How the camera changed the design's size, for the screen."""
+    d = state.get("dish") or {}
+    full = extent(strokes_for({**plan, "fit_r": None}))
+    now = extent(strokes)
+    k = now / full if full else 1.0
+    letters = 10 if plan.get("shape") != "text" else 24   # letter height in mm before scaling (shapes.py)
+    return {"dish": d.get("dish"), "fit_r": plan.get("fit_r"), "scale": round(k, 2),
+            "small_text": bool(plan.get("text")) and letters * k < 6}
+
+
 def exact(plan: dict) -> tuple[list, dict]:
     """Strokes plus the path read back from the real G-code, so Design shows exactly what will pipe."""
     try:
@@ -183,6 +196,11 @@ def label_for(product: str) -> dict | None:
 
 
 def publish(plan: dict, keep_checks: bool) -> dict:
+    d = state.get("dish") or {}
+    if d.get("fit_r"):
+        plan["fit_r"], plan["dish"] = d["fit_r"], d.get("dish")
+    else:
+        plan.pop("fit_r", None)
     strokes, path = exact(plan)
     if not SHOW_HEALTH:
         plan["diet_notes"] = ""
@@ -194,7 +212,7 @@ def publish(plan: dict, keep_checks: bool) -> dict:
         state["ready"] = 0.0
         state.pop("guide", None)
     return {"plan": plan, "strokes": path["strokes"], "path": {k: path[k] for k in ("mm", "seconds")},
-            "scan": scan}
+            "scan": scan, "fit": fit_info(plan, strokes)}
 
 
 @app.post("/api/design")
@@ -203,7 +221,7 @@ def design(req: DesignReq):
         raise HTTPException(400, "Type what you'd like on the pie")
     diets = clean_diets(req.diets)
     with make_client() as client:
-        plan = plan_design(client, req.prompt, guests()["guests"], diets=diets)
+        plan = plan_design(client, req.prompt, guests()["guests"], diets=diets, dish=state.get("dish"))
     plan["diets"] = diets
     add_labels(plan)
     return publish(plan, keep_checks=False)
@@ -223,7 +241,7 @@ def revise(req: ReviseReq):
     diets = clean_diets(req.diets)
     old = state["plan"]
     with make_client() as client:
-        plan = revise_design(client, old, req.change, guests()["guests"], diets=diets)
+        plan = revise_design(client, old, req.change, guests()["guests"], diets=diets, dish=state.get("dish"))
     plan["diets"] = diets
     plan["diet_notes"] = plan.get("diet_notes") or old.get("diet_notes", "")
     add_labels(plan, old)
@@ -348,10 +366,38 @@ def guide():
 
 @app.post("/api/ready")
 def ready():
-    with make_client() as client:
-        p = pie_ready(client, take_photo())
+    """One photo: Decider says if it's ready; vision says what it is and where the crust is."""
+    from concurrent.futures import ThreadPoolExecutor
+    photo = take_photo()
+    jpeg = photo.read_bytes()
+    pie_mm = Machine.load().pie_mm
+    with make_client() as client, ThreadPoolExecutor(2) as ex:
+        p_job = ex.submit(pie_ready, client, photo)
+        v_job = ex.submit(vision.inspect, client, jpeg, pie_mm)
+        p, v = p_job.result(), v_job.result()
+    state["dish"] = v
+    design = publish(dict(state["plan"]), keep_checks=True) if state["plan"] else None
     state["ready"] = p
-    return {"probability": p}
+    return {"probability": p, "dish": v, "design": design}
+
+
+@app.post("/api/dish/center")
+def dish_center():
+    """Calibrate once: the pie sits where pie_x/pie_y was measured. Saves the target and the mm scale."""
+    v = state.get("dish")
+    if not v or not v.get("edges"):
+        raise HTTPException(409, "Check the pie first so the camera can find its edge")
+    if v["dish"] in vision.TYPICAL_MM:
+        raise HTTPException(409, f"Save the center with the pie on the bed, not a {v['dish']}")
+    m = Machine.load()
+    vision.save_cal(v["edges"], m.pie_mm)
+    v = {**v, "calibrated": True, **vision.sizes(v["edges"], v["dish"], m.pie_mm, vision.load_cal())}
+    cal = vision.load_cal()
+    v["target"] = {"cx": cal["cx"] * v["edges"]["w"], "cy": cal["cy"] * v["edges"]["h"]}
+    v["warnings"] = vision.warnings(v)
+    state["dish"] = v
+    design = publish(dict(state["plan"]), keep_checks=True) if state["plan"] else None
+    return {"dish": v, "design": design}
 
 
 @app.get("/api/photo")

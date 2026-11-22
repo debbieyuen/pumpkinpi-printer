@@ -83,6 +83,8 @@ Rules:
   fully (about 2 hours), then makes and pipes the topping. Topping says e.g. "Pumpkin pie + dark chocolate
   ganache". For low-sugar guests, give a reduced-sugar option in diet_notes.
 - Fill products[] in the same order, with a Bay Area store that sells it and the UPC if a store page shows it.
+- If a dish on the bed is given, design for it: a cookie or cupcake is small, so use a shape alone or a name of at
+  most 6 letters; a pie has a crust ring, so keep the design inside the filling.
 - Never say an ingredient is safe; PumpkinPi checks each one separately. Do not put URLs in the JSON.
 - If diet options are given (vegan, dairy-free, gluten-free, egg-free, low sugar), every ingredient must fit them,
   e.g. vegan ganache uses dairy-free chocolate and oat or soy cream.
@@ -104,11 +106,19 @@ def tidy(plan: dict, old: dict | None = None) -> dict:
     return plan
 
 
-def plan_design(client: httpx.Client, prompt: str, guests: list[dict], diets: list[str] | None = None) -> dict:
+def dish_line(dish: dict | None) -> str:
+    if not dish or dish.get("dish") in (None, "nothing", "other"):
+        return ""
+    room = f", room for a design about {2 * dish['fit_r']:.0f} mm across" if dish.get("fit_r") else ""
+    return f"\nDish on the bed (from the camera): {dish['dish']}{room}"
+
+
+def plan_design(client: httpx.Client, prompt: str, guests: list[dict], diets: list[str] | None = None,
+                dish: dict | None = None) -> dict:
     roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
     text, results = pplx.agent(
         client, instructions=INSTRUCTIONS, name="pumpkinpi_design", schema=SCHEMA,
-        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\n\nRequest: {prompt}",
+        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}{dish_line(dish)}\n\nRequest: {prompt}",
     )
     plan = tidy(json.loads(text))
     plan["sources"] = [{"title": r.get("title"), "url": r.get("url")} for r in results if r.get("url")][:8]
@@ -125,13 +135,13 @@ font cursive. Words in quotes are the text to pipe."""
 
 
 def revise_design(client: httpx.Client, plan: dict, change: str, guests: list[dict],
-                  diets: list[str] | None = None) -> dict:
+                  diets: list[str] | None = None, dish: dict | None = None) -> dict:
     """Edit the current plan ("just a heart, no name") instead of starting over."""
     roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
     current = {k: plan.get(k) for k in SCHEMA["properties"]}
     text, results = pplx.agent(
         client, instructions=REVISE, name="pumpkinpi_revise", schema=SCHEMA,
-        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\n"
+        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}{dish_line(dish)}\n"
               f"Current design: {json.dumps(current)}\n\nChange: {change}",
     )
     new = tidy(json.loads(text), plan)
