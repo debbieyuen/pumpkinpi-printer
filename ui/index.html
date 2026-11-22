@@ -20,9 +20,13 @@
 <form id="askForm" class="ask" autocomplete="off">
   <div class="box">
   <input id="prompt" name="prompt" type="text" inputmode="none" placeholder="What should we pipe on the pie?" aria-label="What should we pipe on the pie?" required>
+  <button type="button" class="clear" id="clearBtn" aria-label="Clear prompt" hidden>×</button>
   <button type="submit" class="send" id="askBtn">Make</button>
   </div>
 </form>
+
+<!-- Shown while typing: tap a recent prompt to reuse or edit it -->
+<div class="recent" id="recent" hidden></div>
 
 <main class="screens">
   <!-- Recipe: diet chips, ingredients (allergen checks), steps, sources -->
@@ -59,8 +63,8 @@
 
 <div class="bar" id="bar">
   <p class="why" id="why">Make a design to start.</p>
+  <button class="btn go" id="sendBtn" type="button" disabled>Send to Printer</button>
   <div class="meter" aria-hidden="true"><div class="fill" id="jobFill"></div></div>
-  <button class="btn go" id="sendBtn" type="button" disabled>Send</button>
 </div>
 
 <!-- Shown (and the app grayed out) until the Pi sees the printer on USB -->

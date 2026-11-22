@@ -10,7 +10,8 @@ Endpoints
     POST /api/check    {"product": "...", "diets": [...]} -> Search API sources + Decider verdict per guest
                        allergen and per chosen diet (vegan, dairy-free, gluten-free, egg-free)
     POST /api/ready    photo -> Decider: is the pie ready?  {"probability": 0.97}
-    POST /api/start    {"dry_run": bool} -> refuses until every ingredient is green and readiness >= 0.9
+    POST /api/start    {"dry_run": bool} -> refuses until every ingredient is green and readiness >= 0.9,
+                       then writes the G-code to the printer's microSD (PPMMDDNN.GCO) and prints from it
     GET  /api/photo    latest camera photo
     GET  /api/camera.mjpg  live camera preview (MJPEG)
     GET  /api/job      piping progress
@@ -21,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -204,16 +206,51 @@ def gate(dry_run: bool) -> None:
         raise HTTPException(409, "Pie readiness below 0.9; re-run the camera check")
 
 
-def run_job(lines: list[str]) -> None:
+GCODE_DIR = ROOT / "gcode"   # a copy of every file sent, named like the one on the card
+
+
+def run_job(lines: list[str], dry_run: bool = False) -> None:
+    """Upload to the printer's microSD and print from the card; stream over USB if SD writes fail."""
+    from .printer import SDError, sd_file, sd_name
     job = state["job"]
+
+    def prog(i: int, n: int) -> None:
+        job["pct"] = round(40 * i / n)        # upload = first 40 % of the bar
+
     try:
         p = printer()
         p.frosting_mode()
-        for ln in lines:
+        try:
+            name = sd_name(dry_run, list(p.sd_list()))
+            data = sd_file(lines, name)
+            GCODE_DIR.mkdir(exist_ok=True)
+            (GCODE_DIR / name).write_text("\n".join(data) + "\n")
+            job.update(phase="upload", file=name)
+            p.sd_upload(name, data, progress=prog, stop=_stop.is_set)
             if _stop.is_set():
-                break
-            p.send(ln, wait_s=120)
-            job["done"] += 1
+                return
+            p.sd_start(name)
+            job["phase"] = "printing"
+            seen, t0 = False, time.time()
+            while not _stop.is_set():
+                time.sleep(1.0)
+                pr = p.sd_progress()
+                if pr:
+                    seen = True
+                    job["pct"] = 40 + round(60 * pr[0] / max(1, pr[1]))
+                elif seen or time.time() - t0 > 15:
+                    break   # finished, or stopped from the printer's screen
+            job["pct"] = 100
+        except SDError as e:  # no card / firmware without M28: fall back to streaming
+            if _stop.is_set():
+                return
+            job.update(phase="streaming", note=f"SD upload failed ({e}); streaming over USB")
+            for i, ln in enumerate(lines, 1):
+                if _stop.is_set():
+                    break
+                p.send(ln, wait_s=120)
+                job["done"] = i
+                job["pct"] = round(100 * i / len(lines))
     except Exception as e:  # noqa: BLE001 - surface any printer error on screen
         job["error"] = str(e)
     finally:
@@ -225,8 +262,9 @@ def start(req: StartReq):
     gate(req.dry_run)
     lines = to_gcode(state["strokes"], Machine.load(), dry_run=req.dry_run)
     _stop.clear()
-    state["job"] = {"running": True, "done": 0, "total": len(lines), "error": None, "dry_run": req.dry_run}
-    threading.Thread(target=run_job, args=(lines,), daemon=True).start()
+    state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": "start", "file": None,
+                    "error": None, "dry_run": req.dry_run}
+    threading.Thread(target=run_job, args=(lines, req.dry_run), daemon=True).start()
     return {"started": True, "lines": len(lines), "dry_run": req.dry_run}
 
 

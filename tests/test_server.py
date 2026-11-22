@@ -21,7 +21,7 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
         "checks": {a: Check(prod, a, 0.02, verdict, ["https://example.com"]) for a in al},
         "search": {"queries": ["q"], "results": [{"title": "t", "url": "https://example.com"}]},
         "relevance": 0.9, "natural_flavor": 0.1})
-    monkeypatch.setattr(srv, "run_job", lambda lines: None)
+    monkeypatch.setattr(srv, "run_job", lambda lines, dry_run=False: None)
     srv.state.update(checks={}, ready=0.0, plan=None, strokes=None, job={"running": False})
     return TestClient(srv.app)
 

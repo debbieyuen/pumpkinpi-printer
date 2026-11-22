@@ -94,6 +94,7 @@ document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".
 async function ask() {
   const prompt = $("prompt").value.trim();
   if (!prompt || state.busy) return;
+  remember(prompt);
   state.busy = true; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
   show("recipe"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
@@ -115,6 +116,28 @@ async function ask() {
     state.busy = false; $("askBtn").textContent = "Make"; updateGate();
   }
 }
+
+// ---------- recent prompts (kept on this Pi's browser, newest first) ----------
+const RECENT_KEY = "pumpkinpi.recent";
+const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } };
+function remember(p) {
+  const list = [p, ...recent().filter((x) => x.toLowerCase() !== p.toLowerCase())].slice(0, 6);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch {}
+}
+function renderRecent() {
+  const list = recent();
+  $("recent").innerHTML = list.length ? `<span class="lbl">Recent</span>` +
+    list.map((p, i) => `<button type="button" class="chip" data-i="${i}">${esc(p)}</button>`).join("") : "";
+  $("recent").hidden = !list.length || $("kbd").hidden;
+}
+$("recent").addEventListener("pointerdown", (e) => e.preventDefault());  // keep the keyboard open
+$("recent").onclick = (e) => {
+  const b = e.target.closest("[data-i]"); if (!b) return;
+  $("prompt").value = recent()[+b.dataset.i]; syncClear();   // edit it, or tap Make / Done
+};
+function syncClear() { $("clearBtn").hidden = !$("prompt").value; }
+$("clearBtn").addEventListener("pointerdown", (e) => e.preventDefault());
+$("clearBtn").onclick = () => { $("prompt").value = ""; syncClear(); if ($("kbd").hidden) showKbd(); };
 
 // ---------- 2. Search API + Decider per ingredient ----------
 async function check(product) {
@@ -224,9 +247,9 @@ function reason() {
   if (!state.plan) return state.busy ? "Perplexity is designing…" : "Make a design to start.";
   const c = counts();
   if (c.wait) return "Checking ingredients…";
-  if (c.red || c.yellow) return "Send is locked: an ingredient needs a check (Recipe).";
-  if (state.ready < READY_AT) return "Send is locked: check the pie on the Camera screen.";
-  return "Ready. Stay next to the printer, then tap Send.";
+  if (c.red || c.yellow) return "Locked: an ingredient needs a check";
+  if (state.ready < READY_AT) return "Locked: check the pie on Camera";
+  return "Ready. Stay next to the printer.";
 }
 function updateGate() {
   const p = !!state.plan;
@@ -234,7 +257,7 @@ function updateGate() {
   const ok = p && allSafe() && state.ready >= READY_AT;
   const b = $("sendBtn");
   if (state.job) { b.disabled = false; b.textContent = "Stop"; b.classList.add("stop"); }
-  else { b.disabled = !ok; b.textContent = "Send"; b.classList.remove("stop"); $("why").textContent = reason(); }
+  else { b.disabled = !ok; b.textContent = "Send to Printer"; b.classList.remove("stop"); $("why").textContent = reason(); }
 }
 
 $("readyBtn").onclick = async () => {
@@ -254,12 +277,16 @@ async function start(dry_run) {
   try {
     const r = await apiJson("/api/start", { dry_run });
     state.job = true; updateGate();
-    log(`${dry_run ? "Dry run" : "Piping"} started (${r.lines} moves). Stay next to the printer.`);
+    log(`Making G-code (${r.lines} moves)…`);
+    const what = dry_run ? "Dry run" : "Piping";
     for (let i = 0; i < 7200; i++) {
       await sleep(500);
       const j = await apiJson("/api/job");
-      $("jobFill").style.width = `${Math.round((100 * j.done) / Math.max(1, j.total))}%`;
-      if (!j.running) { log(j.error ? `Stopped: ${j.error}` : `${dry_run ? "Dry run" : "Piping"} done.`); break; }
+      $("jobFill").style.width = `${j.pct ?? Math.round((100 * j.done) / Math.max(1, j.total))}%`;
+      if (j.phase === "upload") $("why").textContent = `Saving ${j.file} to the printer's SD card…`;
+      else if (j.phase === "printing") $("why").textContent = `${what} ${j.file} from the SD card. Stay next to the printer.`;
+      else if (j.phase === "streaming") $("why").textContent = `${what} over USB (no SD card). Stay next to the printer.`;
+      if (!j.running) { log(j.error ? `Stopped: ${j.error}` : `${what} done${j.file ? ` (${j.file})` : ""}.`); break; }
     }
   } catch (e) { log(`Send refused: ${e.message}`); }
   state.job = false; updateGate(); if (note) $("why").textContent = note;
@@ -281,8 +308,8 @@ function drawKbd() {
   $("kbd").innerHTML = KEYS.map((row) => `<div class="krow">${(typeof row === "string" ? [...row] : row).map((k) =>
     `<button type="button" class="key ${k.length > 1 ? "wide " + (k === "space" ? "space" : "") : ""}" data-k="${esc(k)}">${esc(k === "space" ? "space" : shift && k.length === 1 ? k.toUpperCase() : k)}</button>`).join("")}</div>`).join("");
 }
-function showKbd() { drawKbd(); $("kbd").hidden = false; document.body.classList.add("typing"); }
-function hideKbd() { $("kbd").hidden = true; document.body.classList.remove("typing"); window.Pie3D?.resize(); }
+function showKbd() { drawKbd(); $("kbd").hidden = false; document.body.classList.add("typing"); renderRecent(); syncClear(); }
+function hideKbd() { $("kbd").hidden = true; $("recent").hidden = true; document.body.classList.remove("typing"); syncClear(); window.Pie3D?.resize(); }
 $("prompt").addEventListener("pointerdown", () => { if ($("kbd").hidden) showKbd(); });
 $("prompt").addEventListener("focus", showKbd);
 $("kbd").addEventListener("pointerdown", (e) => e.preventDefault()); // keep focus in the input
@@ -294,6 +321,7 @@ $("kbd").onclick = (e) => {
   else if (k === "⇧") { shift = !shift; drawKbd(); return; }
   else if (k === "Done") { hideKbd(); el.blur(); ask(); return; }
   else { el.value += shift ? k.toUpperCase() : k; if (shift) { shift = false; drawKbd(); } }
+  syncClear();
 };
 $("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); ask(); };
 

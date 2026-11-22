@@ -228,3 +228,4 @@ guests.json
 *.local.json
 captures/
 machine.json
+gcode/
