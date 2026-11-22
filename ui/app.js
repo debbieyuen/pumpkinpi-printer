@@ -116,18 +116,10 @@ function counts() {
 
 function renderSummary() {
   const p = state.plan; if (!p) return;
-  const c = counts();
-  const ingLine = c.wait ? `<span class="spin sm"></span> Checking ingredients… ${c.n - c.wait}/${c.n}`
-    : c.red ? `${c.red} allergen found` : c.yellow ? `${c.yellow} of ${c.n} need a label check` : `All ${c.n} ingredients safe`;
-  const ingCls = c.wait ? "" : c.red ? "red" : c.yellow ? "yellow" : "green";
   const ready = state.ready >= READY_AT ? ["green", "Pie looks ready"] : state.ready > 0 ? ["yellow", "Pie not ready"] : ["", "Pie not checked yet"];
   $("summary").innerHTML = `
     <h2 class="cap">${esc(p.caption)}</h2>
-    <dl class="facts">
-      ${p.guest ? `<div><dt>For</dt><dd>${esc(p.guest)}</dd></div>` : ""}
-      <div><dt>Topping</dt><dd>${esc(p.topping)}</dd></div>
-    </dl>
-    <button type="button" class="stat ${ingCls}" data-go="recipe"><span class="sdot"></span>${ingLine}<span class="go">Recipe ›</span></button>
+    ${p.guest ? `<p class="for">For <b>${esc(p.guest)}</b></p>` : ""}
     <button type="button" class="stat ${ready[0]}" data-go="camera"><span class="sdot"></span>${ready[1]}<span class="go">Camera ›</span></button>`;
 }
 $("summary").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) show(b.dataset.go); };

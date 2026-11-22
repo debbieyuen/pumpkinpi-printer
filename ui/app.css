@@ -64,7 +64,8 @@ body:not(.webgl) .preview{display:block} body:not(.webgl) #pie3d{display:none}
 #strokes polyline{fill:none;stroke:#3a1f10;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .side{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:.8rem}
 .hint p{font-size:1.25rem;color:var(--muted);max-width:22em}
-.cap{font-size:1.6rem;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.for{font-size:1.25rem;color:var(--muted)}.for b{color:var(--paper);font-weight:600}
+.cap{font-size:1.9rem;font-weight:600;letter-spacing:-.02em;line-height:1.2}
 .facts{display:flex;flex-direction:column;gap:.3rem}
 .facts div{display:flex;gap:.8rem;font-size:1.1rem}
 .facts dt{color:var(--muted);min-width:5rem}.facts dd{font-weight:500}

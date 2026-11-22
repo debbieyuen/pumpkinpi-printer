@@ -65,7 +65,22 @@ if (renderer) {
 
   const crustMat = new THREE.MeshStandardMaterial({ map: crustTex, roughness: 0.82, color: 0xffffff });
   const fillingMat = new THREE.MeshStandardMaterial({ map: fillingTex, roughness: 0.42, metalness: 0 });
-  const ganacheMat = new THREE.MeshStandardMaterial({ color: 0x4a2412, roughness: 0.28, metalness: 0.05 });
+  // Ganache: very dark brown, satin (not mirror) sheen, fine surface bumps so highlights break up.
+  const ganacheBump = canvasTex(256, (g, n) => {
+    g.fillStyle = "#808080"; g.fillRect(0, 0, n, n);
+    for (let i = 0; i < 1400; i++) {
+      const x = rand() * n, y = rand() * n, r = rand() * 6 + 2, c = 90 + rand() * 80 | 0;
+      const grd = g.createRadialGradient(x, y, 0, x, y, r);
+      grd.addColorStop(0, `rgba(${c},${c},${c},.55)`); grd.addColorStop(1, "rgba(128,128,128,0)");
+      g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+  });
+  ganacheBump.colorSpace = THREE.NoColorSpace;
+  ganacheBump.wrapS = ganacheBump.wrapT = THREE.RepeatWrapping; ganacheBump.repeat.set(14, 1);
+  const ganacheMat = new THREE.MeshPhysicalMaterial({
+    color: 0x2a140a, roughness: 0.5, metalness: 0, bumpMap: ganacheBump, bumpScale: 0.6,
+    clearcoat: 0.35, clearcoatRoughness: 0.55, sheen: 0.4, sheenColor: new THREE.Color(0x6b3a20), sheenRoughness: 0.6,
+  });
 
   const pie = new THREE.Group();
   scene.add(pie);
@@ -127,32 +142,68 @@ if (renderer) {
   const strokeGroup = new THREE.Group();
   pie.add(strokeGroup);
   let tubes = [];   // {mesh, count}
+  // A piped line is not a perfect tube: it settles (wider than tall), its width wobbles with hand/
+  // plunger pressure, and each line starts and ends in a soft blob.
+  const RAD = 1.55, RADIAL = 14, FLAT = 0.58;
+  function surfaceY(x, y) { const r = Math.hypot(x, y); return FILL_Y + 0.9 * (1 - (r / R_FILL) ** 2); }
+  function ganacheGeo(curve, len, seed) {
+    const segs = Math.max(10, Math.ceil(len * 2));
+    const geo = new THREE.TubeGeometry(curve, segs, RAD, RADIAL, false);
+    const p = geo.attributes.position, c = new THREE.Vector3(), d = new THREE.Vector3();
+    const ph1 = seed * 1.7, ph2 = seed * 3.1;
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs, s = u * len;
+      curve.getPointAt(u, c);
+      const wobble = 1 + 0.09 * Math.sin(s * 0.55 + ph1) + 0.05 * Math.sin(s * 1.9 + ph2);
+      const endSwell = 1 + 0.22 * Math.exp(-((s / 2.2) ** 2)) + 0.14 * Math.exp(-(((len - s) / 2.2) ** 2));
+      const k = wobble * endSwell;
+      for (let j = 0; j <= RADIAL; j++) {
+        const idx = i * (RADIAL + 1) + j;
+        d.fromBufferAttribute(p, idx).sub(c);
+        d.x *= k; d.z *= k; d.y = d.y * k * FLAT;
+        if (d.y < 0) d.y *= 0.35;                       // flat bottom where it meets the filling
+        p.setXYZ(idx, c.x + d.x, c.y + d.y, c.z + d.z);
+      }
+    }
+    geo.computeVertexNormals();
+    return { geo, segs };
+  }
+  function blob(at, r) {   // rounded dollop to close each end of a line
+    const g = new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    const m = new THREE.Mesh(g, ganacheMat);
+    m.scale.set(1, FLAT * 1.05, 1); m.position.copy(at); m.position.y -= 0.05;
+    m.castShadow = true; m.visible = false; strokeGroup.add(m);
+    return m;
+  }
   function setStrokes(strokes) {
-    for (const t of tubes) { t.mesh.geometry.dispose(); strokeGroup.remove(t.mesh); }
+    for (const t of tubes) { for (const m of [t.mesh, t.a, t.b]) { m.geometry.dispose(); strokeGroup.remove(m); } }
     tubes = [];
-    for (const s of strokes || []) {
-      if (s.length < 2) continue;
-      const pts = s.map(([x, y]) => {
-        const r = Math.hypot(x, y);
-        return new THREE.Vector3(x, FILL_Y + 0.9 * (1 - (r / R_FILL) ** 2) + 1.3, -y);
-      });
-      const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
-      let len = 0; for (let i = 1; i < pts.length; i++) len += pts[i].distanceTo(pts[i - 1]);
-      const geo = new THREE.TubeGeometry(curve, Math.max(8, Math.ceil(len * 1.5)), 1.5, 10, false);
+    (strokes || []).forEach((s, n) => {
+      if (s.length < 2) return;
+      const pts = s.map(([x, y]) => new THREE.Vector3(x, surfaceY(x, y) + RAD * FLAT * 0.35, -y));
+      const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal", 0.5);
+      const len = curve.getLength();
+      const closed = pts[0].distanceTo(pts[pts.length - 1]) < 0.5;
+      const { geo } = ganacheGeo(curve, len, n + 1);
       const mesh = new THREE.Mesh(geo, ganacheMat);
-      mesh.castShadow = true;
+      mesh.castShadow = true; mesh.receiveShadow = true;
       geo.setDrawRange(0, 0);
       strokeGroup.add(mesh);
-      tubes.push({ mesh, count: geo.index.count, len });
-    }
+      const a = blob(pts[0], RAD * (closed ? 1.05 : 1.22)), b = blob(pts[pts.length - 1], RAD * (closed ? 1.05 : 1.14));
+      tubes.push({ mesh, a, b, curve, end: pts[pts.length - 1], count: geo.index.count, len });
+    });
   }
   function reveal(f) {   // f in 0..1 over total stroke length, in order
     const total = tubes.reduce((a, t) => a + t.len, 0) || 1;
     let left = f * total;
     for (const t of tubes) {
       const take = Math.max(0, Math.min(1, left / t.len)); left -= t.len;
-      const segs = Math.floor((take * t.count) / 60) * 60;  // 10 radial * 6 indices per segment
+      const per = RADIAL * 6;                                  // indices per tube segment
+      const segs = Math.floor((take * t.count) / per) * per;
       t.mesh.geometry.setDrawRange(0, take >= 1 ? t.count : segs);
+      t.a.visible = take > 0; t.b.visible = take > 0;
+      if (take > 0 && take < 1) { t.curve.getPointAt(take, t.b.position); t.b.position.y -= 0.05; }   // blob follows the tip
+      else if (take >= 1) { t.b.position.copy(t.end); t.b.position.y -= 0.05; }
     }
   }
 
