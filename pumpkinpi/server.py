@@ -41,7 +41,7 @@ from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
 from .products import enrich
 from .shapes import FONTS, SHAPES, split_lines, strokes_for
-from .toolpath import Machine, piped_path, to_gcode
+from .toolpath import TOPPING_INFO, TOPPINGS, Machine, drip_test_gcode, piped_path, save_topping, to_gcode
 
 ROOT = Path(__file__).resolve().parent.parent
 GUESTS_FILE = Path(os.environ.get("PUMPKINPI_GUESTS", ROOT / "guests.json"))
@@ -65,7 +65,7 @@ def api_error(request, exc: RuntimeError):
 if PREVIEW:   # the hosted preview loads the screen from another origin
     from fastapi.middleware.cors import CORSMiddleware
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-state: dict = {"checks": {}, "ready": 0.0, "plan": None, "strokes": None,
+state: dict = {"checks": {}, "ready": 0.0, "plan": None, "strokes": None, "layers": [], "drip": None,
                "job": {"running": False, "done": 0, "total": 0, "error": None}}
 _printer = None
 _stop = threading.Event()
@@ -109,11 +109,24 @@ def clean_diets(diets: list[str]) -> list[str]:
 class DesignReq(BaseModel):
     prompt: str
     diets: list[str] = []
+    topping_type: str | None = None   # chocolate | frosting | marshmallow
+    add_layer: bool = False           # keep what's already piped and plan the next topping on top
 
 
 class ReviseReq(BaseModel):
     change: str
     diets: list[str] = []
+    topping_type: str | None = None
+
+
+class ToppingReq(BaseModel):
+    topping_type: str
+    values: dict = {}
+
+
+class DripReq(BaseModel):
+    topping_type: str
+    seconds: float | None = None
 
 
 class EditReq(BaseModel):
@@ -161,7 +174,7 @@ def exact(plan: dict) -> tuple[list, dict]:
     """Strokes plus the path read back from the real G-code, so Design shows exactly what will pipe."""
     try:
         strokes = strokes_for(plan)
-        m = Machine.load()
+        m = Machine.load(topping=plan.get("topping_type") or "chocolate")
         path = piped_path(to_gcode(strokes, m), m)
     except ValueError as e:   # off the pie or outside the printer's safe box
         raise HTTPException(422, str(e))
@@ -185,8 +198,18 @@ def label_for(product: str) -> dict | None:
     return None
 
 
-def sources_of(plan: dict) -> list[dict]:
-    return plan.get("sources", [])
+def topping_type(name: str | None) -> str:
+    if name in (None, ""):
+        return "chocolate"
+    if name not in TOPPINGS:
+        raise HTTPException(400, f"Topping must be one of {', '.join(TOPPINGS)}")
+    return name
+
+
+def layer_of(plan: dict) -> dict:
+    """A finished layer, kept on screen (and in the Agent's context) while the next topping is planned."""
+    return {"topping_type": plan.get("topping_type") or "chocolate", "shape": plan.get("shape"),
+            "text": plan.get("text", ""), "font": plan.get("font"), "strokes": state["strokes_path"]}
 
 
 def answer_only(plan: dict) -> dict:
@@ -205,12 +228,12 @@ def publish(plan: dict, keep_checks: bool) -> dict:
     checks = state["checks"] if keep_checks else {}
     # Name scan of the whole recipe (steps and notes too): "a drop of almond extract" in step 3 blocks Send.
     scan = scan_recipe(plan, allergens())
-    state.update(plan=plan, strokes=strokes, checks=checks, scan=scan)
+    state.update(plan=plan, strokes=strokes, checks=checks, scan=scan, strokes_path=path["strokes"])
     if not keep_checks:
         state["ready"] = 0.0
         state.pop("guide", None)
     return {"plan": plan, "strokes": path["strokes"], "path": {k: path[k] for k in ("mm", "seconds")},
-            "scan": scan}
+            "scan": scan, "layers": state["layers"]}
 
 
 @app.post("/api/design")
@@ -218,11 +241,23 @@ def design(req: DesignReq):
     if not req.prompt.strip():
         raise HTTPException(400, "Type what you'd like on the pie")
     diets = clean_diets(req.diets)
+    ttype = topping_type(req.topping_type)
+    layers = state["layers"]
+    if req.add_layer:
+        if not state["plan"] or not state["strokes"]:
+            raise HTTPException(409, "Pipe a first design before adding another topping")
+        layers = layers + [layer_of(state["plan"])]
     with make_client() as client:
-        plan = plan_design(client, req.prompt, guests()["guests"], diets=diets)
+        plan = plan_design(client, req.prompt, guests()["guests"], diets=diets, topping_type=ttype,
+                           layers=[{k: l[k] for k in ("topping_type", "shape", "text")} for l in layers] if req.add_layer else None)
     if plan.get("kind") == "question":
         add_labels(plan)
         return answer_only(plan)
+    if req.add_layer:   # same food; earlier layers stay on it
+        plan["base"] = state["plan"].get("base", "pie")
+        state["layers"] = layers
+    else:
+        state["layers"] = []
     plan["diets"] = diets
     add_labels(plan)
     return publish(plan, keep_checks=False)
@@ -242,7 +277,9 @@ def revise(req: ReviseReq):
     diets = clean_diets(req.diets)
     old = state["plan"]
     with make_client() as client:
-        plan = revise_design(client, old, req.change, guests()["guests"], diets=diets)
+        plan = revise_design(client, old, req.change, guests()["guests"], diets=diets,
+                             topping_type=topping_type(req.topping_type or old.get("topping_type")),
+                             layers=[{k: l[k] for k in ("topping_type", "shape", "text")} for l in state["layers"]] or None)
     if plan.get("kind") == "question":
         return answer_only(plan)
     plan["diets"] = diets
@@ -413,7 +450,8 @@ def run_job(lines: list[str], dry_run: bool = False) -> None:
 @app.post("/api/start")
 def start(req: StartReq):
     gate(req.dry_run)
-    lines = to_gcode(state["strokes"], Machine.load(), dry_run=req.dry_run)
+    lines = to_gcode(state["strokes"], Machine.load(topping=state["plan"].get("topping_type") or "chocolate"),
+                     dry_run=req.dry_run)
     _stop.clear()
     state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": "start", "file": None,
                     "error": None, "dry_run": req.dry_run}
@@ -424,6 +462,77 @@ def start(req: StartReq):
 @app.get("/api/job")
 def job():
     return state["job"]
+
+
+# ---------- toppings: per-topping settings + drip test ----------
+@app.get("/api/toppings")
+def toppings():
+    out = {}
+    for name in TOPPINGS:
+        m = Machine.load(topping=name)
+        out[name] = {**TOPPING_INFO[name], "settings": {k: getattr(m, k) for k in TOPPINGS[name]} | {"tip_offset": m.tip_offset}}
+    return out
+
+
+@app.post("/api/toppings")
+def save_toppings(req: ToppingReq):
+    try:
+        return {"topping_type": req.topping_type, "settings": save_topping(topping_type(req.topping_type), req.values)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+def run_drip(lines: list[str]) -> None:
+    drip = state["drip"]
+    try:
+        p = printer()
+        p.frosting_mode()
+        for ln in lines:            # streamed over USB so we know the moment the line ends
+            if _stop.is_set():
+                return
+            p.send(ln, wait_s=60)
+        drip.update(phase="watching", t_end=time.time())   # M400 returned: plunger has stopped
+    except Exception as e:  # noqa: BLE001
+        drip.update(phase="error", error=str(e))
+    finally:
+        state["job"]["running"] = False
+
+
+@app.post("/api/drip-test")
+def drip_test(req: DripReq):
+    """Pipe one 40 mm line on parchment, pull back with no pause, then you time the ooze on camera."""
+    name = topping_type(req.topping_type)
+    if state["job"]["running"]:
+        raise HTTPException(409, "Already piping")
+    lines = drip_test_gcode(Machine.load(topping=name))
+    _stop.clear()
+    state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": "drip", "file": None, "error": None}
+    state["drip"] = {"topping_type": name, "phase": "piping", "t_end": None, "error": None}
+    threading.Thread(target=run_drip, args=(lines,), daemon=True).start()
+    return {"started": True}
+
+
+@app.get("/api/drip-test")
+def drip_status():
+    d = state["drip"] or {"phase": "idle"}
+    return {**d, "now": time.time()}
+
+
+def suggest(name: str, seconds: float) -> dict:
+    """Pause = the measured ooze (plus a little), capped at 8 s. Long oozes also get a bigger pull-back."""
+    m = Machine.load(topping=name)
+    out = {"dwell": round(min(8.0, max(0.0, seconds) + 0.3), 1)}
+    if seconds > 3:
+        out["retract"] = round(m.retract + 0.2, 2)
+    return out
+
+
+@app.post("/api/drip-test/result")
+def drip_result(req: DripReq):
+    name = topping_type(req.topping_type)
+    if req.seconds is None or req.seconds < 0 or req.seconds > 120:
+        raise HTTPException(400, "seconds must be 0-120")
+    return {"topping_type": name, "seconds": round(req.seconds, 1), "suggest": suggest(name, req.seconds)}
 
 
 @app.post("/api/stop")

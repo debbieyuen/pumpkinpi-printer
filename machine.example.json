@@ -8,5 +8,19 @@
   "travel": 1500.0,
   "e_per_mm": 0.02,
   "prime": 0.3,
-  "retract": 0.6
+  "retract": 0.6,
+  "dwell": 0.5,
+  "lift_feed": 300.0,
+  "tip_offset": 0.0,
+  "toppings": {
+    "chocolate": {
+      "dwell": 1.0
+    },
+    "frosting": {
+      "dwell": 0.5
+    },
+    "marshmallow": {
+      "dwell": 1.5
+    }
+  }
 }

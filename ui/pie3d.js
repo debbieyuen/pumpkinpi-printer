@@ -82,6 +82,14 @@ if (renderer) {
     clearcoat: 0.35, clearcoatRoughness: 0.55, sheen: 0.4, sheenColor: new THREE.Color(0x6b3a20), sheenRoughness: 0.6,
   });
 
+  // Each topping looks different: buttercream is matte cream, melted marshmallow is glossy white.
+  const MATS = {
+    chocolate: ganacheMat,
+    frosting: new THREE.MeshPhysicalMaterial({ color: 0xf6efe2, roughness: 0.78, metalness: 0, bumpMap: ganacheBump, bumpScale: 0.35, sheen: 0.3, sheenColor: new THREE.Color(0xffffff) }),
+    marshmallow: new THREE.MeshPhysicalMaterial({ color: 0xfbf8f2, roughness: 0.28, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.25 }),
+  };
+  let mat = ganacheMat;
+
   const pie = new THREE.Group();
   scene.add(pie);
 
@@ -213,12 +221,32 @@ if (renderer) {
     geo.computeVertexNormals();
     return { geo, segs };
   }
-  function blob(at, r) {   // rounded dollop to close each end of a line
+  function blob(at, r, material = mat, group = strokeGroup, shown = false) {   // rounded dollop to close each end of a line
     const g = new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-    const m = new THREE.Mesh(g, ganacheMat);
+    const m = new THREE.Mesh(g, material);
     m.scale.set(1, FLAT * 1.05, 1); m.position.copy(at); m.position.y -= 0.05;
-    m.castShadow = true; m.visible = false; strokeGroup.add(m);
+    m.castShadow = true; m.visible = shown; group.add(m);
     return m;
+  }
+  // Toppings piped earlier (e.g. the chocolate layer before the frosting) stay drawn underneath.
+  const underGroup = new THREE.Group();
+  pie.add(underGroup);
+  function setUnder(layers) {
+    for (const m of [...underGroup.children]) { m.geometry.dispose(); underGroup.remove(m); }
+    for (const L of layers || []) {
+      const material = MATS[L.topping_type] || ganacheMat;
+      for (const s of L.strokes || []) {
+        if (s.length < 2) continue;
+        const pts = s.map(([x, y]) => new THREE.Vector3(x, surfaceY(x, y) + RAD * FLAT * 0.35, -y));
+        const curve = new THREE.CurvePath();
+        for (let i = 1; i < pts.length; i++) if (pts[i].distanceTo(pts[i - 1]) > 1e-3) curve.add(new THREE.LineCurve3(pts[i - 1], pts[i]));
+        if (!curve.curves.length) continue;
+        const mesh = new THREE.Mesh(ganacheGeo(curve, curve.getLength(), 7).geo, material);
+        mesh.castShadow = true; mesh.receiveShadow = true; underGroup.add(mesh);
+        blob(pts[0], RAD * 1.1, material, underGroup, true); blob(pts[pts.length - 1], RAD * 1.1, material, underGroup, true);
+      }
+    }
+    dirty = true;
   }
   function setStrokes(strokes) {
     for (const t of tubes) { for (const m of [t.mesh, t.a, t.b]) { m.geometry.dispose(); strokeGroup.remove(m); } }
@@ -233,7 +261,7 @@ if (renderer) {
       const len = curve.getLength();
       const closed = pts[0].distanceTo(pts[pts.length - 1]) < 0.5;
       const { geo } = ganacheGeo(curve, len, n + 1);
-      const mesh = new THREE.Mesh(geo, ganacheMat);
+      const mesh = new THREE.Mesh(geo, mat);
       mesh.castShadow = true; mesh.receiveShadow = true;
       geo.setDrawRange(0, 0);
       strokeGroup.add(mesh);
@@ -295,7 +323,8 @@ if (renderer) {
   new ResizeObserver(resize).observe(canvas.parentElement);
 
   window.Pie3D = {
-    show(strokes) {
+    show(strokes, topping) {
+      if (topping) mat = MATS[topping] || ganacheMat;
       setStrokes(strokes);
       if (!strokes || !strokes.length) { mode = "idle"; return; }
       // Always come in from the side, then orbit forward to the top view (camera ends on +z, so +Y reads "up").
@@ -308,8 +337,9 @@ if (renderer) {
       if (want === base && c === (this._candy || false)) return;
       this._candy = c; buildBase(want, c); dirty = true;
     },
+    setLayers(layers) { setUnder(layers); },
     thinking(on) { if (on) setStrokes([]); mode = on ? "thinking" : "idle"; },
-    replay() { el = SIDE; this.show(window.pieStrokes); },
+    replay() { el = SIDE; this.show(window.pieStrokes, window.pieTopping); },
     resize,
     seek(ms) {   // for screenshots/tests: jump to a point in the side -> top animation
       if (!tubes.length) return;
@@ -319,6 +349,7 @@ if (renderer) {
   resize();
   requestAnimationFrame(frame);
   if (window.pieBase) window.Pie3D.setBase(window.pieBase, window.pieCandy);
-  if (window.pieStrokes && window.pieStrokes.length) window.Pie3D.show(window.pieStrokes);
+  if (window.pieLayers) window.Pie3D.setLayers(window.pieLayers);
+  if (window.pieStrokes && window.pieStrokes.length) window.Pie3D.show(window.pieStrokes, window.pieTopping);
   canvas.addEventListener("click", () => window.Pie3D.replay());   // tap the pie to replay
 }

@@ -20,6 +20,7 @@ import json
 import httpx
 
 from . import pplx
+from .toolpath import TOPPINGS
 from .shapes import BASES, FONTS, MAX_LINE, MAX_TEXT, SHAPES, split_lines
 
 SCHEMA = {
@@ -30,6 +31,8 @@ SCHEMA = {
         "answer": {"type": "string", "description": "For questions (and any question inside a make request): 3-6 short plain sentences, no URLs"},
         "makes": {"type": "string", "description": "What the recipe makes, e.g. 'M&M's cookies with a heart', 'Roast turkey'"},
         "base": {"type": "string", "enum": list(BASES), "description": "What the design is piped on; none if nothing gets piped"},
+        "topping_type": {"type": "string", "enum": list(TOPPINGS),
+                         "description": "What the syringe pipes: the selected one unless the request names another"},
         "guest": {"type": "string", "description": "Guest name from the list, or empty"},
         "shape": {"type": "string", "enum": list(SHAPES)},
         "text": {"type": "string", "description": f"Words to pipe: at most 2 short lines of {MAX_LINE} letters, or empty"},
@@ -52,7 +55,7 @@ SCHEMA = {
         "design_note": {"type": "string", "description": "One short line if you simplified the design (one picture, shorter words), else empty"},
         "caption": {"type": "string", "description": "One short on-screen line, under 60 characters"},
     },
-    "required": ["kind", "answer", "makes", "base", "guest", "shape", "text", "font", "topping", "ingredients", "products", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption"],
+    "required": ["kind", "answer", "makes", "base", "topping_type", "guest", "shape", "text", "font", "topping", "ingredients", "products", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption"],
     "additionalProperties": False,
 }
 
@@ -83,8 +86,13 @@ Design rules (when base is not none):
   name if the design is for a named guest, else empty. Whole words only, at most two lines of {MAX_LINE} letters (e.g.
   "Happy Thanksgiving" pipes as "Happy" / "Thanksgiving"). If the words are longer, shorten them and say so in design_note.
 - font: "cursive" if they ask for cursive, script or handwriting, else "print".
-- The syringe is NOT heated, so melted chocolate will set in the tip. Turn "chocolate" into a pipeable
-  chocolate ganache or chocolate frosting that stays soft at room temperature.
+- The syringe pipes one of three toppings (topping_type), loaded one at a time:
+  "chocolate" = melted chocolate chips (an exact chip product; optionally a little neutral oil so it flows);
+  "frosting" = a pipeable frosting (e.g. buttercream or cream-cheese frosting, from exact products);
+  "marshmallow" = melted marshmallows (an exact marshmallow product; they contain gelatin, so not vegan).
+  Use the selected topping unless the request clearly names another. The syringe is NOT heated: for
+  chocolate say in piping_notes to pipe within about 10-15 minutes of melting and keep it under 120°F; for
+  marshmallow say to cool it about 3 minutes and pipe right away because it sets fast and strings.
 - The topping must avoid every allergen any guest avoids. Prefer 2-3 simple, widely sold ingredients.
 - Watch for hidden nuts and fish: no almond/cashew/other nut milks, creams, flours, butters, oils or
   extracts, praline, marzipan, gianduja, nougat or pesto when a guest avoids tree nuts or peanuts;
@@ -112,7 +120,7 @@ Design rules (when base is not none):
 - Never say an ingredient is safe; PumpkinPi checks each one separately. Do not put URLs in the JSON.
 - If diet options are given (vegan, dairy-free, gluten-free, egg-free, low sugar), every ingredient must fit them,
   e.g. vegan ganache uses dairy-free chocolate and oat or soy cream.
-- Search the web for a ganache/frosting ratio and piping consistency; prefer university extension and
+- Search the web for the topping's piping consistency; prefer university extension and
   food-safety sites.
 Return only a JSON object matching the schema."""
 
@@ -121,6 +129,8 @@ def tidy(plan: dict, old: dict | None = None) -> dict:
     """Keep the model inside what shapes.py can draw, and products[] in step with ingredients[]."""
     if plan.get("kind") not in ("make", "question"):
         plan["kind"] = "make"
+    if plan.get("topping_type") not in TOPPINGS:
+        plan["topping_type"] = (old or {}).get("topping_type", "chocolate")
     if plan.get("base") not in BASES:
         plan["base"] = (old or {}).get("base", "pie")
     if plan["kind"] == "question":
@@ -143,11 +153,26 @@ def tidy(plan: dict, old: dict | None = None) -> dict:
     return plan
 
 
-def plan_design(client: httpx.Client, prompt: str, guests: list[dict], diets: list[str] | None = None) -> dict:
+LAYER = """
+
+Adding a layer: the food and earlier toppings are already on it (listed as Layers). Plan ONLY this new
+topping: ingredients, products and recipe are just for this topping, base stays the same, makes says e.g.
+"Frosting layer". Pick a design that goes with the earlier layers (e.g. a name in frosting under a chocolate heart)."""
+
+
+def context(roster, diets, topping_type, layers) -> str:
+    s = f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\nSelected topping: {topping_type or 'chocolate'}\n"
+    if layers:
+        s += f"Layers already piped: {json.dumps(layers)}\n"
+    return s
+
+
+def plan_design(client: httpx.Client, prompt: str, guests: list[dict], diets: list[str] | None = None,
+                topping_type: str | None = None, layers: list[dict] | None = None) -> dict:
     roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
     text, results = pplx.agent(
-        client, instructions=INSTRUCTIONS, name="pumpkinpi_design", schema=SCHEMA,
-        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\n\nRequest: {prompt}",
+        client, instructions=INSTRUCTIONS + (LAYER if layers else ""), name="pumpkinpi_design", schema=SCHEMA,
+        input=context(roster, diets, topping_type, layers) + f"\nRequest: {prompt}",
     )
     plan = tidy(json.loads(text))
     plan["sources"] = [{"title": r.get("title"), "url": r.get("url")} for r in results if r.get("url")][:8]
@@ -166,13 +191,14 @@ food ("make cookies instead"), plan that food from scratch."""
 
 
 def revise_design(client: httpx.Client, plan: dict, change: str, guests: list[dict],
-                  diets: list[str] | None = None) -> dict:
+                  diets: list[str] | None = None, topping_type: str | None = None,
+                  layers: list[dict] | None = None) -> dict:
     """Edit the current plan ("just a heart, no name") instead of starting over."""
     roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
     current = {k: plan.get(k) for k in SCHEMA["properties"]}
     text, results = pplx.agent(
         client, instructions=REVISE, name="pumpkinpi_revise", schema=SCHEMA,
-        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\n"
+        input=context(roster, diets, topping_type or plan.get("topping_type"), layers) +
               f"Current design: {json.dumps(current)}\n\nChange: {change}",
     )
     new = tidy(json.loads(text), plan)

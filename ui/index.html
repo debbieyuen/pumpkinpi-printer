@@ -51,10 +51,14 @@
   <section class="screen camera" id="cameraView" hidden>
     <div class="camframe"><img id="camImg" alt="Live camera view of the printer bed" hidden><span class="live" id="liveTag" hidden>Live</span><p class="muted" id="camEmpty">Camera preview runs on the Pi.</p></div>
     <div class="side">
+      <div class="more" id="more" hidden></div>
+      <div class="load" id="load" aria-live="polite"></div>
       <p class="cammsg" id="camMsg">Put the food on the bed, then check it.</p>
       <button class="btn" id="readyBtn" type="button">Check it</button>
       <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
-      <p class="muted small">Dry run traces the path 15 mm above the pie with no topping.</p>
+      <button class="btn" id="dripBtn" type="button">Drip test</button>
+      <div class="drip" id="dripBox" hidden aria-live="polite"></div>
+      <p class="muted small" id="dripSet"></p>
     </div>
   </section>
 </main>
