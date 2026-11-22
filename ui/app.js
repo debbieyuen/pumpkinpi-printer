@@ -150,15 +150,6 @@ function demoVariant(shape, text) {   // sample mode: paths precomputed from the
   const x = v[`${shape}|${t}`];
   return { plan: { ...state.plan, shape, text: t }, strokes: x.strokes, path: { mm: x.mm, seconds: x.seconds } };
 }
-async function edit(shape, text) {
-  if (!state.plan || state.busy || state.job) return;
-  state.busy = true; renderDesign();
-  try {
-    const res = state.live ? await apiJson("/api/edit", { shape, text }) : (await sleep(250), demoVariant(shape, text));
-    applyDesign(res);
-  } catch (e) { log(`Couldn't change it: ${e.message}`); }
-  state.busy = false; renderDesign(); updateGate();
-}
 async function revise() {
   const change = $("prompt").value.trim();
   if (!change || !state.plan || state.busy || state.job) return;
@@ -181,22 +172,10 @@ async function revise() {
   state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate();
 }
 function renderDesign() {
-  const p = state.plan;
-  $("shapeRail").hidden = !p;
-  if (!p) { $("exact").hidden = true; return; }
-  for (const b of document.querySelectorAll(".shape[data-shape]")) { b.classList.toggle("on", b.dataset.shape === p.shape); b.disabled = state.busy; }
-  const nb = $("nameBtn"), has = !!p.text;
-  nb.classList.toggle("on", has); nb.setAttribute("aria-pressed", has); nb.disabled = state.busy || p.shape === "text" || !(p.text || state.name);
-  $("nameLbl").textContent = (p.text || state.name || "Name").slice(0, 10);
-  const t = state.path;
+  const t = state.plan && state.path;
   $("exact").hidden = !t;
   if (t) $("exact").innerHTML = `<b>Exactly what will pipe</b> · ${(t.mm / 10).toFixed(0)} cm of topping · about ${Math.max(1, Math.round(t.seconds / 60))} min`;
 }
-$("shapeRail").onclick = (e) => {
-  const b = e.target.closest(".shape"); if (!b || b.disabled || !state.plan) return;
-  if (b.id === "nameBtn") edit(state.plan.shape, state.plan.text ? "" : state.name || "");
-  else if (b.dataset.shape !== state.plan.shape) edit(b.dataset.shape, b.dataset.shape === "text" ? state.plan.text || state.name || "Happy" : state.plan.text);
-};
 
 function syncClear() { $("clearBtn").hidden = !$("prompt").value; }
 $("clearBtn").addEventListener("pointerdown", (e) => e.preventDefault());

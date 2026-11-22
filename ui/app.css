@@ -52,17 +52,8 @@ h1 span{color:var(--teal)}
 .screen{flex:1;min-width:0;min-height:0;display:flex;gap:calc(var(--pad)*1.2);animation:up .3s cubic-bezier(.2,.8,.2,1)}
 @keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
-/* design: the pie (exact G-code path) + a rail of quick changes */
+/* design: just the pie (exact G-code path) */
 .design{justify-content:center;align-items:center}
-.rail{flex:none;display:grid;grid-template-columns:repeat(2,5.2rem);gap:.45rem;order:2;align-self:center}
-.shape{width:5.2rem;height:3.6rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;
-  background:#fff;border:1.5px solid var(--line);border-radius:1rem;color:var(--fg);font-size:.78rem;font-weight:600;cursor:pointer}
-.shape svg{width:1.6rem;height:1.6rem;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-.shape svg .dot{fill:currentColor;stroke:none}
-.shape span{max-width:5.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.shape.on{border-color:var(--teal);background:#e3f1f0;color:var(--teal-hi)}
-.shape:disabled{opacity:.4}
-.shape.name{grid-column:1/-1;width:auto;flex-direction:row;gap:.5rem;font-size:.9rem;margin-top:.3rem}
 .exact{position:absolute;bottom:.2rem;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.82rem;color:var(--muted);
   background:rgba(252,250,246,.9);padding:.2rem .8rem;border-radius:999px}
 .exact b{color:var(--fg);font-weight:600}

@@ -36,15 +36,8 @@
     </div>
   </section>
 
-  <!-- Design: the exact path the printer will pipe (read back from the G-code), plus quick changes -->
+  <!-- Design: the exact path the printer will pipe (read back from the G-code). Change it by typing in the top box. -->
   <section class="screen design" id="designView" hidden>
-    <div class="rail" id="shapeRail" role="group" aria-label="Shape">
-      <button type="button" class="shape" data-shape="smiley" aria-label="Smiley"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="19"/><circle cx="17" cy="19" r="2.2" class="dot"/><circle cx="31" cy="19" r="2.2" class="dot"/><path d="M15 28c4 6 14 6 18 0"/></svg><span>Smiley</span></button>
-      <button type="button" class="shape" data-shape="heart" aria-label="Heart"><svg viewBox="0 0 48 48"><path d="M24 40C10 30 6 23 6 17a9 9 0 0 1 18-2 9 9 0 0 1 18 2c0 6-4 13-18 23z"/></svg><span>Heart</span></button>
-      <button type="button" class="shape" data-shape="star" aria-label="Star"><svg viewBox="0 0 48 48"><path d="M24 5l5.6 12.2 13.4 1.5-10 9 2.8 13.1L24 34.2l-11.8 6.6 2.8-13.1-10-9 13.4-1.5z"/></svg><span>Star</span></button>
-      <button type="button" class="shape" data-shape="text" aria-label="Words only"><svg viewBox="0 0 48 48"><path d="M8 36 17 12l9 24M11.5 28h11M38 22v14M38 26c-1-3-3-4-5-4-3 0-5 3-5 7s2 7 5 7c2 0 4-1 5-4"/></svg><span>Words</span></button>
-      <button type="button" class="shape name" id="nameBtn" aria-pressed="false"><svg viewBox="0 0 48 48"><rect x="6" y="13" width="36" height="22" rx="5"/><path d="M13 21h14M13 27h9"/></svg><span id="nameLbl">Name</span></button>
-    </div>
     <div class="stage">
       <canvas id="pie3d" aria-label="3D pie preview"></canvas>
       <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
