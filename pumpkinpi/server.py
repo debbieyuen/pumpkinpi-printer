@@ -57,6 +57,16 @@ READY_AT = 0.9
 PREVIEW = os.environ.get("PUMPKINPI_PREVIEW") == "1"   # hosted web preview: no printer or camera
 
 app = FastAPI(title="PumpkinPi")
+BOOT = str(time.time())   # changes on every restart, so open screens reload the new UI
+
+
+@app.middleware("http")
+async def no_stale_ui(request, call_next):
+    """The kiosk browser stays open for days: make it re-check UI files instead of using an old copy."""
+    resp = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        resp.headers.setdefault("Cache-Control", "no-cache")
+    return resp
 @app.exception_handler(RuntimeError)
 def api_error(request, exc: RuntimeError):
     """Perplexity API errors (e.g. 403 'needs paid credits') shown on screen instead of a bare 500."""
@@ -183,7 +193,7 @@ def status():
     connected = printer_connected()
     # Only names and allergens go to the screen; health notes stay off camera.
     return {"event": g.get("event"), "printer": connected, "diets": DIETS,
-            "camera": shutil.which("rpicam-vid") is not None, "preview": PREVIEW,
+            "camera": shutil.which("rpicam-vid") is not None, "preview": PREVIEW, "boot": BOOT,
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}
 
 

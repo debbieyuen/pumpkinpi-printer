@@ -188,6 +188,9 @@ async function refreshStatus() {
   try {
     const s = await apiJson("/api/status");
     state.live = state.everLive = true; state.guests = s.guests; printer = !!s.printer; state.noCamera = s.camera === false;
+    // Server restarted (e.g. after git pull): load the new UI, but never in the middle of piping.
+    if (s.boot && state.boot && s.boot !== state.boot && !state.job) return location.reload();
+    state.boot = s.boot;
   } catch {
     // Never fall back to sample "Safe" results once the real Pi server has been seen.
     if (!state.everLive) state.live = false;
