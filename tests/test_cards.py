@@ -108,6 +108,7 @@ def test_two_sides_only_and_both_fit():
     finally:
         ac.check_ingredient = orig
     W, H = cfg["card"]["w"], cfg["card"]["h"]
+    cfg["card"]["style"] = "short"
     for side in ("front", "back"):
         st = cards.layout(cfg, lines, "Debbie", side)
         assert st and all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
@@ -189,8 +190,11 @@ def test_short_card_both_sides_fit_for_every_guest():
     L = _lines(cfg)
     for g in cfg["guests"]:
         g = g if isinstance(g, str) else g.get("name", "")
+        cfg["card"]["style"] = "short"
         for side in ("front", "back"):
             assert cards.layout(cfg, L, g, side)
+        cfg["card"]["style"] = "one"
+        assert cards.layout(cfg, L, g, "front") and cards.layout(cfg, L, g, "back") == []
 
 
 def test_pie_one_line_yes_and_peanut_topping_warning():
@@ -216,3 +220,13 @@ def test_broth_is_haidilao_mushroom_with_label():
     assert b["brand"] == "Haidilao" and "Mushroom" in b["item"]
     assert b["source"].startswith("https://yihaius.com/")
     assert "Mushroom broth (Haidilao)" in cfg["overview"]
+
+
+def test_one_page_has_menu_and_dont_eat():
+    cfg = cards.load()
+    assert cfg["card"]["style"] == "one"
+    L = _lines(cfg)
+    t = [r[0] for r in cards.one_page_rows(cfg, L, "Debbie")]
+    assert "Pumpkin pie: YES" in t and "Don't eat" in t
+    assert "Satay (Lee Kum Kee): peanut, sesame" in t and "Peanut topping on pie" in t
+    assert "No food allergies on file" in [r[0] for r in cards.one_page_rows(cfg, L, "Dad")]

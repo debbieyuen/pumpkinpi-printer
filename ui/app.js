@@ -814,6 +814,8 @@ async function loadCards() {
   try {
     const c = await apiJson("/api/cards");
     cards.guests = c.guests || []; cards.lines = c.lines || [];
+    const one = (c.card || {}).style === "one";               // one-page card: no back side to pick
+    $("cardSide").hidden = one; if (one) cards.side = "front";
     if (!cards.guest && cards.guests.length) cards.guest = cards.guests[0];
     renderCards(); drawCard();
   } catch (e) { log(`Cards: ${e.message}`); }

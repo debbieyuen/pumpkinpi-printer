@@ -17,7 +17,8 @@
   "show_title": false,
   "detail_mm": 3.2,
   "detail_gap": 1.35,
-  "style": "short"
+  "style": "one",
+  "one_avoid_mm": 3.8
  },
  "guests": [
   "Debbie",
@@ -449,5 +450,11 @@
     "peanut"
    ]
   }
+ ],
+ "overview_one": [
+  "Mushroom broth (Haidilao)",
+  "Beef, shrimp, tofu, noodles",
+  "Vegetables, dips, sauce bar",
+  "Pumpkin pie"
  ]
 }

@@ -425,6 +425,39 @@ def dessert_verdict(cfg: dict, lines: list[dict], guest: str) -> str:
     return "YES"
 
 
+def one_page_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
+    """Everything on one side: date, name, menu overview, then this guest's don't-eat list."""
+    card = cfg.get("card", {})
+    W, m = card.get("w", 127.0), card.get("margin", 10.0)
+    oh = card.get("one_menu_mm", 4.6)
+    ah = card.get("one_avoid_mm", 4.2)
+    op, ap = oh * 1.5, ah * 1.5
+    ev = cfg.get("event", {})
+    rows = []
+    if ev.get("when"):
+        rows.append((ev["when"], 4.6, "print", True, 10))
+    if guest:
+        rows.append((guest, 8, "cursive", True, 13))
+    rows.append(section("Menu", 5.5, op + 2))
+    pie = (cfg.get("dessert") or {}).get("name")
+    for t in cfg.get("overview_one") or cfg.get("overview", []):
+        if t == pie:
+            v = dessert_verdict(cfg, lines, guest)
+            t = f"{t}: {v}" if v else t
+        rows += [(x, oh, "print", True, op) for x in wrap(t, oh, W - 2 * m)]
+    rows[-1] = rows[-1][:4] + (op + 5,)
+    if not (cfg.get("allergies") or {}).get(guest):
+        rows.append(("No food allergies on file", ah, "print", True, ap))
+    else:
+        rows.append((f"Don't eat", 6.5, "cursive", True, ap + 4))
+        for b in avoid_lines(cfg, lines, guest) or ["Nothing on the menu"]:
+            rows += [(x, ah, "print", False, ap) for x in wrap(b, ah, W - 2 * m)]
+        rows[-1] = rows[-1][:4] + (ap + 3,)
+        rows.append(("Everything else: YES", 3.8, "print", True, 6.5))
+    rows.append(("Not on the card? Check the label.", 3.8, "print", True, 6.5))
+    return rows
+
+
 def short_front_rows(cfg: dict, guest: str, lines: list[dict] | None = None) -> list[tuple]:
     card = cfg.get("card", {})
     W, m = card.get("w", 127.0), card.get("margin", 10.0)
@@ -452,6 +485,8 @@ def layout_back(cfg: dict, lines: list[dict] | None = None, guest: str = "", sid
     """Back: short style = this guest's "don't eat" list; full style = pie + sauces YES/NO."""
     card = cfg.get("card", {})
     lines = lines or []
+    if card.get("style", "short") == "one":
+        return []                                              # one-page card: nothing on the back
     if card.get("style", "short") == "short":
         st, _ = draw_rows(short_back_rows(cfg, lines, guest), card.get("w", 127.0), card.get("h", 178.0),
                           card.get("margin", 10.0))
@@ -482,6 +517,8 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
         rows.append((ev["when"], 5, "print", True, 11))
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
+    if card.get("style", "short") == "one":
+        return draw_rows(one_page_rows(cfg, lines, guest), W, H, m)[0]
     if card.get("style", "short") == "short":
         rows = short_front_rows(cfg, guest, lines)
         menu = []
