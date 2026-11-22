@@ -6,17 +6,18 @@
 <title>Perplexity Make</title>
 <link rel="stylesheet" href="app.css">
 </head>
-<body data-view="recipe">
+<body data-view="cards">
 <header class="top">
   <img class="sym" src="brand/perplexity-symbol-ink.svg" alt="" aria-hidden="true">
   <h1>Perplexity <span>Make</span></h1>
   <nav class="tabs" role="tablist" aria-label="Screens">
-    <button class="tab" type="button" role="tab" data-v="cards">Cards</button>
-    <button class="tab on" type="button" role="tab" data-v="recipe">Recipe</button>
-    <button class="tab" type="button" role="tab" data-v="design">Design</button>
-    <button class="tab" type="button" role="tab" data-v="camera">Camera</button>
+    <button class="tab on" type="button" role="tab" data-v="cards"><span class="n">1</span>Cards</button>
+    <button class="tab" type="button" role="tab" data-v="recipe"><span class="n">2</span>Recipe</button>
+    <button class="tab" type="button" role="tab" data-v="design"><span class="n">3</span>Design</button>
+    <button class="tab" type="button" role="tab" data-v="camera"><span class="n">4</span>Camera</button>
   </nav>
 </header>
+<button class="npbanner" id="npBanner" type="button" hidden>Printer offline · <u>How to connect</u></button>
 
 <form id="askForm" class="ask" autocomplete="off">
   <div class="box">
@@ -28,7 +29,7 @@
 
 <main class="screens">
   <!-- Recipe: diet chips, ingredients (allergen checks), steps, sources -->
-  <section class="screen recipe" id="recipeView">
+  <section class="screen recipe" id="recipeView" hidden>
     <div class="chips" id="diets" role="group" aria-label="Diet options"></div>
     <div class="cols">
       <div class="col" id="ingCol"></div>
@@ -46,6 +47,7 @@
         <circle r="58" class="crust"/><circle r="50" class="filling"/><g id="strokes"></g>
       </svg>
       <div class="toomuch" id="detailNote" role="status" hidden></div>
+      <button class="btn sm editbtn" id="editBtn" type="button">Change design</button>
     </div>
   </section>
 
@@ -64,18 +66,20 @@
       <div class="load" id="load" aria-live="polite"></div>
       <p class="cammsg" id="camMsg">Put the food on the bed, then check it.</p>
       <button class="btn" id="readyBtn" type="button">Check it</button>
-      <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
-      <button class="btn" id="dripBtn" type="button">Drip test</button>
       <div class="drip" id="dripBox" hidden aria-live="polite"></div>
-      <button class="btn" id="labelBtn" type="button">Scan label</button>
-      <button class="btn" id="recBtn" type="button">Record</button>
-      <button class="btn ghost" id="clipBtn" type="button" hidden>Last clip</button>
-      <p class="muted small" id="dripSet"></p>
+      <details class="moremenu" id="moreMenu"><summary class="btn">More</summary>
+        <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
+        <button class="btn" id="dripBtn" type="button">Drip test</button>
+        <button class="btn" id="labelBtn" type="button">Scan label</button>
+        <button class="btn" id="recBtn" type="button">Record</button>
+        <button class="btn ghost" id="clipBtn" type="button" hidden>Last clip</button>
+        <p class="muted small" id="dripSet"></p>
+      </details>
     </div>
   </section>
 
   <!-- Cards: menu invitation drawn in PLA on watercolor paper. Search API + Decider list what's in each dish. -->
-  <section class="screen cards" id="cardsView" hidden>
+  <section class="screen cards" id="cardsView">
     <div class="cardbar">
       <select id="cardGuests" class="guestpick" aria-label="Guest on the card"></select>
       <div class="chips" id="cardSide" role="group" aria-label="Side of the card" hidden>
@@ -143,8 +147,15 @@
     <h2 id="npTitle">Printer Not Connected</h2>
     <p class="npsub">Connect via USB-C and USB-A</p>
     <p class="muted small">Use a data cable: USB-A into the Pi, USB-C into the printer. Then turn the printer on.</p>
-    <button class="btn npskip" id="skipPrinter" type="button">Continue without printer</button>
+    <button class="btn npskip" id="skipPrinter" type="button">Close</button>
   </div>
+</div>
+
+<!-- Load-syringe steps: opened from the Camera tab, closed with Loaded -->
+<div class="popwrap" id="loadPop" hidden role="dialog" aria-labelledby="loadTitle">
+  <div class="popcard"><h2 id="loadTitle"></h2><p id="loadText"></p>
+    <div class="popbtns"><button class="btn ghost" id="loadCancel" type="button">Not yet</button>
+      <button class="btn go" id="loadedBtn" type="button">Loaded</button></div></div>
 </div>
 
 <div class="kbd" id="kbd" hidden aria-label="On-screen keyboard"></div>

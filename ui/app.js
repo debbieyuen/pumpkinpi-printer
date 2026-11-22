@@ -195,15 +195,15 @@ async function refreshStatus() {
     // Never fall back to sample "Safe" results once the real Pi server has been seen.
     if (!state.everLive) state.live = false;
   }
-  if (printer) state.skipPrinter = false;  // show the screen again if it gets unplugged later
-  const blocked = !printer && !state.skipPrinter;
-  $("noPrinter").hidden = !blocked;
-  document.body.classList.toggle("nop", blocked);
+  // No printer: a small banner (the app stays usable); tap it for the cable picture.
+  $("npBanner").hidden = printer;
+  if (printer) $("noPrinter").hidden = true;
   state.printer = printer;
   clearTimeout(statusTimer);
   statusTimer = setTimeout(refreshStatus, printer ? 10000 : 3000);
 }
-$("skipPrinter").onclick = () => { state.skipPrinter = true; $("noPrinter").hidden = true; document.body.classList.remove("nop"); };
+$("skipPrinter").onclick = () => { $("noPrinter").hidden = true; };
+$("npBanner").onclick = () => { $("noPrinter").hidden = false; };
 
 // ---------- screens ----------
 // The top box asks for a new idea on Recipe/Camera ("Make"), and for a change on Design ("Update").
@@ -221,6 +221,7 @@ function setBox(mode) {
 }
 function show(view) {
   document.body.dataset.view = view;
+  document.body.classList.remove("editing"); hideKbd();
   setBox(view === "design" && state.plan ? "change" : "make");
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t.dataset.v === view);
   $("designView").hidden = view !== "design";
@@ -398,25 +399,35 @@ function counts() {
 
 function renderDiets() {
   const avoid = [...new Set(state.guests.flatMap((g) => g.avoid))];
-  $("diets").innerHTML = `<span class="seg" role="radiogroup" aria-label="Pipe with">${Object.entries(state.tops).map(([k, t]) =>
-    `<button type="button" role="radio" class="segb ${state.toppingType === k ? "on" : ""}" data-t="${k}" aria-checked="${state.toppingType === k}">${t.short || TOPS[k].short}</button>`).join("")}</span>` +
-    `<span class="chip on lock" title="${esc(avoid.join(", "))}">Allergy-safe</span>` +
-    DIETS.map(([k, t]) => `<button type="button" class="chip ${state.diets.includes(k) ? "on" : ""}" data-d="${k}" aria-pressed="${state.diets.includes(k)}">${t}</button>`).join("");
+  const names = DIETS.filter(([k]) => state.diets.includes(k)).map(([, t]) => t);
+  $("diets").innerHTML =
+    `<label class="pickwrap">Topping <select id="topPick" class="pick" aria-label="Pipe with">${Object.entries(state.tops).map(([k, t]) =>
+      `<option value="${k}"${state.toppingType === k ? " selected" : ""}>${t.short || TOPS[k].short}</option>`).join("")}</select></label>` +
+    `<span class="dietwrap"><button type="button" class="pick dietbtn" id="dietBtn" aria-expanded="${!!state.dietOpen}">Diet: ${esc(["Allergy-safe", ...names].join(", "))} ▾</button>` +
+    `<div class="dietpop" id="dietPop"${state.dietOpen ? "" : " hidden"}>` +
+    `<span class="drow lock" title="${esc(avoid.join(", "))}"><span class="tick on">✓</span>Allergy-safe</span>` +
+    DIETS.map(([k, t]) => `<button type="button" class="drow" data-d="${k}" aria-pressed="${state.diets.includes(k)}"><span class="tick ${state.diets.includes(k) ? "on" : ""}">${state.diets.includes(k) ? "✓" : ""}</span>${t}</button>`).join("") +
+    `<button type="button" class="btn sm go" id="dietDone">Done</button></div></span>`;
 }
+$("diets").onchange = (e) => {
+  if (e.target.id !== "topPick") return;
+  const k = e.target.value;
+  if (state.busy || state.job || k === state.toppingType) { renderDiets(); return; }
+  state.toppingType = k; renderDiets(); renderLoad();
+  // Same design, different topping: the recipe changes (and gets re-checked), the path settings change.
+  if (state.plan && !state.addLayer && state.plan.base !== "none") revise(`Pipe it with ${state.tops[k].label.toLowerCase()} instead.`);
+};
 $("diets").onclick = (e) => {
-  const t = e.target.closest("[data-t]");
-  if (t && !state.busy && !state.job) {
-    if (t.dataset.t === state.toppingType) return;
-    state.toppingType = t.dataset.t; renderDiets(); renderLoad();
-    // Same design, different topping: the recipe changes (and gets re-checked), the path settings change.
-    if (state.plan && !state.addLayer && state.plan.base !== "none") revise(`Pipe it with ${state.tops[t.dataset.t].label.toLowerCase()} instead.`);
-    return;
+  if (e.target.closest("#dietBtn")) { state.dietOpen = !state.dietOpen; return renderDiets(); }
+  if (e.target.closest("#dietDone")) {
+    state.dietOpen = false; renderDiets();
+    if (state.dietsChanged && state.plan && $("prompt").value.trim()) ask();   // remake the recipe for the new diet
+    state.dietsChanged = false; return;
   }
   const b = e.target.closest("[data-d]"); if (!b || state.busy) return;
   const d = b.dataset.d;
   state.diets = state.diets.includes(d) ? state.diets.filter((x) => x !== d) : [...state.diets, d];
-  renderDiets();
-  if (state.plan && $("prompt").value.trim()) ask();  // remake the recipe for the new diet
+  state.dietsChanged = true; renderDiets();
 };
 
 // ---------- recipe visuals ----------
@@ -900,7 +911,8 @@ $("kbd").onclick = (e) => {
   else { el.value += shift ? k.toUpperCase() : k; if (shift) { shift = false; drawKbd(); } }
   syncClear();
 };
-$("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); boxMode === "change" ? revise() : ask(); };
+$("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); document.body.classList.remove("editing"); boxMode === "change" ? revise() : ask(); };
+$("editBtn").onclick = () => { document.body.classList.toggle("editing"); if (document.body.classList.contains("editing")) $("prompt").focus(); };
 
 
 // ---------- syringes: one per topping, swapped by hand between layers ----------
@@ -916,11 +928,15 @@ function renderLoad() {
   box.className = `load ${ok ? "ok" : ""}`;
   box.innerHTML = ok
     ? `<b>${esc(t.label)} loaded</b><span>${esc(setLine(k))}</span>${state.workEnd ? `<span class="${left < 120 ? "warn" : ""}">${left > 0 ? `Pipe within ${mmss(left)}` : "May be too thick now. Rewarm it."}</span>` : ""}`
-    : `<b>${state.loaded ? "Swap syringe" : "Load syringe"}: ${esc(t.label)}</b><span>${esc(t.tip)}. ${esc(t.prep)}</span><button class="btn" type="button" id="loadedBtn">Loaded</button>`;
+    : `<button class="btn" type="button" id="loadOpen">${state.loaded ? "Swap syringe" : "Load syringe"}: ${esc(t.short || t.label)}</button>`;
+  $("loadTitle").textContent = `${state.loaded ? "Swap syringe" : "Load syringe"}: ${t.label}`;
+  $("loadText").textContent = `${t.tip[0].toUpperCase()}${t.tip.slice(1)}. ${t.prep}`;
   $("dripSet").textContent = `${t.short || TOPS[k].short}: ${setLine(k)}`;
 }
-$("load").onclick = (e) => {
-  if (!e.target.closest("#loadedBtn")) return;
+$("load").onclick = (e) => { if (e.target.closest("#loadOpen")) $("loadPop").hidden = false; };
+$("loadCancel").onclick = () => { $("loadPop").hidden = true; };
+$("loadedBtn").onclick = () => {
+  $("loadPop").hidden = true;
   const k = topOf();
   state.loaded = k; state.workEnd = state.tops[k].work_min ? Date.now() + state.tops[k].work_min * 60000 : 0;
   renderLoad(); updateGate();
@@ -999,6 +1015,6 @@ async function init() {
   await refreshStatus();
   await loadToppings(); renderLoad();
   renderRecipe(); renderDesign();
-  updateGate();
+  show("cards");
 }
 init();
