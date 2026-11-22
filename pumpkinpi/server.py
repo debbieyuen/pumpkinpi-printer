@@ -50,6 +50,18 @@ READY_AT = 0.9
 PREVIEW = os.environ.get("PUMPKINPI_PREVIEW") == "1"   # hosted web preview: no printer or camera
 
 app = FastAPI(title="PumpkinPi")
+@app.exception_handler(RuntimeError)
+def api_error(request, exc: RuntimeError):
+    """Perplexity API errors (e.g. 403 'needs paid credits') shown on screen instead of a bare 500."""
+    from fastapi.responses import JSONResponse
+    msg = str(exc)
+    try:
+        msg = json.loads(msg.split(": ", 1)[1])["error"]["message"]
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({"detail": f"Perplexity API: {msg[:240]}"}, status_code=502)
+
+
 if PREVIEW:   # the hosted preview loads the screen from another origin
     from fastapi.middleware.cors import CORSMiddleware
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
