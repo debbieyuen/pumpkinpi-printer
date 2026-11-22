@@ -10,17 +10,70 @@ const DEMO_GUESTS = [
   { name: "Debbie", avoid: ["tree nuts", "peanuts", "fish"] },
   { name: "Dad", avoid: [] }, { name: "Mom", avoid: [] }, { name: "Kathy", avoid: [] },
 ];
-const DEMO_PROBS = {
-  "semi-sweet chocolate chips": { "tree nuts": 0.35, peanuts: 0.12, fish: 0.01 },  // many chips carry may-contain warnings
-  "heavy cream": { "tree nuts": 0.01, peanuts: 0.01, fish: 0.01 },
-};
-
-// Diet chips. Checked diets go to the Decider like allergens; "low sugar" only changes the recipe.
+// Sample mode (no Pi): real store products and labels from demo.json, and the pie drawn from your words
+// with the same shapes and single-stroke fonts as shapes.py (ui/shapes.json, from scripts/export_ui_shapes.py).
 const DIETS = [["vegan", "Vegan"], ["dairy-free", "Dairy-free"], ["gluten-free", "Gluten-free"], ["egg-free", "Egg-free"], ["low sugar", "Low sugar"]];
-const DEMO_DIET_PROBS = {  // offline sample only
-  vegan: { "heavy cream": 0.99, "semi-sweet chocolate chips": 0.4 }, "dairy-free": { "heavy cream": 0.99, "semi-sweet chocolate chips": 0.4 },
-  "gluten-free": { "heavy cream": 0.02, "semi-sweet chocolate chips": 0.2 }, "egg-free": { "heavy cream": 0.02, "semi-sweet chocolate chips": 0.05 },
-};
+let SAMPLE = null, SHAPES = null;
+async function loadSample() {
+  if (!SAMPLE) SAMPLE = await (await fetch("demo.json")).json();
+  state.demo = SAMPLE;
+  if (!SHAPES) SHAPES = await (await fetch("shapes.json")).json();
+}
+function textStrokes(words, width, height, font) {
+  const g = SHAPES.fonts[font] || SHAPES.fonts.print;
+  let x = 0; const st = [];
+  for (const c of [...words.trim()].slice(0, SHAPES.max_text)) {
+    const gl = g[c] || g["?"];
+    for (const s of gl.s) st.push(s.map(([px, py]) => [px + x, py]));
+    x += gl.a;
+  }
+  if (!st.length) return [];
+  const xs = st.flat().map((p) => p[0]), ys = st.flat().map((p) => p[1]);
+  const w = Math.max(...xs) - Math.min(...xs) || 1, h = Math.max(...ys) - Math.min(...ys) || 1;
+  const k = Math.min(width / w, height / h), cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  return st.map((s) => s.map(([px, py]) => [(px - cx) * k, (py - cy) * k]));
+}
+const moveSt = (st, dy, k) => st.map((s) => s.map(([x, y]) => [x * k, y * k + dy]));
+function strokesFor(plan) {   // mirrors shapes.strokes_for
+  const words = (plan.text || "").trim(), font = plan.font === "cursive" ? "cursive" : "print";
+  if (plan.shape === "text" || !SHAPES.shapes[plan.shape]) return textStrokes(words || "Happy", 80, font === "print" ? 24 : 30, font);
+  const art = SHAPES.shapes[plan.shape];
+  return words ? moveSt(art, 12, 0.65).concat(moveSt(textStrokes(words, 50, font === "print" ? 10 : 13, font), -28, 1)) : art;
+}
+// Understand the common requests locally: shape, name (quoted or a guest's), cursive, brands.
+function readWords(said, cur) {
+  const c = said.toLowerCase();
+  const shape = /\b(cat|kitty|kitten)/.test(c) ? "cat" : /heart/.test(c) ? "heart" : /\bstar/.test(c) ? "star" : /smil/.test(c) ? "smiley"
+    : /pumpkin/.test(c) && !/pumpkin pie/.test(c) ? "pumpkin" : /\bleaf|\bleaves/.test(c) ? "leaf"
+    : /(only|just) (the )?(name|word|text)/.test(c) ? "text" : cur ? cur.shape : null;
+  const font = /cursive|script|handwrit/.test(c) ? "cursive" : /\b(print|block letters)\b/.test(c) ? "print" : cur ? cur.font || "print" : "print";
+  const guest = (n) => state.guests.find((g) => g.name.toLowerCase() === n.toLowerCase());
+  const quoted = said.match(/["“”'‘’]([^"“”'‘’]{1,24})["“”'‘’]/);
+  let text = cur ? cur.text || "" : "";
+  if (quoted) text = guest(quoted[1].trim())?.name || quoted[1].trim();
+  else { const g = state.guests.find((g) => new RegExp(`\\b${g.name}\\b`, "i").test(said)); if (g) text = g.name; }
+  if (/(no|without|drop|remove)\b.*(name|text|word)/.test(c)) text = "";
+  const named = state.guests.find((g) => g.name === text);
+  return { shape: shape || (text ? "text" : "smiley"), font, text: text.slice(0, SHAPES.max_text), guest: named ? named.name : "" };
+}
+function samplePlan(said, cur) {
+  const d = readWords(said, cur), c = said.toLowerCase();
+  const keys = [/hershey/.test(c) ? "hersheys" : cur && cur.ingredients.includes(SAMPLE.products.hersheys.ingredient) && !/enjoy life/.test(c) ? "hersheys" : "enjoy", "clover"];
+  if (/m\s*&\s*m|\bm and m|\bmms\b|m&amp;m/.test(c) || (cur && cur.ingredients.includes(SAMPLE.products.mms.ingredient) && !/(no|without) m/.test(c))) keys.push("mms");
+  // "bake a pumpkin pie ..." -> the whole pie (crust, filling) as store products, then the topping.
+  const pie = /\bpie\b|\bbake\b/.test(c) || !!(cur && cur.pie);
+  if (pie) keys.unshift(...SAMPLE.pie.keys);
+  const prods = keys.map((k) => SAMPLE.products[k]);
+  const notes = [SAMPLE.plan.allergy_notes];
+  if (pie) notes.push("Low sugar for Dad and Mom: the Libby's recipe uses 3/4 cup sugar; many bakers cut it to 1/2 cup. Pillsbury crusts are made with lard (not vegan).");
+  if (keys.includes("hersheys")) notes.unshift("Hershey's chips list natural flavor, so PumpkinPi asks you to check the label; Enjoy Life is the nut-free-facility swap.");
+  if (keys.includes("mms")) notes.unshift("M&M's Milk Chocolate says \"May contain peanuts\": not for Debbie.");
+  const shapeName = { cat: "cat", heart: "heart", star: "star", smiley: "smiley", pumpkin: "pumpkin", leaf: "leaf", text: "name" }[d.shape];
+  return { ...SAMPLE.plan, ...d, ingredients: prods.map((p) => p.ingredient), products: prods,
+    pie, topping: pie ? `Pumpkin pie + ${SAMPLE.plan.topping.toLowerCase()}` : SAMPLE.plan.topping, sources: pie ? [...SAMPLE.pie.sources, ...(SAMPLE.plan.sources || [])] : SAMPLE.plan.sources,
+    recipe: [...(pie ? SAMPLE.pie.recipe : []), ...SAMPLE.plan.recipe, ...(keys.includes("mms") ? ["Topping: press M&M's around the edge after piping."] : [])],
+    allergy_notes: notes.join(" "), caption: `${pie ? "A pumpkin pie with a" : "A"} chocolate ${shapeName}${d.text ? ` for ${d.text}` : ""}${d.font === "cursive" ? " in cursive" : ""}` };
+}
 
 const state = { live: false, everLive: false, guests: DEMO_GUESTS, plan: null, strokes: [], checks: {},
   ready: 0, busy: false, open: null, job: false, photo: null, diets: [], scan: [], guide: null, openWatch: null };
@@ -118,9 +171,9 @@ async function ask() {
   show("recipe"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
   renderRecipe(); updateGate();
   try {
-    const res = state.live ? await apiJson("/api/design", { prompt, diets: state.diets })
-      : (await sleep(1400), await (await fetch("demo.json")).json());
-    state.demo = state.live ? null : res;
+    let res;
+    if (state.live) res = await apiJson("/api/design", { prompt, diets: state.diets });
+    else { await sleep(1200); await loadSample(); const plan = samplePlan(prompt, null); res = { plan, strokes: strokesFor(plan) }; }
     applyDesign(res);
     await checkMissing();
   } catch (e) {
@@ -158,13 +211,6 @@ async function loadGuide() {
 }
 
 // ---------- Design changes: quick buttons (instant) or words ("just a heart, no name", Agent API) ----------
-function demoVariant(shape, text) {   // sample mode: paths precomputed from the real G-code pipeline
-  const v = state.demo?.variants || {};
-  const t = v[`${shape}|${text}`] ? text : v[`${shape}|`] ? "" : null;
-  if (t === null) throw new Error("not in the sample");
-  const x = v[`${shape}|${t}`];
-  return { plan: { ...state.plan, shape, text: t }, strokes: x.strokes, path: { mm: x.mm, seconds: x.seconds } };
-}
 async function revise() {
   const change = $("prompt").value.trim();
   if (!change || !state.plan || state.busy || state.job) return;
@@ -174,11 +220,9 @@ async function revise() {
     let res;
     if (state.live) res = await apiJson("/api/revise", { change, diets: state.diets });
     else {  // sample only: understand the common changes locally
-      await sleep(900);
-      const c = change.toLowerCase();
-      const shape = /heart/.test(c) ? "heart" : /star/.test(c) ? "star" : /smil/.test(c) ? "smiley" : /(only|just) (the )?(name|word|text)/.test(c) ? "text" : state.plan.shape;
-      const noName = /(no|without|drop|remove)\b.*(name|text|word)|only a|just a/.test(c) && shape !== "text";
-      res = demoVariant(shape, noName ? "" : state.plan.text || state.name || "");
+      await sleep(900); await loadSample();
+      const plan = samplePlan(change, state.plan);
+      res = { plan, strokes: strokesFor(plan) };
     }
     applyDesign(res);
     $("prompt").value = ""; state.change = ""; syncClear();
@@ -198,12 +242,15 @@ async function check(product) {
   try {
     let res;
     if (state.live) res = await apiJson("/api/check", { product, diets: state.diets });
-    else {
+    else {   // sample: real labels for these exact products (sources in demo.json)
       await sleep(900);
-      const p = DEMO_PROBS[product] || {};
-      res = { sources: state.demo?.sources?.[product] || [{ title: "Have Food Allergies? Read the Label", url: "https://www.fda.gov/consumers/consumer-updates/have-food-allergies-read-label", tag: "label" }], relevance: 0.9,
-        results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p[a] ?? 0.3, note: (state.demo?.notes?.[product] || {})[a] || "" })))
-          .concat(state.diets.filter((d) => DEMO_DIET_PROBS[d]).map((d) => ({ name: d[0].toUpperCase() + d.slice(1), diet: d, allergen: d, probability: DEMO_DIET_PROBS[d][product] ?? 0.3 }))) };
+      const p = Object.values(SAMPLE.products).find((x) => x.ingredient === product) || { probs: {}, diet: {}, sources: [] };
+      // Same rule as allergen_check.py: "natural flavor" on the label means check the label, never green.
+      const v = (prob) => (p.flavor && prob <= 0.1 ? "unsure" : prob >= 0.7 ? "found" : prob <= 0.1 ? "safe" : "unsure");
+      res = { label: p.label, relevance: 0.9,
+        sources: [{ title: `Open Food Facts: ${p.brand} ${p.product}`, url: p.label?.url }, ...p.sources],
+        results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p.probs[a] ?? 0.3, verdict: v(p.probs[a] ?? 0.3) })))
+          .concat(state.diets.filter((d) => d in p.diet).map((d) => ({ name: d[0].toUpperCase() + d.slice(1), diet: d, allergen: d, probability: p.diet[d], verdict: v(p.diet[d]) }))) };
     }
     res.results.forEach((r) => (r.color = r.verdict ? toColor[r.verdict] : verdict(r.probability)));
     const worst = res.results.some((r) => r.color === "red") ? "red" : res.results.some((r) => r.color === "yellow") ? "yellow" : "green";
@@ -277,16 +324,24 @@ function renderRecipe() {
   const rows = p.ingredients.map((ing) => {
     const c = state.checks[ing] || { status: "wait" };
     const open = state.open === ing;
+    const prod = (p.products || []).find((x) => x.ingredient === ing) || {};
+    const lab = c.label || prod.label || null;
+    const title = prod.brand ? `${prod.brand} ${prod.product}` : ing;
+    const sub = [prod.size, prod.store].filter(Boolean).join(" · ");
     let detail = "";
     if (open && c.results) {
-      detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)}${r.diet ? "" : ` · ${esc(r.allergen)}`}<span class="prob">${Math.round(r.probability * 100)}%</span></div>${r.note ? `<div class="rnote">${esc(r.note)}</div>` : ""}`).join("") || `<div>No guest avoids an allergen for this.</div>`}
+      const printed = lab ? `<div class="dlabel"><b>Label</b> Contains: ${esc((lab.allergens || []).join(", ") || "none listed")}.
+        May contain: ${esc((lab.traces || []).join(", ") || "none listed")}.${lab.note ? ` ${esc(lab.note)}.` : ""}
+        ${lab.ingredients ? `<span class="muted">Ingredients: ${esc(lab.ingredients)}</span>` : ""}</div>` : "";
+      detail = `<div class="detail">${printed}${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)}${r.diet ? "" : ` · ${esc(r.allergen)}`}<span class="prob">${Math.round(r.probability * 100)}%</span></div>${r.note ? `<div class="rnote">${esc(r.note)}</div>` : ""}`).join("") || `<div>No guest avoids an allergen for this.</div>`}
         ${p.allergy_notes ? `<div class="dnote">${esc(p.allergy_notes)}</div>` : ""}
         ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}</div>`;
     }
     const st = c.status === "wait" ? '<span class="spin sm"></span>' : STATUS_ICON[c.status];
+    const pic = lab && lab.image ? `<img src="${esc(lab.image)}" alt="${esc(title)} package" loading="lazy" onerror="this.parentNode.classList.remove('photo');this.parentNode.innerHTML=JAR">` : ingArt(ing);
     return `<button type="button" class="ing ${open ? "open" : ""}" data-ing="${esc(ing)}">
-      <span class="art">${ingArt(ing)}</span>
-      <span class="who">${esc(ing)}<span class="tag ${c.status}">${c.status === "wait" ? "Checking" : esc(c.tag || label[c.status])}</span></span>
+      <span class="art ${lab && lab.image ? "photo" : ""}">${pic}</span>
+      <span class="who">${esc(title)}${sub ? `<span class="psub">${esc(sub)}</span>` : ""}<span class="tag ${c.status}">${c.status === "wait" ? "Checking" : esc(c.tag || label[c.status])}</span></span>
       <span class="sicon ${c.status}">${st}</span></button>${detail}`;
   }).join("");
   $("ingCol").innerHTML = `<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>

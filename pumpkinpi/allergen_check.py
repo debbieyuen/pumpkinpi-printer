@@ -125,8 +125,23 @@ def flag_by_name(product: str, a: str, p: float, v: str) -> tuple[float, str, st
     return p, v, ""
 
 
-def check_ingredient(client: httpx.Client, product: str, allergens: list[str]) -> dict:
+def label_evidence(label: dict | None) -> list[dict]:
+    """The Open Food Facts label (products.py) as one evidence item, or nothing."""
+    if not label or not (label.get("ingredients") or label.get("allergens")):
+        return []
+    text = (f"Package label for {label.get('brand', '')} {label.get('name', '')} {label.get('size', '')}. "
+            f"Ingredients: {label.get('ingredients') or 'not listed'}. "
+            f"Contains: {', '.join(label.get('allergens') or []) or 'none listed'}. "
+            f"May contain: {', '.join(label.get('traces') or []) or 'none listed (Open Food Facts often misses these)'}.")
+    return [{"title": f"Open Food Facts: {label.get('brand', '')} {label.get('name', '')}".strip(),
+             "url": label.get("url"), "text": text}]
+
+
+def check_ingredient(client: httpx.Client, product: str, allergens: list[str], label: dict | None = None) -> dict:
     """Search API for evidence, then Decider answers one question per allergen on that evidence.
+
+    `label` is the Open Food Facts entry for this exact product (photo, printed ingredients,
+    contains / may-contain), added as extra evidence. It never turns a result green by itself.
 
     Returns {"product", "search": {"queries", "results"}, "checks": {allergen: Check}, "relevance", "natural_flavor"}.
     Each result gets "tag": "tree nuts" / "peanuts" / "fish" / "label".
@@ -136,7 +151,7 @@ def check_ingredient(client: httpx.Client, product: str, allergens: list[str]) -
 
     queries = search_queries(product, allergens)
     results = pplx.search(client, queries, max_results=12)
-    if not results:  # nothing found: fall back to Decider's own grounded search
+    if not results and not label_evidence(label):  # nothing found: fall back to Decider's own grounded search
         checks = {}
         for a in allergens:
             c = check_product(client, product, a)
@@ -148,7 +163,8 @@ def check_ingredient(client: httpx.Client, product: str, allergens: list[str]) -
         r["tag"] = tag_result(r, allergens)
 
     state = {"product": product,
-             "evidence": [{"title": r.get("title"), "url": r.get("url"), "text": (r.get("snippet") or "")[:2500]}
+             "evidence": label_evidence(label) +
+                         [{"title": r.get("title"), "url": r.get("url"), "text": (r.get("snippet") or "")[:2500]}
                           for r in results]}
     questions = {
         "about_product": {"type": "noul", "instructions":

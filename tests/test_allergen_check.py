@@ -69,3 +69,19 @@ def test_safe_downgraded_when_evidence_is_not_this_product():
 
     r = check_ingredient(httpx.Client(transport=httpx.MockTransport(handler)), "chips", ["tree nuts"])
     assert r["checks"]["tree nuts"].verdict == "unsure"
+
+
+def test_label_is_extra_evidence_not_a_pass():
+    from pumpkinpi.allergen_check import label_evidence
+    assert label_evidence(None) == []
+    ev = label_evidence({"brand": "M&M's", "name": "Milk Chocolate", "size": "1.69 oz", "ingredients": "milk chocolate",
+                         "allergens": ["milk", "soybeans"], "traces": [], "url": "https://world.openfoodfacts.org/product/0040000000310"})
+    assert "Contains: milk, soybeans" in ev[0]["text"] and "often misses" in ev[0]["text"]
+
+
+def test_design_tidy_keeps_products_in_step():
+    from pumpkinpi.design import tidy
+    p = tidy({"shape": "dragon", "font": "gothic", "text": "Debbie", "ingredients": ["A", "B"],
+              "products": [{"ingredient": "b", "brand": "Clover Sonoma", "product": "Cream", "size": "1 pint", "store": "Safeway", "upc": ""}]})
+    assert p["shape"] == "text" and p["font"] == "print"
+    assert [x["ingredient"] for x in p["products"]] == ["A", "B"] and p["products"][1]["brand"] == "Clover Sonoma"
