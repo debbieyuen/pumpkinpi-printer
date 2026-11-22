@@ -191,11 +191,13 @@ def check_menu(client, cfg: dict) -> list[dict]:
             for t in list(WATCH):
                 if TERMS[t] not in want.setdefault(prod, []):
                     want[prod].append(TERMS[t])
-    results = {}
-    for prod, allergens in want.items():
-            r = check_ingredient(client, prod, allergens, label=labels[prod])
-            results[prod] = {"checks": {a: asdict(c) for a, c in r["checks"].items()},
-                             "relevance": r.get("relevance")}
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(prod: str) -> dict:
+        r = check_ingredient(client, prod, want[prod], label=labels[prod])
+        return {"checks": {a: asdict(c) for a, c in r["checks"].items()}, "relevance": r.get("relevance")}
+    with ThreadPoolExecutor(4) as ex:            # 4 products at a time: Search + Decider each
+        results = dict(zip(want, ex.map(one, want)))
     menu = item_lines([(d["name"], p) for d in cfg["menu"] for p in d["products"]], results)
     sauces = item_lines([("Sauce", p) for p in cfg.get("sauces", [])], results)
     sweet = item_lines([(d["name"], p) for d in dessert for p in d["products"]], results)
@@ -561,7 +563,14 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
     if card.get("style", "short") == "simple":
-        return draw_rows(simple_rows(cfg, lines, guest), W, H, m)[0]
+        for k in (1, .92, .85, .78, .72):         # a longer menu: smaller letters until it fits one side
+            c = {**cfg, "card": {**card, "simple_mm": card.get("simple_mm", 4.4) * k,
+                                 "simple_avoid_mm": card.get("simple_avoid_mm", 3.8) * k}}
+            try:
+                return draw_rows(simple_rows(c, lines, guest), W, H, m)[0]
+            except ValueError:
+                if k == .72:
+                    raise
     if card.get("style", "short") == "one":
         return draw_rows(one_page_rows(cfg, lines, guest), W, H, m)[0]
     if card.get("style", "short") == "short":
@@ -655,9 +664,16 @@ def check_bounds(lines: list[str], p: Pla) -> None:
                 raise ValueError(f"{ln!r}: {w[0]} outside {lim}. Check pla.card_x/card_y/paper_z in machine.json")
 
 
-def load(path: Path = CARDS_FILE) -> dict:
+def load(path: Path = CARDS_FILE, use_menu: bool = True) -> dict:
+    """Guests, allergies and card settings from cards.json; the menu from the last prompt if there is one."""
+    from . import menu_plan
     p = path if path.exists() else ROOT / "cards.example.json"
-    return json.loads(p.read_text())
+    cfg = json.loads(p.read_text())
+    m = menu_plan.saved() if use_menu else None
+    if m:
+        cfg.update({k: v for k, v in m.items() if k not in ("title", "prompt")})
+        cfg["menu_title"], cfg["menu_prompt"] = m.get("title", "Dinner"), m.get("prompt", "")
+    return cfg
 
 
 def menu_key(cfg: dict) -> str:

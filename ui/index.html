@@ -6,13 +6,13 @@
 <title>Perplexity Make</title>
 <link rel="stylesheet" href="app.css">
 </head>
-<body data-view="cards">
+<body data-view="recipe" data-mode="menu">
 <header class="top">
   <img class="sym" src="brand/perplexity-symbol-ink.svg" alt="" aria-hidden="true">
   <h1>Perplexity <span>Make</span></h1>
   <nav class="tabs" role="tablist" aria-label="Screens">
-    <button class="tab on" type="button" role="tab" data-v="cards"><span class="n">1</span>Cards</button>
-    <button class="tab" type="button" role="tab" data-v="recipe"><span class="n">2</span>Recipe</button>
+    <button class="tab on" type="button" role="tab" data-v="recipe"><span class="n">1</span>Recipe</button>
+    <button class="tab" type="button" role="tab" data-v="cards"><span class="n">2</span>Cards</button>
     <button class="tab" type="button" role="tab" data-v="design"><span class="n">3</span>Design</button>
     <button class="tab" type="button" role="tab" data-v="camera"><span class="n">4</span>Camera</button>
   </nav>
@@ -29,8 +29,9 @@
 
 <main class="screens">
   <!-- Recipe: diet chips, ingredients (allergen checks), steps, sources -->
-  <section class="screen recipe" id="recipeView" hidden>
+  <section class="screen recipe" id="recipeView">
     <div class="chips" id="diets" role="group" aria-label="Diet options"></div>
+    <div class="menuview" id="menuView"></div>
     <div class="cols">
       <div class="col" id="ingCol"></div>
       <div class="col" id="stepCol"></div>
@@ -79,18 +80,18 @@
   </section>
 
   <!-- Cards: menu invitation drawn in PLA on watercolor paper. Search API + Decider list what's in each dish. -->
-  <section class="screen cards" id="cardsView">
+  <section class="screen cards" id="cardsView" hidden>
     <div class="cardbar">
       <select id="cardGuests" class="guestpick" aria-label="Guest on the card"></select>
       <div class="chips" id="cardSide" role="group" aria-label="Side of the card" hidden>
         <button type="button" class="chip on" data-s="front">Front</button>
         <button type="button" class="chip" data-s="back">Back</button></div>
-      <button class="btn sm" id="menuBtn" type="button">Check menu</button>
+      <button class="btn sm" id="menuBtn" type="button">Recheck</button>
       <button class="btn sm" id="homeBtn" type="button">Heat &amp; home</button>
       <button class="btn sm go" id="cardBtn" type="button">Print card</button>
     </div>
     <div class="cardnote">
-      <span class="muted small" id="cardMsg"></span>
+      <b id="cardTitle"></b><span class="muted small" id="cardMsg"></span>
     </div>
     <div class="cardframe"><svg id="cardSvg" viewBox="0 0 127 178" role="img" aria-label="Invitation card preview">
       <rect class="paper" x="0" y="0" width="127" height="178" rx="1.5"/><g id="cardInk"></g></svg></div>

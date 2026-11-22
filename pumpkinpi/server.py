@@ -44,7 +44,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
-from . import allergy_guide, cards, detail, label_scan, vision
+from . import allergy_guide, cards, detail, label_scan, menu_plan, vision
 from .allergens import scan_blocks, scan_recipe
 from .camera import camera
 from .design import plan_design, revise_design
@@ -170,6 +170,10 @@ class LabelReq(BaseModel):
 
 class RecordReq(BaseModel):
     on: bool
+
+
+class MenuReq(BaseModel):
+    prompt: str
 
 
 class CardReq(BaseModel):
@@ -704,10 +708,13 @@ def card_lines() -> list[dict]:
 @app.get("/api/cards")
 def cards_info():
     cfg = cards.load()
-    return {"event": cfg.get("event", {}), "guests": cfg.get("guests", []), "card": cfg.get("card", {}),
+    lines = card_lines()
+    avoid = {g: cards.simple_avoid(cfg, lines, g) for g in cfg.get("allergies", {})} if lines else {}
+    return {"avoid": avoid, "event": cfg.get("event", {}), "guests": cfg.get("guests", []), "card": cfg.get("card", {}),
             "menu": [{"name": d["name"], "recipe": d.get("recipe"), "products": d["products"]} for d in cfg["menu"]],
             "steps": cfg.get("steps", []), "sauces": cfg.get("sauces", []), "allergies": cfg.get("allergies", {}),
-            "lines": card_lines(),
+            "lines": lines, "title": cfg.get("menu_title", ""), "prompt": cfg.get("menu_prompt", ""),
+            "simple": cfg.get("simple", {}),
             "pla": asdict(cards.Pla.load())}
 
 
@@ -720,6 +727,23 @@ def cards_check():
     MENU_CHECK.write_text(json.dumps({"key": cards.menu_key(cfg), "lines": lines}, indent=2))
     state["cards"], state["cards_key"] = lines, cards.menu_key(cfg)
     return {"lines": lines}
+
+
+@app.post("/api/menu")
+def make_menu(req: MenuReq):
+    """Prompt -> branded menu (Agent API) -> every product checked (Search API + Decider) -> cards."""
+    prompt = req.prompt.strip()[:400]
+    if not prompt:
+        raise HTTPException(400, "Type what's for dinner first")
+    base = cards.load(use_menu=False)
+    try:
+        with make_client() as c:
+            menu = menu_plan.plan_menu(c, prompt, base.get("allergies", {}))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    menu_plan.save(menu)
+    out = cards_check()
+    return {"title": menu["title"], "prompt": prompt, "simple": menu["simple"], **out}
 
 
 def card_strokes(guest: str, side: str = "front") -> list:

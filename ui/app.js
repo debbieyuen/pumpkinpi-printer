@@ -157,7 +157,7 @@ function samplePlan(said, cur, keepBase) {
 
 const state = { live: false, everLive: false, guests: DEMO_GUESTS, plan: null, strokes: [], checks: {},
   ready: 0, busy: false, open: null, job: false, photo: null, diets: [], scan: [], guide: null, openWatch: null,
-  toppingType: "chocolate", layers: [], addLayer: false, loaded: null, workEnd: 0, tops: TOPS, drip: null };
+  mode: "menu", toppingType: "chocolate", layers: [], addLayer: false, loaded: null, workEnd: 0, tops: TOPS, drip: null };
 const topOf = () => state.plan?.topping_type || state.toppingType;
 
 const verdict = (p) => (p >= 0.7 ? "red" : p <= 0.1 ? "green" : "yellow");
@@ -207,22 +207,24 @@ $("npBanner").onclick = () => { $("noPrinter").hidden = false; };
 
 // ---------- screens ----------
 // The top box asks for a new idea on Recipe/Camera ("Make"), and for a change on Design ("Update").
-const PH = { make: "Ask for a recipe for any diet, then a design to pipe on top", change: "Change the design, e.g. just a heart, no name" };
+const PH = { make: "Ask for a recipe for any diet, then a design to pipe on top", change: "Change the design, e.g. just a heart, no name",
+  menu: "What's for dinner? e.g. hot pot with beef, lamb and shrimp; pumpkin pie" };
 let boxMode = "make";
 function setBox(mode) {
   if (mode === boxMode) return;
   const el = $("prompt");
-  if (boxMode === "make") state.prompt = el.value; else state.change = el.value;
+  const key = { make: "prompt", change: "change", menu: "menuPrompt" };
+  state[key[boxMode]] = el.value;
   boxMode = mode;
-  el.value = (mode === "make" ? state.prompt : state.change) || "";
+  el.value = state[key[mode]] || "";
   el.placeholder = PH[mode]; el.setAttribute("aria-label", PH[mode]);
-  if (!state.busy) $("askBtn").textContent = mode === "make" ? "Make" : "Update";
+  if (!state.busy) $("askBtn").textContent = mode === "change" ? "Update" : "Make";
   syncClear();
 }
 function show(view) {
   document.body.dataset.view = view;
   document.body.classList.remove("editing"); hideKbd();
-  setBox(view === "design" && state.plan ? "change" : "make");
+  setBox(view === "design" && state.plan ? "change" : view === "recipe" && state.mode === "menu" ? "menu" : "make");
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t.dataset.v === view);
   $("designView").hidden = view !== "design";
   $("recipeView").hidden = view !== "recipe";
@@ -400,7 +402,12 @@ function counts() {
 function renderDiets() {
   const avoid = [...new Set(state.guests.flatMap((g) => g.avoid))];
   const names = DIETS.filter(([k]) => state.diets.includes(k)).map(([, t]) => t);
-  $("diets").innerHTML =
+  const modePick = `<select id="modePick" class="pick" aria-label="What to make">` +
+    `<option value="menu"${state.mode === "menu" ? " selected" : ""}>Dinner menu</option>` +
+    `<option value="pie"${state.mode === "pie" ? " selected" : ""}>Pie topping</option></select>`;
+  document.body.dataset.mode = state.mode;
+  if (state.mode === "menu") { $("diets").innerHTML = modePick; return; }
+  $("diets").innerHTML = modePick +
     `<label class="pickwrap">Topping <select id="topPick" class="pick" aria-label="Pipe with">${Object.entries(state.tops).map(([k, t]) =>
       `<option value="${k}"${state.toppingType === k ? " selected" : ""}>${t.short || TOPS[k].short}</option>`).join("")}</select></label>` +
     `<span class="dietwrap"><button type="button" class="pick dietbtn" id="dietBtn" aria-expanded="${!!state.dietOpen}">Diet: ${esc(["Allergy-safe", ...names].join(", "))} ▾</button>` +
@@ -410,6 +417,7 @@ function renderDiets() {
     `<button type="button" class="btn sm go" id="dietDone">Done</button></div></span>`;
 }
 $("diets").onchange = (e) => {
+  if (e.target.id === "modePick") { state.mode = e.target.value; renderRecipe(); show("recipe"); return; }
   if (e.target.id !== "topPick") return;
   const k = e.target.value;
   if (state.busy || state.job || k === state.toppingType) { renderDiets(); return; }
@@ -468,6 +476,8 @@ function answerCard(q) {
 
 function renderRecipe() {
   renderDiets();
+  renderMenu();
+  if (state.mode === "menu") return;
   const p = state.plan;
   if (!p && state.answer && !state.busy) {   // just a question, no design yet
     const q = state.answer;
@@ -608,6 +618,7 @@ const noun = () => ({ cookie: "Cookie", cake: "Cake", cupcake: "Cupcake" })[stat
 function nextStep() {
   const view = document.body.dataset.view;
   if (state.job) return "stop";
+  if (view === "recipe" && state.mode === "menu") return "cards";
   if (view === "recipe") return "design";
   if (view === "design" && (state.ready < READY_AT || state.loaded !== topOf())) return "camera";
   return "send";
@@ -621,7 +632,8 @@ function updateGate() {
   b.classList.toggle("stop", step === "stop");
   if (step === "stop") { b.disabled = false; b.textContent = "Stop"; return; }
   $("sendBtn").title = reason();
-  if (step === "design") { b.textContent = "Start Designing"; b.disabled = !p || state.busy; }
+  if (step === "cards") { b.textContent = "Make Cards"; b.disabled = !cards.lines.length || state.busy; }
+  else if (step === "design") { b.textContent = "Start Designing"; b.disabled = !p || state.busy; }
   else if (step === "camera") { b.textContent = `Check the ${noun()}`; b.disabled = !p || state.busy; }
   else { b.textContent = "Send to Printer"; b.disabled = !ok || state.busy; }
 }
@@ -809,6 +821,7 @@ $("dryBtn").onclick = () => start(true);
 // Send turns into Stop while the printer is moving (sends M112).
 $("sendBtn").onclick = async () => {
   const step = nextStep();
+  if (step === "cards") return show("cards");
   if (step === "design") return show("design");
   if (step === "camera") return show("camera");
   if (!state.job) return start(false);
@@ -817,24 +830,54 @@ $("sendBtn").onclick = async () => {
   catch (e) { log(`Stop failed: ${e.message}. Switch the printer off now.`); }
 };
 
+// ---------- dinner menu: prompt -> branded products (Agent API) -> every label checked (Search + Decider) ----------
+function renderMenu() {
+  const box = $("menuView");
+  if (state.mode !== "menu") { box.innerHTML = ""; return; }
+  if (state.menuBusy) {
+    box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Picking exact brands, then checking every label… about a minute.</p>`;
+    return;
+  }
+  if (!cards.title) { box.innerHTML = `<p class="muted menuhint">Type what's for dinner. Perplexity picks an exact brand for each product and checks every label against your guests' allergies.</p>`; return; }
+  const secs = Object.entries(cards.simple).map(([t, ls]) => `<div class="msec"><h3>${esc(t)}</h3>${ls.map((l) => `<p>${esc(l)}</p>`).join("")}</div>`).join("");
+  const nos = Object.entries(cards.avoid).map(([g, ls]) => `<div class="mguest"><b>${esc(g)}</b>${ls.length
+    ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "<span class=\"yes\">YES</span> everything"}</div>`).join("");
+  box.innerHTML = `<div class="mhead"><h2>${esc(cards.title)}</h2>${cards.prompt ? `<span class="muted">“${esc(cards.prompt)}”</span>` : ""}</div>
+    <div class="mbody"><div class="mmenu">${secs}</div><div class="mnos"><h3>Allergens</h3>${cards.lines.length ? nos : "<p class=\"muted\">Not checked yet.</p>"}</div></div>`;
+}
+async function makeMenu() {
+  const prompt = $("prompt").value.trim();
+  if (!prompt || state.menuBusy) return;
+  if (!state.live) return log("The menu is made on the Pi (Agent API + Search + Decider).");
+  state.menuPrompt = prompt; state.menuBusy = true; $("askBtn").disabled = true; renderMenu(); updateGate();
+  try {
+    const r = await apiJson("/api/menu", { prompt });
+    cards.lines = r.lines; await loadCards(); log(`Menu ready: ${r.title}.`);
+  } catch (e) { log(`Menu: ${e.message}`); }
+  state.menuBusy = false; $("askBtn").disabled = false; renderMenu(); updateGate();
+}
+
 // ---------- invitation cards (PLA on watercolor paper) ----------
 // The menu check runs the Search API + Decider on every product (cards.py); each dish prints as one short line.
-const cards = { guest: "", side: "front", lines: [], guests: [], homed: false };
+const cards = { guest: "", side: "front", lines: [], guests: [], homed: false, title: "", simple: {}, avoid: {}, prompt: "" };
 async function loadCards() {
   if (!state.live) { $("cardMsg").textContent = "Cards run on the Pi (Search + Decider + printer)."; return; }
   try {
     const c = await apiJson("/api/cards");
     cards.guests = c.guests || []; cards.lines = c.lines || [];
+    Object.assign(cards, { title: c.title || "", simple: c.simple || {}, avoid: c.avoid || {}, prompt: c.prompt || "" });
+    if (!state.menuPrompt && cards.prompt) state.menuPrompt = cards.prompt;
     const one = ["one", "simple"].includes((c.card || {}).style);               // one-page card: no back side to pick
     $("cardSide").hidden = one; if (one) cards.side = "front";
     if (!cards.guest && cards.guests.length) cards.guest = cards.guests[0];
-    renderCards(); drawCard();
+    renderCards(); drawCard(); renderMenu(); updateGate();
   } catch (e) { log(`Cards: ${e.message}`); }
 }
 function renderCards() {
   $("cardGuests").innerHTML = cards.guests.map((g) =>
     `<option value="${g}"${g === cards.guest ? " selected" : ""}>${g}</option>`).join("");
-  if (!state.job) $("cardMsg").textContent = cards.lines.length ? "" : "Tap Check menu first.";
+  $("cardTitle").textContent = cards.title ? `Menu: ${cards.title}` : "";
+  if (!state.job) $("cardMsg").textContent = cards.lines.length ? "" : "Make the menu on Recipe first.";
   $("cardBtn").disabled = !cards.lines.length || !!state.job;
   $("homeBtn").disabled = !!state.job;
 }
@@ -855,9 +898,9 @@ $("menuBtn").onclick = async () => {
   if (!state.live) return log("Menu check runs on the Pi.");
   $("menuBtn").disabled = true; $("menuBtn").textContent = "Checking…";
   log("Search API is finding each product's label; the Decider is reading it…");
-  try { cards.lines = (await apiJson("/api/cards/check", {})).lines; renderCards(); drawCard(); log("Menu checked."); }
+  try { cards.lines = (await apiJson("/api/cards/check", {})).lines; await loadCards(); log("Menu checked."); }
   catch (e) { log(`Menu check failed: ${e.message}`); }
-  $("menuBtn").disabled = false; $("menuBtn").textContent = "Check menu";
+  $("menuBtn").disabled = false; $("menuBtn").textContent = "Recheck";
 };
 async function plaJob(path, body, what) {
   try {
@@ -911,7 +954,10 @@ $("kbd").onclick = (e) => {
   else { el.value += shift ? k.toUpperCase() : k; if (shift) { shift = false; drawKbd(); } }
   syncClear();
 };
-$("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); document.body.classList.remove("editing"); boxMode === "change" ? revise() : ask(); };
+$("askForm").onsubmit = (e) => {
+  e.preventDefault(); hideKbd(); document.body.classList.remove("editing");
+  boxMode === "change" ? revise() : boxMode === "menu" ? makeMenu() : ask();
+};
 $("editBtn").onclick = () => { document.body.classList.toggle("editing"); if (document.body.classList.contains("editing")) $("prompt").focus(); };
 
 
@@ -1015,6 +1061,6 @@ async function init() {
   await refreshStatus();
   await loadToppings(); renderLoad();
   renderRecipe(); renderDesign();
-  show("cards");
+  await loadCards(); show("recipe");
 }
 init();

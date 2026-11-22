@@ -365,3 +365,21 @@ body[data-view="design"]:not(.editing) .ask{display:none}
 .popcard p{font-size:1.1rem;line-height:1.45}
 .popbtns{display:flex;gap:.6rem;justify-content:flex-end}
 .popbtns .btn{height:3rem;padding:0 1.4rem}
+
+/* dinner menu (Recipe step 1) */
+body[data-mode="menu"] #recipeView .cols{display:none}
+.menuview:empty{display:none}
+.menuview{padding:.4rem var(--pad);overflow:auto;font-size:1rem;flex:1;min-height:0}
+.menuview .menuhint{font-size:1.1rem;max-width:40ch}
+.menuview .mhead{display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;margin-bottom:.3rem}
+.menuview .mhead h2{margin:0;font-size:1.5rem}
+.menuview .mbody{display:grid;grid-template-columns:2fr 1fr;gap:1.4rem}
+.menuview .mmenu{display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:0 1.4rem;align-content:start}
+.menuview h3{margin:.5rem 0 .15rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.menuview .msec p{margin:.1rem 0}
+.menuview .mguest{margin:.2rem 0 .6rem;line-height:1.4}
+.menuview .mguest b{display:block}
+.menuview .no{font-weight:700;color:#b3261e}
+.menuview .yes{font-weight:700;color:#1b6e3a}
+#cardTitle{margin-right:.6rem;font-size:1rem}
+@media (orientation:portrait){.menuview .mbody{grid-template-columns:1fr}}
