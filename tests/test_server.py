@@ -43,7 +43,7 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
     monkeypatch.setattr(srv, "GUESTS_FILE", f)
     monkeypatch.setattr(srv, "printer", lambda: (_ for _ in ()).throw(RuntimeError("no printer")))
     monkeypatch.setattr(srv, "make_client", lambda: __import__("contextlib").nullcontext(None))
-    monkeypatch.setattr(srv, "plan_design", lambda c, p, g, diets=None, dish=None: dict(PLAN))
+    monkeypatch.setattr(srv, "plan_design", lambda c, p, g, diets=None, **kw: dict(PLAN))
     seen_labels.clear()
     monkeypatch.setattr(srv, "enrich", lambda ps: [{**p, "label": LABEL if p["ingredient"] == "chocolate chips" else None} for p in ps])
     monkeypatch.setattr(srv, "check_ingredient", lambda c, prod, al, label=None: seen_labels.append(label) or {
@@ -149,10 +149,10 @@ def test_revise_rechecks_only_when_ingredients_change(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     c.post("/api/design", json={"prompt": "x"})
     c.post("/api/check", json={"product": "chocolate chips"})
-    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None, dish=None: {**plan, "shape": "heart", "text": ""})
+    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None, **kw: {**plan, "shape": "heart", "text": ""})
     c.post("/api/revise", json={"change": "just a heart, no name"})
     assert srv.state["plan"]["shape"] == "heart" and srv.state["checks"]
-    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None, dish=None: {**plan, "ingredients": ["white chocolate chips", "heavy cream"]})
+    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None, **kw: {**plan, "ingredients": ["white chocolate chips", "heavy cream"]})
     c.post("/api/revise", json={"change": "white chocolate"})
     assert srv.state["checks"] == {}
 
@@ -160,7 +160,7 @@ def test_revise_rechecks_only_when_ingredients_change(tmp_path, monkeypatch):
 def test_start_blocked_when_a_step_names_a_nut(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     plan = dict(PLAN, recipe=["Heat the cream.", "Add 1/4 tsp almond extract."])
-    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, dish=None: dict(plan))
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, **kw: dict(plan))
     r = c.post("/api/design", json={"prompt": "x"}).json()
     assert r["scan"][0]["term"] == "almond extract"
     for p in PLAN["ingredients"]:
@@ -193,6 +193,57 @@ def test_edit_to_cat_in_cursive(tmp_path, monkeypatch):
     r = c.post("/api/edit", json={"shape": "cat", "text": "Debbie", "font": "cursive"}).json()
     assert r["plan"]["shape"] == "cat" and r["plan"]["font"] == "cursive" and len(r["strokes"]) > 8
     assert c.post("/api/edit", json={"font": "gothic"}).status_code == 400
+
+
+def test_question_returns_answer_and_keeps_design(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    first = c.post("/api/design", json={"prompt": "x"}).json()
+    q = {**PLAN, "kind": "question", "answer": "Free range means outdoor access.", "base": "none",
+         "sources": [{"title": "FSIS", "url": "https://www.fsis.usda.gov/"}]}
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, **kw: dict(q))
+    r = c.post("/api/design", json={"prompt": "what does free range mean on a turkey?"}).json()
+    assert r["question"]["answer"].startswith("Free range") and "strokes" not in r
+    assert srv.state["plan"]["ingredients"] == first["plan"]["ingredients"]   # design kept
+
+
+def test_cookie_base_shrinks_design_and_none_has_no_path(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, **kw: {**PLAN, "kind": "make", "base": "cookie", "shape": "heart", "text": ""})
+    r = c.post("/api/design", json={"prompt": "M&M cookies with a heart"}).json()
+    assert max(abs(v) for s in r["strokes"] for pt in s for v in pt[:2]) <= 45 * 0.75 + 0.5
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, **kw: {**PLAN, "kind": "make", "base": "none"})
+    r = c.post("/api/design", json={"prompt": "roast turkey"}).json()
+    assert r["strokes"] == []
+    assert c.post("/api/start", json={"dry_run": True}).status_code == 409
+
+
+def test_layers_keep_first_topping_and_use_its_settings(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, **kw: {**PLAN, "base": "cookie", "shape": "heart", "text": "", "topping_type": "chocolate"})
+    c.post("/api/design", json={"prompt": "chocolate heart cookie", "topping_type": "chocolate"})
+    seen = {}
+    def second(cl, p, g, diets=None, topping_type=None, layers=None, **kw):
+        seen.update(topping_type=topping_type, layers=layers)
+        return {**PLAN, "base": "pie", "shape": "text", "text": "Debbie", "topping_type": "frosting"}
+    monkeypatch.setattr(srv, "plan_design", second)
+    r = c.post("/api/design", json={"prompt": "Debbie in frosting", "topping_type": "frosting", "add_layer": True}).json()
+    assert seen["topping_type"] == "frosting" and seen["layers"][0]["topping_type"] == "chocolate"
+    assert r["plan"]["base"] == "cookie" and len(r["layers"]) == 1 and r["layers"][0]["strokes"]
+    # a fresh design clears the layers
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, **kw: dict(PLAN))
+    assert c.post("/api/design", json={"prompt": "new"}).json()["layers"] == []
+    assert c.post("/api/design", json={"prompt": "x", "topping_type": "gravy"}).status_code == 400
+
+
+def test_topping_profiles_and_drip_suggestion(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    mf = tmp_path / "machine.json"
+    monkeypatch.setattr(srv.Machine.load.__func__, "__defaults__", (mf, None))
+    t = c.get("/api/toppings").json()
+    assert set(t) == {"frosting", "chocolate", "marshmallow"}
+    assert t["marshmallow"]["settings"]["dwell"] > t["frosting"]["settings"]["dwell"]
+    s = c.post("/api/drip-test/result", json={"topping_type": "chocolate", "seconds": 4.2}).json()["suggest"]
+    assert s["dwell"] == 4.5 and s["retract"] > t["chocolate"]["settings"]["retract"]
 
 
 def test_start_records_a_timelapse(tmp_path, monkeypatch):

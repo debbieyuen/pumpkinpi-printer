@@ -93,3 +93,20 @@ sudo systemctl status pumpkinpi     # server logs: journalctl -u pumpkinpi -f
 - Frosting mode: heaters off, `M302 P1`, slow speed. STOP sends `M112`.
 - A person presses Start. The allergen check is an aid, not a guarantee. Always read the label.
 - Guests' diet/health notes are hidden on screen unless `PUMPKINPI_SHOW_HEALTH=1` (get consent first).
+
+### Toppings, pause and drip test
+
+Three syringes: **melted chocolate** (melted chips), **frosting** and **melted marshmallow**. Pick one with the chips on the Recipe screen. Each has its own starting settings in `pumpkinpi/toolpath.py` (`TOPPINGS`), and your measured values are saved per topping under `"toppings"` in `machine.json`:
+
+| Topping | feed | e_per_mm | prime | pull-back | pause | gap | lift speed |
+|---|---|---|---|---|---|---|---|
+| frosting | 600 | 0.02 | 0.3 | 0.6 | 0.5 s | 1.5 | 300 |
+| chocolate | 720 | 0.015 | 0.2 | 0.8 | 1.0 s | 1.0 | 300 |
+| marshmallow | 420 | 0.03 | 0.4 | 1.0 | 1.5 s | 2.0 | 120 |
+
+These are estimates; tune them with the drip test.
+
+- **Pause** (`dwell`): after each line the plunger pulls back, then waits `G4` this long before lifting, so the ooze lands on the line instead of trailing.
+- **Drip test** (Camera tab): put a plate with parchment where the food goes, tap Drip test. It pipes one 4 cm line, pulls back with no pause and lifts 3 mm. Tap "Drip stopped" when the tip stops oozing; it suggests a pause (ooze time + 0.3 s, max 8 s, plus more pull-back if over 3 s). Tap Save.
+- **Layers**: after a topping is piped, tap "Add another topping" (e.g. frosting after chocolate). Swap the syringe, tap Loaded. Earlier layers stay on the preview, and Send stays locked until the right syringe is loaded.
+- **tip_offset**: if a nozzle is longer or shorter than the one you set `z_surface` with, measure the difference with an empty bed and save it as that topping's `tip_offset` (mm; positive = longer tip, so the carriage stays higher; negative = shorter tip).

@@ -19,7 +19,7 @@
 
 <form id="askForm" class="ask" autocomplete="off">
   <div class="box">
-  <input id="prompt" name="prompt" type="text" inputmode="none" placeholder="What should we pipe on the pie?" aria-label="What should we pipe on the pie?" required>
+  <input id="prompt" name="prompt" type="text" inputmode="none" placeholder="Ask anything about food, or what to make" aria-label="Ask anything about food, or what to make" required>
   <button type="button" class="clear" id="clearBtn" aria-label="Clear prompt" hidden>×</button>
   <button type="submit" class="send" id="askBtn">Make</button>
   </div>
@@ -30,7 +30,7 @@
   <section class="screen recipe" id="recipeView">
     <div class="chips" id="diets" role="group" aria-label="Diet options"></div>
     <div class="cols">
-      <div class="col" id="ingCol"><p class="muted">Type what you'd like, then tap Make.</p></div>
+      <div class="col" id="ingCol"></div>
       <div class="col" id="stepCol"></div>
       <div class="col srccol" id="srcCol"></div>
     </div>
@@ -40,6 +40,7 @@
   <section class="screen design" id="designView" hidden>
     <div class="stage">
       <canvas id="pie3d" aria-label="3D pie preview"></canvas>
+      <p class="nopipe" id="noPipe" hidden>Nothing to pipe for this recipe. Ask for a design on a pie, cake, cookie or cupcake.</p>
       <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
         <circle r="58" class="crust"/><circle r="50" class="filling"/><g id="strokes"></g>
       </svg>
@@ -57,19 +58,24 @@
         <div class="cliprow"><span class="muted small" id="clipInfo"></span><button class="btn ghost sm" id="clipClose" type="button">Close</button></div></div>
     </div>
     <div class="side">
-      <p class="cammsg" id="camMsg">Put the pie or cookie on the bed, then check it.</p>
-      <button class="btn" id="readyBtn" type="button">Check pie</button>
+      <div class="more" id="more" hidden></div>
+      <div class="load" id="load" aria-live="polite"></div>
+      <p class="cammsg" id="camMsg">Put the food on the bed, then check it.</p>
+      <button class="btn" id="readyBtn" type="button">Check it</button>
+      <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
+      <button class="btn" id="dripBtn" type="button">Drip test</button>
+      <div class="drip" id="dripBox" hidden aria-live="polite"></div>
       <button class="btn" id="labelBtn" type="button">Scan label</button>
       <button class="btn" id="recBtn" type="button">Record</button>
       <button class="btn ghost" id="clipBtn" type="button" hidden>Last clip</button>
-      <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
-      <p class="muted small">Scan label: hold the ingredients up to the camera. Recording starts by itself when piping starts.</p>
+      <p class="muted small" id="dripSet"></p>
     </div>
   </section>
 </main>
 
 <div class="bar" id="bar">
-  <p class="why" id="why">Make a design to start.</p>
+  <span></span>
+  <p class="toast" id="toast" role="status" hidden></p>
   <button class="btn go" id="sendBtn" type="button" disabled>Send to Printer</button>
   <div class="meter" aria-hidden="true"><div class="fill" id="jobFill"></div></div>
 </div>
@@ -122,6 +128,7 @@
 </div>
 
 <div class="kbd" id="kbd" hidden aria-label="On-screen keyboard"></div>
+<script>window.API_BASE = "__PORT_8000__";</script>
 <script src="app.js"></script>
 <script type="module" src="pie3d.js"></script>
 </body>
