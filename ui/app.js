@@ -61,7 +61,7 @@ async function ask() {
   const prompt = $("prompt").value.trim();
   if (!prompt || state.busy) return;
   state.busy = true; state.checks = {}; state.ready = 0; state.open = null;
-  $("askBtn").innerHTML = '<span class="spin" aria-label="Planning"></span>';
+  $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
   $("result").hidden = false; $("idle").hidden = true; state.strokes = []; drawPreview();
   $("plan").innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-offwhite.svg" alt=""> Perplexity is planning…</p>`;
   updateGate();
@@ -79,7 +79,7 @@ async function ask() {
     $("plan").innerHTML = `<p class="msg">Couldn't plan that: ${esc(e.message)}</p>`;
     state.plan = null; state.strokes = []; drawPreview();
   } finally {
-    state.busy = false; $("askBtn").textContent = "Ask"; updateGate();
+    state.busy = false; $("askBtn").textContent = "Make"; updateGate();
   }
 }
 
@@ -92,7 +92,7 @@ async function check(product) {
     else {
       await sleep(900);
       const p = DEMO_PROBS[product] || {};
-      res = { sources: [{ title: "Demo: product label page", url: "https://example.com/label" }], relevance: 0.9,
+      res = { sources: [{ title: "Sample: product label page", url: "https://example.com/label" }], relevance: 0.9,
         results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p[a] ?? 0.3 }))) };
     }
     res.results.forEach((r) => (r.color = r.verdict ? toColor[r.verdict] : verdict(r.probability)));
