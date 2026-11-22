@@ -125,3 +125,24 @@ def test_revise_rechecks_only_when_ingredients_change(tmp_path, monkeypatch):
     monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None: {**plan, "ingredients": ["white chocolate chips", "heavy cream"]})
     c.post("/api/revise", json={"change": "white chocolate"})
     assert srv.state["checks"] == {}
+
+
+def test_start_blocked_when_a_step_names_a_nut(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    plan = dict(PLAN, recipe=["Heat the cream.", "Add 1/4 tsp almond extract."])
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None: dict(plan))
+    r = c.post("/api/design", json={"prompt": "x"}).json()
+    assert r["scan"][0]["term"] == "almond extract"
+    for p in PLAN["ingredients"]:
+        c.post("/api/check", json={"product": p})
+    srv.state["ready"] = 0.99
+    r = c.post("/api/start", json={})
+    assert r.status_code == 409 and "almond extract" in r.json()["detail"]
+
+
+def test_guide_falls_back_to_cited_lists(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    c.post("/api/design", json={"prompt": "x"})
+    monkeypatch.setattr(srv.allergy_guide, "research", lambda *a: (_ for _ in ()).throw(RuntimeError("offline")))
+    g = c.post("/api/guide", json={}).json()
+    assert g["allergens"][0]["allergen"] == "tree nuts" and g["allergens"][0]["sources"]

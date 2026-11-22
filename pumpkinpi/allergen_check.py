@@ -39,6 +39,7 @@ class Check:
     probability: float
     verdict: str
     sources: list[str] = field(default_factory=list)
+    note: str = ""   # why, in a few words ("almond milk is a tree nut")
 
 
 def verdict_for(p: float) -> str:
@@ -82,23 +83,69 @@ FLAVOR_AT = 0.5     # "natural flavor" can hide coconut and other removed tree n
 
 
 def search_queries(product: str, allergens: list[str]) -> list[str]:
-    return [f"{product} ingredients allergen statement",
-            f"{product} may contain {' '.join(allergens)} shared facility"]
+    """Up to 5 Search API queries: the label, then one per allergen with its hidden names.
+
+    "semi-sweet chocolate chips tree nuts almond hazelnut cross-contact" finds the brand pages and
+    allergy-group pages that a generic "allergen statement" query misses.
+    """
+    from .allergens import key_for, search_terms
+
+    q = [f"{product} ingredients allergen statement may contain"]
+    nutty = [a for a in allergens if key_for(a)]
+    for a in nutty[:3]:
+        words = " ".join(search_terms(a, 3))
+        q.append(f"{product} {a} {words} shared equipment cross-contact")
+    other = [a for a in allergens if not key_for(a)]
+    if other:
+        q.append(f"is {product} {' '.join(other)}")
+    return q[:5]
+
+
+def tag_result(r: dict, allergens: list[str]) -> str:
+    """Which allergen a source talks about (for grouping on screen), else "label"."""
+    from .allergens import key_for, name_hits
+
+    text = f"{r.get('title') or ''} {r.get('snippet') or ''}"[:4000]
+    for a in allergens:
+        k = key_for(a)
+        if k and (a.lower() in text.lower() or name_hits(text, a)["contains"]):
+            return k
+    return "label"
+
+
+def flag_by_name(product: str, a: str, p: float, v: str) -> tuple[float, str, str]:
+    """Stricter only: the product's own name contains the allergen (red) or a check-the-label word (yellow)."""
+    from .allergens import name_hits
+
+    h = name_hits(product, a)
+    if h["contains"]:
+        return 1.0, "found", f"{h['contains'][0]} is {a}"
+    if h["check"] and v == "safe":
+        return p, "unsure", f"{h['check'][0]}: check the label for {a}"
+    return p, v, ""
 
 
 def check_ingredient(client: httpx.Client, product: str, allergens: list[str]) -> dict:
     """Search API for evidence, then Decider answers one question per allergen on that evidence.
 
     Returns {"product", "search": {"queries", "results"}, "checks": {allergen: Check}, "relevance", "natural_flavor"}.
+    Each result gets "tag": "tree nuts" / "peanuts" / "fish" / "label".
     """
     from . import pplx
+    from .allergens import HIDDEN, key_for
 
     queries = search_queries(product, allergens)
-    results = pplx.search(client, queries, max_results=6)
+    results = pplx.search(client, queries, max_results=12)
     if not results:  # nothing found: fall back to Decider's own grounded search
-        checks = {a: check_product(client, product, a) for a in allergens}
+        checks = {}
+        for a in allergens:
+            c = check_product(client, product, a)
+            c.probability, c.verdict, c.note = flag_by_name(product, a, c.probability, c.verdict)
+            checks[a] = c
         return {"product": product, "search": {"queries": queries, "results": []},
                 "checks": checks, "relevance": None, "natural_flavor": None}
+    for r in results:
+        r["tag"] = tag_result(r, allergens)
 
     state = {"product": product,
              "evidence": [{"title": r.get("title"), "url": r.get("url"), "text": (r.get("snippet") or "")[:2500]}
@@ -110,20 +157,27 @@ def check_ingredient(client: httpx.Client, product: str, allergens: list[str]) -
                            "Does the product's ingredient list include 'natural flavor', 'flavoring' or another unspecified flavor?"},
     }
     for i, a in enumerate(allergens):
+        k = key_for(a)
+        hidden = f" Count every form of it, including {', '.join(HIDDEN[k]['contains'][:18])}." if k else ""
         questions[f"a{i}"] = {"type": "noul", "instructions":
                               f"Based on the evidence, does {product} contain {a} or a {a}-derived ingredient, "
-                              f"or carry a may-contain or shared-facility warning for {a}?"}
+                              f"or carry a may-contain or shared-facility/equipment warning for {a}?{hidden}"}
     ans = pplx.decide(client, state, questions)["answers"]
     rel = float(ans["about_product"]["noul"])
     flav = float(ans["natural_flavor"]["noul"])
-    urls = [r["url"] for r in results if r.get("url")]
     checks = {}
     for i, a in enumerate(allergens):
         p = float(ans[f"a{i}"]["noul"])
         v = verdict_for(p)
-        if v == "safe" and (rel < RELEVANT_AT or flav >= FLAVOR_AT):
-            v = "unsure"  # no label for this exact product, or a hidden-flavor risk: check the label
-        checks[a] = Check(product, a, p, v, urls)
+        note = ""
+        if v == "safe" and rel < RELEVANT_AT:
+            v, note = "unsure", "no label found for this exact product"
+        elif v == "safe" and flav >= FLAVOR_AT:
+            v, note = "unsure", "natural flavor can hide nuts"
+        p, v, why = flag_by_name(product, a, p, v)
+        k = key_for(a)
+        mine = [r["url"] for r in results if r.get("url") and r["tag"] in (k, "label")]
+        checks[a] = Check(product, a, p, v, mine or [r["url"] for r in results if r.get("url")], why or note)
     return {"product": product, "search": {"queries": queries, "results": results},
             "checks": checks, "relevance": rel, "natural_flavor": flav}
 

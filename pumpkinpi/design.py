@@ -45,10 +45,18 @@ Rules:
 - The syringe is NOT heated, so melted chocolate will set in the tip. Turn "chocolate" into a pipeable
   chocolate ganache or chocolate frosting that stays soft at room temperature.
 - The topping must avoid every allergen any guest avoids. Prefer 2-3 simple, widely sold ingredients.
+- Watch for hidden nuts and fish: no almond/cashew/other nut milks, creams, flours, butters, oils or
+  extracts, praline, marzipan, gianduja, nougat or pesto when a guest avoids tree nuts or peanuts;
+  no anchovy or Worcestershire when a guest avoids fish. Peanuts and tree nuts are different: if
+  only some guests avoid peanuts, still avoid them, because the pie is shared.
+- Use vanilla, not almond extract. Avoid coconut when a guest avoids tree nuts (FDA no longer lists
+  it as a tree nut, so labels may not warn); for vegan cream pick oat or soy cream.
+- Every food named in the steps must also be in ingredients (salt, vanilla, sweetener too), so
+  each one gets checked.
 - List each ingredient as a product you'd buy (e.g. "semi-sweet chocolate chips"), not a brand claim of safety.
 - Never say an ingredient is safe; PumpkinPi checks each one separately. Do not put URLs in the JSON.
 - If diet options are given (vegan, dairy-free, gluten-free, egg-free, low sugar), every ingredient must fit them,
-  e.g. vegan ganache uses dairy-free chocolate and full-fat coconut cream or another plant cream.
+  e.g. vegan ganache uses dairy-free chocolate and oat or soy cream.
 - Search the web for a ganache/frosting ratio and piping consistency; prefer university extension and
   food-safety sites.
 Return only a JSON object matching the schema."""

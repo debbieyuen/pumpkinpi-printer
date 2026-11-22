@@ -32,6 +32,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
+from . import allergy_guide
+from .allergens import scan_blocks, scan_recipe
 from .camera import camera
 from .design import plan_design, revise_design
 from .pie_ready import PHOTO, pie_ready, take_photo
@@ -151,10 +153,14 @@ def publish(plan: dict, keep_checks: bool) -> dict:
     if not SHOW_HEALTH:
         plan["diet_notes"] = ""
     checks = state["checks"] if keep_checks else {}
-    state.update(plan=plan, strokes=strokes, checks=checks)
+    # Name scan of the whole recipe (steps and notes too): "a drop of almond extract" in step 3 blocks Send.
+    scan = scan_recipe(plan, allergens())
+    state.update(plan=plan, strokes=strokes, checks=checks, scan=scan)
     if not keep_checks:
         state["ready"] = 0.0
-    return {"plan": plan, "strokes": path["strokes"], "path": {k: path[k] for k in ("mm", "seconds")}}
+        state.pop("guide", None)
+    return {"plan": plan, "strokes": path["strokes"], "path": {k: path[k] for k in ("mm", "seconds")},
+            "scan": scan}
 
 
 @app.post("/api/design")
@@ -215,7 +221,26 @@ def check(req: CheckReq):
     state["checks"][req.product.lower()] = [r["verdict"] for r in rows]
     return {"product": req.product, "results": rows, "relevance": res["relevance"],
             "natural_flavor": res["natural_flavor"], "queries": res["search"]["queries"],
-            "sources": [{"title": r.get("title"), "url": r.get("url")} for r in res["search"]["results"]][:6]}
+            "sources": [{"title": r.get("title"), "url": r.get("url"), "tag": r.get("tag", "label")}
+                        for r in res["search"]["results"]][:8]}
+
+
+@app.post("/api/guide")
+def guide():
+    """Allergy watch for the current recipe: cited hidden names + where these ingredients hide nuts."""
+    if not state["plan"]:
+        raise HTTPException(409, "Make a design first")
+    if state.get("guide"):
+        return state["guide"]
+    g = guests()["guests"]
+    try:
+        with make_client() as client:
+            out = allergy_guide.research(client, state["plan"], g)
+    except Exception as e:   # research is extra; the fixed cited lists still show
+        out = {**allergy_guide.offline(g), "error": str(e)[:200]}
+    out["scan"] = state.get("scan", [])
+    state["guide"] = out
+    return out
 
 
 @app.post("/api/ready")
@@ -262,6 +287,10 @@ def gate(dry_run: bool) -> None:
         raise HTTPException(409, f"Not checked yet: {', '.join(missing)}")
     if any(v != "safe" for i in need for v in state["checks"][i]):
         raise HTTPException(409, "Not every ingredient is green")
+    blocks = scan_blocks(scan_recipe(state["plan"], allergens()))
+    if blocks:
+        b = blocks[0]
+        raise HTTPException(409, f"The recipe names {b['term']} ({b['allergen']}) in the {b['where']}")
     if state["ready"] < READY_AT:
         raise HTTPException(409, "Pie readiness below 0.9; re-run the camera check")
 

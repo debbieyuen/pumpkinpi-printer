@@ -23,7 +23,7 @@ const DEMO_DIET_PROBS = {  // offline sample only
 };
 
 const state = { live: false, everLive: false, guests: DEMO_GUESTS, plan: null, strokes: [], checks: {},
-  ready: 0, busy: false, open: null, job: false, photo: null, diets: [] };
+  ready: 0, busy: false, open: null, job: false, photo: null, diets: [], scan: [], guide: null, openWatch: null };
 
 const verdict = (p) => (p >= 0.7 ? "red" : p <= 0.1 ? "green" : "yellow");
 const toColor = { found: "red", unsure: "yellow", safe: "green" };
@@ -134,7 +134,10 @@ async function ask() {
 
 // Show a design. res.strokes is the path read back from the real G-code (exact), res.path its length/time.
 function applyDesign(res) {
+  const sameTopping = state.plan && JSON.stringify(state.plan.ingredients) === JSON.stringify(res.plan.ingredients);
   state.plan = res.plan; state.strokes = res.strokes; state.path = res.path || null;
+  state.scan = res.scan || (state.demo ? state.demo.scan || [] : []);
+  if (!sameTopping) { state.guide = null; loadGuide(); }
   if (res.plan.text) state.name = res.plan.text;
   window.Pie3D?.thinking(false); drawPreview(); renderAll(); renderDesign();
 }
@@ -143,6 +146,15 @@ async function checkMissing() {
   if (todo.length) log(`Checking ${todo.length} ingredient${todo.length > 1 ? "s" : ""}…`);
   for (const ing of todo) await check(ing);
   log(allSafe() ? "All ingredients safe. Tap Start Designing." : "An ingredient needs a check.");
+}
+
+// Allergy watch: cited hidden-name lists + where THESE ingredients hide nuts (Agent API, allergy sites only).
+async function loadGuide() {
+  const plan = state.plan;
+  try {
+    const g = state.live ? await apiJson("/api/guide", {}) : (await sleep(700), state.demo?.guide || null);
+    if (state.plan === plan) { state.guide = g; renderRecipe(); }
+  } catch (e) { if (state.plan === plan) { state.guide = { allergens: [], error: e.message }; renderRecipe(); } }
 }
 
 // ---------- Design changes: quick buttons (instant) or words ("just a heart, no name", Agent API) ----------
@@ -189,8 +201,8 @@ async function check(product) {
     else {
       await sleep(900);
       const p = DEMO_PROBS[product] || {};
-      res = { sources: [{ title: "Have Food Allergies? Read the Label", url: "https://www.fda.gov/consumers/consumer-updates/have-food-allergies-read-label" }], relevance: 0.9,
-        results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p[a] ?? 0.3 })))
+      res = { sources: state.demo?.sources?.[product] || [{ title: "Have Food Allergies? Read the Label", url: "https://www.fda.gov/consumers/consumer-updates/have-food-allergies-read-label", tag: "label" }], relevance: 0.9,
+        results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p[a] ?? 0.3, note: (state.demo?.notes?.[product] || {})[a] || "" })))
           .concat(state.diets.filter((d) => DEMO_DIET_PROBS[d]).map((d) => ({ name: d[0].toUpperCase() + d.slice(1), diet: d, allergen: d, probability: DEMO_DIET_PROBS[d][product] ?? 0.3 }))) };
     }
     res.results.forEach((r) => (r.color = r.verdict ? toColor[r.verdict] : verdict(r.probability)));
@@ -267,7 +279,7 @@ function renderRecipe() {
     const open = state.open === ing;
     let detail = "";
     if (open && c.results) {
-      detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)}${r.diet ? "" : ` · ${esc(r.allergen)}`}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div>No guest avoids an allergen for this.</div>`}
+      detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)}${r.diet ? "" : ` · ${esc(r.allergen)}`}<span class="prob">${Math.round(r.probability * 100)}%</span></div>${r.note ? `<div class="rnote">${esc(r.note)}</div>` : ""}`).join("") || `<div>No guest avoids an allergen for this.</div>`}
         ${p.allergy_notes ? `<div class="dnote">${esc(p.allergy_notes)}</div>` : ""}
         ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}</div>`;
     }
@@ -281,15 +293,64 @@ function renderRecipe() {
       <span><b>${esc(p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${rows}`;
   const steps = (p.recipe || []).map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("");
   $("stepCol").innerHTML = `<h3>Steps</h3><ol class="steps">${steps}</ol>
-    ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}`;
-  // Sources: recipe research (Agent API web search) + label pages per ingredient (Search API, judged by Decider).
-  const seen = new Set();
-  const all = [...(p.sources || []).slice(0, 4).map((s) => [s, ""]),
-    ...p.ingredients.flatMap((ing) => ((state.checks[ing] || {}).sources || []).slice(0, 2).map((s) => [s, ing]))]
-    .filter(([s]) => s.url && !seen.has(s.url) && seen.add(s.url)).slice(0, 6);
-  $("srcCol").innerHTML = `<h3>Sources</h3><ol class="srcs">${all.map(([s, tag]) => `<li class="srcitem">${favicon(s.url)}<span class="st"><b>${esc(s.title || host(s.url))}</b>
-    <span class="url">${esc(host(s.url))}${tag ? ` · ${esc(tag)}` : ""}</span></span></li>`).join("")}</ol>
+    ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}
+    <h3 class="srch">Sources</h3>${renderSources(p)}
     <p class="muted small by"><img src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity search + Decider${state.live ? "" : " · sample"}</p>`;
+  $("srcCol").innerHTML = renderWatch();
+}
+
+// ---------- allergy watch ----------
+const ALLERGEN_ART = {
+  "tree nuts": `<svg viewBox="0 0 48 48"><path d="M10 20c0-6 6-10 14-10s14 4 14 10z" fill="#7a5233"/><path d="M24 10v-4" stroke="#7a5233" stroke-width="3" stroke-linecap="round"/><path d="M12 20h24c0 10-5 18-12 20-7-2-12-10-12-20z" fill="#c8894d"/><path d="M14 23h20" stroke="#a96d36" stroke-width="2"/></svg>`,
+  peanuts: `<svg viewBox="0 0 48 48"><path d="M24 6c6 0 9 5 8 10-1 4-3 5-3 8s3 5 3 9c0 6-4 9-8 9s-8-3-8-9c0-4 3-6 3-9s-2-4-3-8c-1-5 2-10 8-10z" fill="#d9a35c" stroke="#a8742f" stroke-width="2"/><path d="M19 14h2M27 16h2M20 33h2M26 35h2" stroke="#a8742f" stroke-width="2" stroke-linecap="round"/></svg>`,
+  fish: `<svg viewBox="0 0 48 48"><path d="M6 24c6-9 16-12 26-6l8-6v24l-8-6C22 36 12 33 6 24z" fill="#6aa9c9"/><circle cx="14" cy="22" r="2" fill="#0f2e3d"/></svg>`,
+};
+const keyFor = (a) => (/peanut/i.test(a) ? "peanuts" : /nut/i.test(a) ? "tree nuts" : /fish/i.test(a) && !/shell/i.test(a) ? "fish" : a);
+const WATCH_LABEL = { "tree nuts": "Tree nuts", peanuts: "Peanuts", fish: "Fish" };
+
+function renderWatch() {
+  const g = state.guide, scan = state.scan || [];
+  const blocks = scan.filter((h) => h.kind === "contains"), checks = scan.filter((h) => h.kind === "check");
+  const banner = blocks.length ? `<div class="scan red">${STATUS_ICON.red}<span>The recipe names <b>${esc(blocks[0].term)}</b> (${esc(blocks[0].allergen)}) in ${esc(blocks[0].where)}. Change the design.</span></div>`
+    : checks.length ? `<div class="scan yellow">${STATUS_ICON.yellow}<span><b>${esc(checks[0].term)}</b> in ${esc(checks[0].where)}: check the label for ${esc(checks[0].allergen)}.</span></div>` : "";
+  if (!g) return `<h3>Allergy watch</h3>${banner}<p class="muted small by"><span class="spin sm"></span> Researching where nuts hide in this recipe…</p>`;
+  const cards = (g.allergens || []).map((c) => {
+    const k = keyFor(c.allergen), open = state.openWatch === c.allergen;
+    // Closed: one line + a few hidden names. Open: every risk for this recipe, the cited facts, all names.
+    const all = (c.watch || []).map((w) => `<li><b>${esc(w.ingredient)}</b> ${esc(w.risk)}</li>`);
+    const lines = (open ? all : all.slice(0, 1)).join("") || (c.facts || []).slice(0, 1).map((f) => `<li>${esc(f)}</li>`).join("");
+    const facts = open ? `<ul class="facts">${(c.facts || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>${c.tip ? `<p class="wtip">${esc(c.tip)}</p>` : ""}` : "";
+    const names = open ? c.names || [] : (c.names || []).slice(0, 4), more = (c.more || 0) + (c.names || []).length - names.length;
+    return `<button type="button" class="wcard ${open ? "open" : ""}" data-w="${esc(c.allergen)}">
+      <span class="wart">${ALLERGEN_ART[k] || JAR}</span>
+      <span class="wbody"><span class="wtitle">${esc(WATCH_LABEL[k] || c.allergen)}<span class="wwho">${esc((c.guests || []).join(" · "))}</span></span>
+        <ul class="wlines">${lines}</ul>${facts}
+        <span class="names">${names.map((n) => `<i>${esc(n)}</i>`).join("")}${more ? `<i class="more">+${more} more</i>` : ""}</span></span></button>`;
+  }).join("");
+  return `<h3>Allergy watch</h3>${banner}<div class="watch">${cards}</div>`;
+}
+$("srcCol").onclick = (e) => {
+  const b = e.target.closest(".wcard"); if (!b) return;
+  state.openWatch = state.openWatch === b.dataset.w ? null : b.dataset.w; renderRecipe();
+};
+
+// Sources grouped: the recipe, each allergen (allergy groups + nut searches), then product labels.
+function renderSources(p) {
+  const seen = new Set(), groups = [];
+  const add = (name, list, n) => {
+    const items = list.filter(([s]) => s && s.url && !seen.has(s.url) && seen.add(s.url)).slice(0, n);
+    if (items.length) groups.push([name, items]);
+  };
+  const fromChecks = (want) => p.ingredients.flatMap((ing) => ((state.checks[ing] || {}).sources || [])
+    .filter((s) => (s.tag || "label") === want).map((s) => [s, ing]));
+  add("Recipe", (p.sources || []).filter((s) => !/fda\.gov|foodallergy\.org/.test(s.url || "")).map((s) => [s, ""]), 2);
+  for (const c of (state.guide?.allergens || [])) {
+    const k = keyFor(c.allergen);
+    add(WATCH_LABEL[k] || c.allergen, [...fromChecks(k), ...(c.sources || []).map((s) => [s, ""])], 3);
+  }
+  add("Product labels", fromChecks("label"), 3);
+  return groups.map(([name, items]) => `<p class="sgroup">${esc(name)}</p><ol class="srcs">${items.map(([s, tag]) => `<li class="srcitem">${favicon(s.url)}<span class="st"><b>${esc(s.title || host(s.url))}</b>
+    <span class="url">${esc(host(s.url))}${tag ? ` · ${esc(tag)}` : ""}</span></span></li>`).join("")}</ol>`).join("");
 }
 $("ingCol").onclick = (e) => {
   const b = e.target.closest(".ing"); if (!b) return;
@@ -309,11 +370,14 @@ function drawPreview() {
 // ---------- gate ----------
 function allSafe() {
   if (!state.plan) return false;
+  if ((state.scan || []).some((h) => h.kind === "contains")) return false;
   return state.plan.ingredients.every((i) => state.checks[i] && state.checks[i].status === "green");
 }
 function reason() {
   if (!state.plan) return state.busy ? "Perplexity is designing…" : "Make a design to start.";
   const c = counts();
+  const block = (state.scan || []).find((h) => h.kind === "contains");
+  if (block) return `Recipe names ${block.term} (${block.allergen})`;
   if (c.wait) return "Checking ingredients…";
   if (c.red || c.yellow) return "An ingredient needs a check";
   if (state.ready < READY_AT) return document.body.dataset.view === "recipe" ? "All ingredients checked" : "Next: check the pie on Camera";

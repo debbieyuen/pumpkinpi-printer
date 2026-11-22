@@ -185,3 +185,27 @@ body.nop > :not(.noprinter){filter:grayscale(1);opacity:.35;pointer-events:none}
 .noprinter h2{font-size:2rem;font-weight:600;letter-spacing:-.02em}
 .npsub{font-size:1.3rem;font-weight:500;color:var(--teal-hi)}
 .npskip{margin-top:.6rem;height:2.8rem;font-size:1rem;color:var(--muted)}
+
+/* Allergy watch: one card per guest allergen, with hidden names and where this recipe can hide it */
+.watch{display:flex;flex-direction:column;gap:.45rem}
+.wcard{display:flex;gap:.65rem;align-items:flex-start;width:100%;text-align:left;background:#fff;border:1px solid var(--line);
+  border-radius:1rem;padding:.5rem .7rem;cursor:pointer;color:var(--fg)}
+.wcard.open{border-color:var(--teal)}
+.wart{flex:none;width:2.6rem;height:2.6rem;border-radius:.8rem;background:var(--surface);display:grid;place-items:center}
+.wart svg{width:2rem;height:2rem}
+.wbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25rem}
+.wtitle{display:flex;align-items:baseline;gap:.5rem;font-weight:650;font-size:1rem}
+.wwho{font-size:.78rem;font-weight:600;color:var(--teal-hi);margin-left:auto;white-space:nowrap}
+.wlines,.facts{list-style:none;display:flex;flex-direction:column;gap:.15rem;font-size:.85rem;line-height:1.25;color:var(--muted)}
+.wlines b{color:var(--fg);font-weight:600;margin-right:.25rem}
+.facts li::before{content:"•";color:var(--teal);margin-right:.35rem}
+.wtip{font-size:.82rem;color:var(--fg)}
+.names{display:flex;flex-wrap:wrap;gap:.25rem}
+.names i{font-style:normal;font-size:.72rem;font-weight:600;padding:.08rem .45rem;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.names i.more{background:none}
+.scan{display:flex;gap:.5rem;align-items:center;border-radius:.8rem;padding:.45rem .7rem;font-size:.85rem;line-height:1.25}
+.scan svg{flex:none;width:1.2rem;height:1.2rem;stroke-width:3}
+.scan.red{background:#c2492f;color:#fff}.scan.yellow{background:var(--peach);color:#3a2410}
+.sgroup{font-size:.75rem;font-weight:700;color:var(--teal-hi);margin:.35rem 0 .1rem}
+.rnote{font-size:.78rem;padding:0 0 .2rem .2rem;color:var(--muted)}
+.srch{margin-top:.6rem}
