@@ -175,7 +175,14 @@ def test_short_card_back_lists_only_nos_for_debbie():
 def test_unsure_counts_as_dont_eat():
     cfg = cards.load()
     ln = {"name": "Mystery (Brand)", "terms": {t: "unsure" for t in cards.WATCH}, "unsure": ["peanut"]}
-    assert "Mystery (Brand): check label" in cards.avoid_lines(cfg, [ln], "Debbie")
+    assert "Mystery (Brand): may have peanut" in cards.avoid_lines(cfg, [ln], "Debbie")
+
+
+def test_michael_unsure_sauces_are_a_no_with_reason():
+    cfg = cards.load()
+    t = [r[0] for r in cards.simple_rows(cfg, _lines(cfg), "Michael")]
+    assert "Lee Kum Kee Satay: coconut" in t and "Bull Head Sha cha: unnamed spices" in t
+    assert not any("check label" in x.lower() for x in t)
 
 
 def test_no_allergy_guest_gets_no_avoid_list():
@@ -243,3 +250,20 @@ def test_simple_card_like_the_note():
     assert "Everything else: YES" in t and any("Little Sheep lamb" in x for x in t)
     assert any("Mrs. Smith" in x for x in t) and any("Straus" in x for x in t)
     assert cards.layout(cfg, L, "Debbie", "front") and cards.layout(cfg, L, "Debbie", "back") == []
+
+
+def test_saved_check_from_old_menu_is_ignored(tmp_path, monkeypatch):
+    import json
+    from pumpkinpi import server, cards
+    f = tmp_path / "menu_check.json"
+    monkeypatch.setattr(server, "MENU_CHECK", f)
+    server.state.pop("cards", None); server.state.pop("cards_key", None)
+    f.write_text(json.dumps([{"text": "Beef slices: meat ?"}]))          # old list format
+    assert server.card_lines() == []
+    cfg = cards.load()
+    f.write_text(json.dumps({"key": cards.menu_key(cfg), "lines": [{"text": "ok"}]}))
+    server.state.pop("cards_key")
+    assert server.card_lines() == [{"text": "ok"}]
+    f.write_text(json.dumps({"key": "other", "lines": [{"text": "old"}]}))
+    server.state.pop("cards_key")
+    assert server.card_lines() == []

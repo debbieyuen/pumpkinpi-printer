@@ -826,7 +826,8 @@ function renderCards() {
   $("dishList").innerHTML = cards.lines.length ? cards.lines.map((l) => {
     const has = Object.values(l.terms || {}).includes("found");
     const cls = has ? "red" : l.unsure.length ? "yellow" : "green";
-    const why = l.unsure.length ? `check the label: ${l.unsure.join(", ")}` : `${l.sources.length} sources`;
+    const n = l.sources.length;
+    const why = l.unsure.length ? `unsure on ${l.unsure.join(", ")}: counts as NO` : `${n} source${n === 1 ? "" : "s"}`;
     return `<li class="${cls}"><span class="sdot"></span><span><b>${l.text}</b><small>${why}</small></span></li>`;
   }).join("") : `<li class="empty">Tap Check menu: Search finds each product's label, the Decider lists its allergens.</li>`;
   $("cardBtn").disabled = !cards.lines.length || !!state.job;

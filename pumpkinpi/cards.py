@@ -373,6 +373,9 @@ def avoid_lines(cfg: dict, lines: list[dict], guest: str) -> list[str]:
     A guest with no allergy list gets nothing here (their back says so instead)."""
     if not (cfg.get("allergies") or {}).get(guest):
         return []
+    products = {p.get("item"): p for d in cfg.get("menu", []) + [cfg.get("dessert") or {"products": []}]
+                for p in d.get("products", [])}
+    products.update({p.get("item"): p for p in cfg.get("more", []) + cfg.get("sauces", [])})
     out = []
     for ln in guest_lines(cfg, lines, guest):
         t = ln.get("text", "")
@@ -380,7 +383,8 @@ def avoid_lines(cfg: dict, lines: list[dict], guest: str) -> list[str]:
         if verdict.startswith("NO"):
             out.append(f"{name}: {verdict[2:].strip() or 'no'}")
         elif verdict == "check label" or (ln.get("unsure") and not verdict.startswith("YES")):
-            out.append(f"{name}: check label")
+            why = (products.get(ln.get("item")) or {}).get("why", {})   # e.g. {"tree nut": "coconut"}
+            out.append(f"{name}: " + ", ".join(why.get(u, f"may have {u}") for u in ln.get("unsure") or ["?"]))
     mine = set((cfg.get("allergies") or {}).get(guest) or [])
     for x in cfg.get("avoid_extra", []):              # e.g. "Peanut topping on pie" for peanut-allergic guests
         if mine & set(x.get("terms", [])):
@@ -656,6 +660,13 @@ def load(path: Path = CARDS_FILE) -> dict:
     return json.loads(p.read_text())
 
 
+def menu_key(cfg: dict) -> str:
+    """Fingerprint of the menu, so a saved check from an older menu is never reused."""
+    import hashlib
+    keep = {k: cfg.get(k) for k in ("menu", "dessert", "more", "sauces", "allergies")}
+    return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Menu invitation cards in PLA.")
     ap.add_argument("--check", action="store_true", help="run Search + Decider on every product (needs the API key)")
@@ -670,11 +681,13 @@ def main() -> None:
         with make_client() as c:
             lines = check_menu(c, cfg)
         Path("captures").mkdir(exist_ok=True)
-        Path("captures/menu_check.json").write_text(json.dumps(lines, indent=2))
-    elif Path("captures/menu_check.json").exists():
-        lines = json.loads(Path("captures/menu_check.json").read_text())
+        Path("captures/menu_check.json").write_text(json.dumps({"key": menu_key(cfg), "lines": lines}, indent=2))
     else:
-        raise SystemExit("Run with --check first")
+        f = Path("captures/menu_check.json")
+        saved = json.loads(f.read_text()) if f.exists() else None
+        if not (isinstance(saved, dict) and saved.get("key") == menu_key(cfg)):
+            raise SystemExit("Menu changed (or never checked): run with --check first")
+        lines = saved["lines"]
     if args.gcode:
         print("\n".join(card_gcode(layout(cfg, lines, args.guest, args.side), Pla.load())))
     else:

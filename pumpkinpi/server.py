@@ -691,8 +691,13 @@ MENU_CHECK = Path("captures/menu_check.json")
 
 
 def card_lines() -> list[dict]:
-    if state.get("cards") is None and MENU_CHECK.exists():
-        state["cards"] = json.loads(MENU_CHECK.read_text())
+    key = cards.menu_key(cards.load())
+    if state.get("cards_key") != key:
+        state["cards"], state["cards_key"] = None, key
+        if MENU_CHECK.exists():
+            saved = json.loads(MENU_CHECK.read_text())
+            if isinstance(saved, dict) and saved.get("key") == key:   # old list format = stale
+                state["cards"] = saved["lines"]
     return state.get("cards") or []
 
 
@@ -708,11 +713,12 @@ def cards_info():
 
 @app.post("/api/cards/check")
 def cards_check():
+    cfg = cards.load()
     with make_client() as c:
-        lines = cards.check_menu(c, cards.load())
+        lines = cards.check_menu(c, cfg)
     MENU_CHECK.parent.mkdir(exist_ok=True)
-    MENU_CHECK.write_text(json.dumps(lines, indent=2))
-    state["cards"] = lines
+    MENU_CHECK.write_text(json.dumps({"key": cards.menu_key(cfg), "lines": lines}, indent=2))
+    state["cards"], state["cards_key"] = lines, cards.menu_key(cfg)
     return {"lines": lines}
 
 

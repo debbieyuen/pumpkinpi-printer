@@ -246,7 +246,10 @@
     "milk",
     "soy"
    ],
-   "source": "https://usa.lkk.com/en/products/satay-sauce"
+   "source": "https://usa.lkk.com/en/products/satay-sauce",
+   "why": {
+    "tree nut": "coconut"
+   }
   },
   {
    "item": "Bull Head Barbecue Sauce (Sha Cha)",
@@ -258,7 +261,10 @@
     "sesame",
     "shellfish"
    ],
-   "source": "https://www.waiyeehong.com/food-ingredients/sauces-oils/other-sauces/barbecue-sauce-sha-cha"
+   "source": "https://www.waiyeehong.com/food-ingredients/sauces-oils/other-sauces/barbecue-sauce-sha-cha",
+   "why": {
+    "tree nut": "unnamed spices"
+   }
   },
   {
    "item": "Lee Kum Kee Sa Cha Sauce",
