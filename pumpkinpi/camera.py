@@ -79,6 +79,15 @@ class LiveCamera:
     def running(self) -> bool:
         return bool(self._proc and self._proc.poll() is None)
 
+    def keep_alive(self) -> None:
+        """Keep the camera on with nobody watching (timelapse recording)."""
+        self._last_seen = time.monotonic()
+        self._start()
+
+    def latest(self) -> tuple[int, bytes | None]:
+        with self._lock:
+            return self._seq, self._frame
+
     # ---- frames ----
     def frames(self):
         """Generator of multipart MJPEG chunks for StreamingResponse."""

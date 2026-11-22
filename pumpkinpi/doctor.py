@@ -58,6 +58,8 @@ def main():
                "no camera found - check the ribbon cable (power off first)")
     else:
         report(False, "rpicam-hello not installed (sudo apt install rpicam-apps)")
+    report(shutil.which("ffmpeg"), "ffmpeg installed (timelapse clips)" if shutil.which("ffmpeg") else
+           "ffmpeg missing - timelapse keeps only photos (sudo apt install -y ffmpeg)")
     print("\nAll good." if ok else "\nFix the lines marked FIX, then run again.")
 
 

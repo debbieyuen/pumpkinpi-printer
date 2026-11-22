@@ -138,6 +138,7 @@ function show(view) {
   $("cameraView").hidden = view !== "camera";
   if (view === "design") window.Pie3D?.resize();
   liveCamera(view === "camera");
+  if (view === "camera") pollRec();
   updateGate();
 }
 
@@ -471,11 +472,100 @@ $("readyBtn").onclick = async () => {
   updateGate();
 };
 
+// ---------- Scan label: camera photo -> Agent API reads it -> same Search API + Decider check ----------
+function marked(text, hits) {   // highlight the printed words that made a row red or yellow
+  let out = esc(text);
+  for (const [t, cls] of hits) {
+    const rx = new RegExp(`\\b(${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "[\\s-]*")})`, "gi");
+    out = out.replace(rx, `<mark class="${cls}">$1</mark>`);
+  }
+  return out;
+}
+function renderLabel(res) {
+  const sh = $("labelSheet");
+  if (!res) { sh.hidden = true; return; }
+  const read = res.read || {};
+  const rows = res.results.map((r) => {
+    const c = toColor[r.verdict] || verdict(r.probability);
+    return `<div class="lrow"><span class="pill sm ${c}">${label[c]}</span><b>${esc(r.name)}</b><span>${esc(r.diet || r.allergen)}</span>${r.note ? `<span class="why2">${esc(r.note)}</span>` : ""}</div>`;
+  }).join("");
+  const hits = res.results.flatMap((r) => { const m = (r.note || "").match(/^label lists ([^:]+)/); return m ? [[m[1], toColor[r.verdict] === "red" ? "" : "y"]] : []; });
+  const pic = res.photo ? `<img src="${esc(res.photo)}" alt="Photo of the label">` : "";
+  const srcs = (res.sources || []).filter((x) => /^https?:/.test(x.url || "")).slice(0, 4)
+    .map((x, i) => `<a class="src" href="${esc(x.url)}" target="_blank" rel="noopener"><span class="num">${i + 1}</span>${esc(host(x.url))}</a>`).join("");
+  sh.innerHTML = `<div class="lhead">${pic}<div><h3>${esc(res.title || res.product)}</h3>
+      <div class="lfor ${res.ingredient ? "" : "no"}">${res.ingredient ? "Matches your recipe" : "Not in this recipe. Just a check."}</div></div>
+      <button class="btn sm" id="labelClose" type="button">Close</button></div>
+    <div class="lrows">${rows}</div>
+    <p class="ltext"><b>Ingredients:</b> ${marked(read.ingredients || "", hits)}</p>
+    ${(read.contains || []).length ? `<p class="ltext"><b>Contains:</b> ${esc(read.contains.join(", "))}</p>` : ""}
+    <p class="ltext"><b>May contain:</b> ${read.may_contain ? marked(read.may_contain, [["tree nuts?", ""], ["peanuts?", ""], ["fish", ""]]) : "nothing printed"}</p>
+    ${read.complete === false ? `<p class="ltext"><b>Partly unreadable:</b> ${esc(read.problem || "rescan closer")}</p>` : ""}
+    <div>${srcs}</div>`;
+  sh.hidden = false;
+  $("labelClose").onclick = () => renderLabel(null);
+}
+$("labelBtn").onclick = async () => {
+  $("labelBtn").disabled = true; renderLabel(null);
+  $("camMsg").innerHTML = '<span class="spin sm"></span> Reading the label…';
+  try {
+    let res;
+    if (state.live) { res = await apiJson("/api/label", { diets: state.diets }); res.photo = res.label?.image; }
+    else {   // sample: the Enjoy Life bag, read from its real label
+      await sleep(1200);
+      const p = SAMPLE.products.enjoy;
+      const ing = state.plan?.ingredients.includes(p.ingredient) ? p.ingredient : null;
+      res = { product: p.ingredient, title: `${p.brand} ${p.product} ${p.size}`, ingredient: ing, photo: p.label.image,
+        read: { ingredients: p.label.ingredients, contains: [], may_contain: "", complete: true },
+        sources: p.sources, results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p.probs[a] ?? 0.3, verdict: (p.probs[a] ?? 0.3) <= 0.1 ? "safe" : "unsure" }))) };
+    }
+    res.results.forEach((r) => (r.color = r.verdict ? toColor[r.verdict] : verdict(r.probability)));
+    const worst = res.results.some((r) => r.color === "red") ? "red" : res.results.some((r) => r.color === "yellow") ? "yellow" : "green";
+    if (res.ingredient) { state.checks[res.ingredient] = { status: worst, ...res }; renderAll(); }
+    renderLabel(res);
+    $("camMsg").textContent = worst === "green" ? "Label checked: safe for everyone." : worst === "red" ? "Label lists an allergen." : "Check the label: see notes.";
+  } catch (e) { $("camMsg").textContent = `Label scan: ${e.message}`; }
+  $("labelBtn").disabled = false; updateGate();
+};
+
+// ---------- Timelapse: Record button + automatic recording while piping ----------
+let recTimer = null, recSample = 0;
+const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+async function pollRec() {
+  clearTimeout(recTimer);
+  let st;
+  if (state.live) { try { st = await apiJson("/api/record"); } catch { return; } }
+  else st = { recording: !!recSample, seconds: recSample ? Math.round((Date.now() - recSample) / 1000) : 0, clips: [] };
+  $("recTag").hidden = !st.recording; $("recTag").textContent = `REC ${mmss(st.seconds)}`;
+  $("recBtn").textContent = st.recording ? "Stop recording" : st.saving ? "Saving clip…" : "Record";
+  $("recBtn").classList.toggle("on", st.recording); $("recBtn").disabled = !!st.saving;
+  state.clips = st.clips || []; state.lastClip = st.last;
+  $("clipBtn").hidden = !state.clips.length;
+  if (st.error && !st.recording && state.recWas) $("camMsg").textContent = st.error;
+  else if (state.recWas && !st.recording && !st.saving && st.last) $("camMsg").textContent = `Saved a ${st.last.seconds} s timelapse.`;
+  state.recWas = st.recording || st.saving;
+  if (st.recording || st.saving || state.job) recTimer = setTimeout(pollRec, 1000);
+}
+$("recBtn").onclick = async () => {
+  const on = !$("recBtn").classList.contains("on");
+  if (!state.live) { recSample = on ? Date.now() : 0; if (!on) $("camMsg").textContent = "Sample: recordings are saved on the Pi."; return pollRec(); }
+  try { await apiJson("/api/record", { on }); state.recWas = true; } catch (e) { $("camMsg").textContent = `Record: ${e.message}`; }
+  pollRec();
+};
+$("clipBtn").onclick = () => {
+  const name = state.clips[0]; if (!name) return;
+  renderLabel(null);
+  $("clipVid").src = `/api/clips/${encodeURIComponent(name)}`;
+  $("clipInfo").textContent = `${name}  ·  on the Pi in captures/timelapse/`;
+  $("clipSheet").hidden = false; $("clipVid").play().catch(() => {});
+};
+$("clipClose").onclick = () => { $("clipVid").pause(); $("clipVid").removeAttribute("src"); $("clipSheet").hidden = true; };
+
 async function start(dry_run) {
   if (!state.live) { log(dry_run ? "Sample: dry run would trace the path 15 mm above the pie." : "Sample: would pipe now."); return; }
   try {
     const r = await apiJson("/api/start", { dry_run });
-    state.job = true; updateGate();
+    state.job = true; updateGate(); pollRec();
     log(`Making G-code (${r.lines} moves)…`);
     const what = dry_run ? "Dry run" : "Piping";
     for (let i = 0; i < 7200; i++) {

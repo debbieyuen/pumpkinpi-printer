@@ -67,6 +67,24 @@ def agent(client: httpx.Client, *, instructions: str, input: str, schema: dict, 
     return text, results
 
 
+def agent_image(client: httpx.Client, *, instructions: str, text: str, jpeg: bytes, schema: dict,
+                name: str) -> str:
+    """One Agent API run on a photo (base64 JPEG, no web search). Returns the JSON text.
+    Docs: https://docs.perplexity.ai/docs/agent-api/image-attachments"""
+    import base64
+    data = post(client, AGENT_URL, {
+        "model": AGENT_MODEL,
+        "instructions": instructions,
+        "input": [{"role": "user", "content": [
+            {"type": "input_text", "text": text},
+            {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()},
+        ]}],
+        "response_format": {"type": "json_schema", "json_schema": {"name": name, "schema": schema}},
+    })
+    return "".join(c.get("text", "") for item in data.get("output", []) if item.get("type") == "message"
+                   for c in item.get("content", []) if c.get("type") == "output_text")
+
+
 def search(client: httpx.Client, query: str | list[str], max_results: int = 5) -> list[dict]:
     """Search API: ranked results with title, url, snippet, date."""
     return post(client, SEARCH_URL, {"query": query, "max_results": max_results}).get("results", [])

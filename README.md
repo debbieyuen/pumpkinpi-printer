@@ -49,6 +49,20 @@ cd ~/pumpkinpi-printer && .venv/bin/python -m pumpkinpi.doctor
 sudo systemctl status pumpkinpi     # server logs: journalctl -u pumpkinpi -f
 ```
 
+## Camera extras
+
+- **Scan label**: hold a package's ingredient list up to the camera and tap Scan label. The Agent API reads the
+  photo ([image input](https://docs.perplexity.ai/docs/agent-api/image-attachments)), then the normal Search API +
+  Decider check runs with the photo as label evidence. Printed allergens or a may-contain line for a guest allergen
+  turn it red; "natural flavor" or a cut-off label is never green. If the brand matches a recipe ingredient, the
+  result counts for that ingredient.
+- **Timelapse**: recording starts by itself when piping or a dry run starts, and the Record button starts it by hand.
+  Clips land in `captures/timelapse/` as a 4:3 MP4 and a 9:16 `-vertical.mp4` for the video. Copy them to a laptop:
+
+  ```
+  scp debbiepumpkinpi@pumpkinpi.local:~/pumpkinpi-printer/captures/timelapse/*.mp4 .
+  ```
+
 ## Calibrate (empty bed, syringe off)
 
 1. Home normally with **no food on the bed and the syringe removed**.

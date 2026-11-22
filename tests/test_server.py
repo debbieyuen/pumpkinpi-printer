@@ -19,6 +19,24 @@ LABEL = {"upc": "0853522000009", "name": "Mini Chips", "brand": "Enjoy Life", "s
 seen_labels: list = []
 
 
+class FakeRecorder:
+    def __init__(self):
+        self.calls = []
+
+    def start(self, auto=False):
+        self.calls.append(("start", auto))
+        return True
+
+    def stop(self):
+        self.calls.append(("stop",))
+
+    def stop_auto(self):
+        self.calls.append(("stop_auto",))
+
+    def status(self):
+        return {"recording": bool(self.calls and self.calls[-1][0] == "start"), "clips": []}
+
+
 def setup(tmp_path, monkeypatch, verdict="safe"):
     f = tmp_path / "guests.json"
     f.write_text(json.dumps({"event": "Test", "guests": [{"name": "Michael", "avoid": ["tree nuts"], "notes": "private"}]}))
@@ -33,6 +51,7 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
         "search": {"queries": ["q"], "results": [{"title": "t", "url": "https://example.com"}]},
         "relevance": 0.9, "natural_flavor": 0.1})
     monkeypatch.setattr(srv, "run_job", lambda lines, dry_run=False: None)
+    monkeypatch.setattr(srv, "recorder", FakeRecorder())
     srv.state.update(checks={}, ready=0.0, plan=None, strokes=None, job={"running": False})
     return TestClient(srv.app)
 
@@ -174,3 +193,23 @@ def test_edit_to_cat_in_cursive(tmp_path, monkeypatch):
     r = c.post("/api/edit", json={"shape": "cat", "text": "Debbie", "font": "cursive"}).json()
     assert r["plan"]["shape"] == "cat" and r["plan"]["font"] == "cursive" and len(r["strokes"]) > 8
     assert c.post("/api/edit", json={"font": "gothic"}).status_code == 400
+
+
+def test_start_records_a_timelapse(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    c.post("/api/design", json={"prompt": "x"})
+    c.post("/api/start", json={"dry_run": True})
+    assert srv.recorder.calls == [("start", True)]
+
+
+def test_record_button(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    assert c.post("/api/record", json={"on": True}).json()["recording"] is True
+    assert c.post("/api/record", json={"on": False}).json()["recording"] is False
+    assert srv.recorder.calls == [("start", False), ("stop",)]
+
+
+def test_clip_names_are_checked(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    assert c.get("/api/clips/..%2F.env").status_code == 404
+    assert c.get("/api/clips/20261126-153000.mp4").status_code == 404
