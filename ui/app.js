@@ -171,11 +171,7 @@ async function revise() {
   } catch (e) { window.Pie3D?.thinking(false); drawPreview(); log(`Couldn't change it: ${e.message}`); }
   state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate();
 }
-function renderDesign() {
-  const t = state.plan && state.path;
-  $("exact").hidden = !t;
-  if (t) $("exact").innerHTML = `<b>Exactly what will pipe</b> · ${(t.mm / 10).toFixed(0)} cm of topping · about ${Math.max(1, Math.round(t.seconds / 60))} min`;
-}
+function renderDesign() {}   // Design is just the pie
 
 function syncClear() { $("clearBtn").hidden = !$("prompt").value; }
 $("clearBtn").addEventListener("pointerdown", (e) => e.preventDefault());

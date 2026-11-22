@@ -54,9 +54,6 @@ h1 span{color:var(--teal)}
 
 /* design: just the pie (exact G-code path) */
 .design{justify-content:center;align-items:center}
-.exact{position:absolute;bottom:.2rem;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.82rem;color:var(--muted);
-  background:rgba(252,250,246,.9);padding:.2rem .8rem;border-radius:999px}
-.exact b{color:var(--fg);font-weight:600}
 .stage{flex:none;height:100%;aspect-ratio:1;max-width:100%;display:grid;place-items:center;position:relative}
 #pie3d{display:block;cursor:pointer}
 .preview{display:none;width:100%;height:100%}
