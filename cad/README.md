@@ -1,7 +1,15 @@
-# PumpkinPi CAD: syringe carriage and accessories (v1)
+# PumpkinPi CAD: syringe carriage and accessories (v1.2)
 
 Parametric CadQuery models for the 60 mL syringe add-on for the Creality Ender-3 V3 SE,
 plus the camera, display and pie-locator parts. All of them fit on one 220 x 220 mm plate.
+
+## Syringe parts v1.2
+
+![Carriage v1.2 and plunger pusher v0.4: M2 head-mount slots, motor screw clearance, M3 pusher holes and nut traps, and the plateA3 bed layout](renders/syringe_parts_v1.2.png)
+
+- **Carriage v1.2:** the head-mount holes are M2 (2.5 mm, with 4.6 mm head pockets). They are short slots, so they fit a hole spacing from 12.5 mm to 14.2 mm. The motor plate moved 5 mm forward, so the motor screw heads clear every wall by at least 3 mm.
+- **Pusher v0.4:** 3.4 mm M3 clearance holes and M3 hex nut traps underneath.
+- **plateA3.gcode** prints both parts in one run: about 4 h 5 min (slicer estimate), 71 g PETG, no supports.
 
 ## Print it tonight (no supports needed)
 
@@ -10,9 +18,8 @@ the 30° default) and needed **zero** supports. Horizontal holes are teardrop-sh
 
 | SD-card file | What | Time / PETG |
 |---|---|---|
-| `fittest.gcode` (`out/fit_test_PETG.gcode`) | Screw-hole fit test. Print first. | 13 min / 4 g |
 | `plateA3.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage v1.2 (M2 head holes) + plunger pusher v0.4 | 4 h 5 min / 71 g |
-| `fitM2.gcode` | Fit test for the M2 head-mount holes | 13 min / 4 g |
+| `fitM2.gcode` (`out/fit_test.stl`) | Fit test for the M2 head-mount holes. Optional, print first. | 13 min / 4 g |
 | `plateB.gcode` (`out/plate_B_accessories_PETG.gcode`) | Camera post + holder, 2 display feet, pie locator | 3 h 56 min / 75 g |
 
 The printer only reads files in the card's top folder with names of 20 characters or fewer, using only letters and numbers.
