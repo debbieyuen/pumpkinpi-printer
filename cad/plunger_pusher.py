@@ -1,4 +1,4 @@
-"""Plunger pusher v0.4: carries the Tr8x2 brass nut and presses on the syringe thumb pad.
+"""Plunger pusher v0.5 (v0.4 geometry, fixed solid): carries the Tr8x2 brass nut and presses on the syringe thumb pad.
 
 v0.4 (2026-11-21): nut flange holes are M3 clearance (3.4 mm) with hex nut traps on the bottom;
 use 4x M3x16 + 4x M3 nuts. Nut lobe is 3 mm thicker on the bottom. Screw axis now 47 mm from the
@@ -42,6 +42,12 @@ def build():
     body = (cq.Workplane("XY").circle(R_SYR).extrude(H)
             .union(cq.Workplane("XY").workplane(offset=-DROP).center(0, SY).circle(R_NUT).extrude(H + DROP))
             .union(cq.Workplane("XY").center(0, SY / 2).rect(2 * R_NUT, abs(SY)).extrude(H)))
+    # v0.5: round the outline BEFORE cutting holes. Filleting after the hex traps made an invalid
+    # solid, and the slicer filled the holes and nut traps in (Debbie's print, 2026-11-21).
+    try:
+        body = body.edges("|Z").fillet(0.8)
+    except Exception:
+        pass
     # pad pocket + stem slot, both open to +X
     body = body.cut(cq.Workplane("XY").workplane(offset=LIP).circle(POCKET_D / 2).extrude(POCKET_H)
                     .union(cq.Workplane("XY").workplane(offset=LIP).center(R_SYR, 0)
@@ -59,10 +65,7 @@ def build():
         body = body.cut(cq.Workplane("XY").workplane(offset=-DROP - 0.01).center(x, y)
                         .polygon(6, NUT_TRAP_AF / math.cos(math.radians(30))).extrude(NUT_TRAP_D)
                         .rotate((x, y, 0), (x, y, 1), a))
-    try:
-        body = body.edges("|Z").fillet(0.8)
-    except Exception:
-        pass
+    assert body.val().isValid(), "pusher solid is invalid"
     return body
 
 
