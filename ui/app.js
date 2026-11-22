@@ -1,6 +1,6 @@
 // PumpkinPi touchscreen UI.
-// Live mode: served by pumpkinpi/server.py on the Pi (Agent API, Search API, Decider, printer).
-// Demo mode: used automatically when /api/status is unreachable. No real search, no printer.
+// Online: served by pumpkinpi/server.py on the Pi (Agent API, Search API, Decider, printer).
+// Offline: used when /api/status is unreachable. Sample results only, no printer.
 
 const $ = (id) => document.getElementById(id);
 const READY_AT = 0.9;
@@ -15,32 +15,30 @@ const DEMO_PROBS = {
   "heavy cream": { "tree nuts": 0.01, peanuts: 0.01, fish: 0.01 },
 };
 
-const state = { live: false, guests: DEMO_GUESTS, plan: null, strokes: [], checks: {}, ready: 0, busy: false, open: null };
+const state = { live: false, everLive: false, guests: DEMO_GUESTS, plan: null, strokes: [], checks: {},
+  ready: 0, busy: false, open: null, job: false, photo: null };
 
-function log(msg) {
-  const t = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  $("log").textContent = `${t}  ${msg}`;
-}
 const verdict = (p) => (p >= 0.7 ? "red" : p <= 0.1 ? "green" : "yellow");
 const toColor = { found: "red", unsure: "yellow", safe: "green" };
 const label = { red: "Allergen", yellow: "Check label", green: "Safe", wait: "Checking" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let note = "";  // last event message; shown in the bottom bar
+function log(msg) { note = msg; $("why").textContent = msg; }
 
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(m); }
-  return r.json();
+  return r;
 }
+const apiJson = async (path, body) => (await api(path, body)).json();
 
-// Status pill: Online (Pi + printer), No printer (Pi only), Offline (no Pi server; sample data).
-function setMode(cls, text) {
-  $("modeBadge").className = "mode " + cls; $("modeText").textContent = text;
-}
+// ---------- status pill: Online (Pi + printer) / No printer / Offline ----------
+function setMode(cls, text) { $("modeBadge").className = "mode " + cls; $("modeText").textContent = text; }
 async function refreshStatus() {
   try {
-    const s = await api("/api/status");
+    const s = await apiJson("/api/status");
     state.live = state.everLive = true; state.guests = s.guests;
     s.printer ? setMode("on", "Online") : setMode("warn", "No printer");
   } catch {
@@ -49,34 +47,39 @@ async function refreshStatus() {
     setMode("off", "Offline");
   }
 }
-async function init() {
-  await refreshStatus();
-  log(state.live ? "Connected to PumpkinPi." : "Offline: sample results only, no printer.");
-  setInterval(refreshStatus, 10000);
-  updateGate();
+
+// ---------- screens ----------
+function show(view) {
+  document.body.dataset.view = view;
+  for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t.dataset.v === view);
+  $("designView").hidden = view !== "design";
+  $("recipeView").hidden = view !== "recipe";
+  $("cameraView").hidden = view !== "camera";
+  if (view === "design") window.Pie3D?.resize();
 }
+document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".tab"); if (t) show(t.dataset.v); };
 
 // ---------- 1. Agent API: prompt -> plan ----------
 async function ask() {
   const prompt = $("prompt").value.trim();
   if (!prompt || state.busy) return;
-  state.busy = true; state.checks = {}; state.ready = 0; state.open = null;
+  state.busy = true; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
-  $("result").hidden = false; $("idle").hidden = true; state.strokes = []; drawPreview();
-  $("plan").innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-offwhite.svg" alt=""> Perplexity is planning…</p>`;
-  updateGate();
+  show("design"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
+  $("summary").innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-offwhite.svg" alt=""> Perplexity is designing…</p>`;
+  renderRecipe(); updateGate();
   try {
-    let res;
-    if (state.live) res = await api("/api/design", { prompt });
-    else { await sleep(1200); res = await (await fetch("demo.json")).json(); }
+    const res = state.live ? await apiJson("/api/design", { prompt })
+      : (await sleep(1400), await (await fetch("demo.json")).json());
     state.plan = res.plan; state.strokes = res.strokes;
-    drawPreview();
-    renderPlan();
+    window.Pie3D?.thinking(false); drawPreview();
+    renderAll();
     log(`Checking ${res.plan.ingredients.length} ingredients…`);
     for (const ing of res.plan.ingredients) await check(ing);
-    log(allSafe() ? "All ingredients safe. Tap Camera next." : "Start is locked. Tap an ingredient to see why.");
+    log(allSafe() ? "All ingredients safe. Check the pie on the Camera screen." : "An ingredient needs a check. See Recipe.");
   } catch (e) {
-    $("plan").innerHTML = `<p class="msg">Couldn't plan that: ${esc(e.message)}</p>`;
+    window.Pie3D?.thinking(false);
+    $("summary").innerHTML = `<p class="msg">Couldn't make that: ${esc(e.message)}</p>`;
     state.plan = null; state.strokes = []; drawPreview();
   } finally {
     state.busy = false; $("askBtn").textContent = "Make"; updateGate();
@@ -85,10 +88,10 @@ async function ask() {
 
 // ---------- 2. Search API + Decider per ingredient ----------
 async function check(product) {
-  state.checks[product] = { status: "wait" }; renderPlan();
+  state.checks[product] = { status: "wait" }; renderAll();
   try {
     let res;
-    if (state.live) res = await api("/api/check", { product });
+    if (state.live) res = await apiJson("/api/check", { product });
     else {
       await sleep(900);
       const p = DEMO_PROBS[product] || {};
@@ -101,34 +104,67 @@ async function check(product) {
   } catch (e) {
     state.checks[product] = { status: "yellow", error: e.message, results: [], sources: [] };
   }
-  renderPlan(); updateGate();
+  renderAll(); updateGate();
 }
 
-function renderPlan() {
+function counts() {
+  const ing = state.plan ? state.plan.ingredients : [];
+  const st = ing.map((i) => (state.checks[i] || { status: "wait" }).status);
+  return { n: ing.length, safe: st.filter((s) => s === "green").length, red: st.filter((s) => s === "red").length,
+    yellow: st.filter((s) => s === "yellow").length, wait: st.filter((s) => s === "wait").length };
+}
+
+function renderSummary() {
   const p = state.plan; if (!p) return;
+  const c = counts();
+  const ingLine = c.wait ? `<span class="spin sm"></span> Checking ingredients… ${c.n - c.wait}/${c.n}`
+    : c.red ? `${c.red} allergen found` : c.yellow ? `${c.yellow} of ${c.n} need a label check` : `All ${c.n} ingredients safe`;
+  const ingCls = c.wait ? "" : c.red ? "red" : c.yellow ? "yellow" : "green";
+  const ready = state.ready >= READY_AT ? ["green", "Pie looks ready"] : state.ready > 0 ? ["yellow", "Pie not ready"] : ["", "Pie not checked yet"];
+  $("summary").innerHTML = `
+    <h2 class="cap">${esc(p.caption)}</h2>
+    <dl class="facts">
+      ${p.guest ? `<div><dt>For</dt><dd>${esc(p.guest)}</dd></div>` : ""}
+      <div><dt>Topping</dt><dd>${esc(p.topping)}</dd></div>
+    </dl>
+    <button type="button" class="stat ${ingCls}" data-go="recipe"><span class="sdot"></span>${ingLine}<span class="go">Recipe ›</span></button>
+    <button type="button" class="stat ${ready[0]}" data-go="camera"><span class="sdot"></span>${ready[1]}<span class="go">Camera ›</span></button>`;
+}
+$("summary").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) show(b.dataset.go); };
+
+function renderRecipe() {
+  const p = state.plan;
+  if (!p) { $("ingCol").innerHTML = `<p class="muted">${state.busy ? "Perplexity is writing the recipe…" : "Make a design first."}</p>`; $("stepCol").innerHTML = ""; return; }
   const rows = p.ingredients.map((ing) => {
     const c = state.checks[ing] || { status: "wait" };
     const open = state.open === ing;
     let detail = "";
     if (open && c.results) {
       detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)} · ${esc(r.allergen)}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div>No guest avoids an allergen for this.</div>`}
-        ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}${(c.sources || []).slice(0, 4).map((s, i) => `<div class="src"><span class="num">${i + 1}</span>${esc(host(s.url))}</div>`).join("")}</div>`;
+        ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}<div>${(c.sources || []).slice(0, 4).map((s, i) => `<span class="src"><span class="num">${i + 1}</span>${esc(host(s.url))}</span>`).join("")}</div></div>`;
     }
     return `<button type="button" class="ing ${open ? "open" : ""}" data-ing="${esc(ing)}">
       <span class="pill ${c.status}">${c.status === "wait" ? '<span class="spin sm"></span>' : label[c.status]}</span>
       <span class="who">${esc(ing)}</span></button>${detail}`;
   }).join("");
-  $("plan").innerHTML = `<div class="cap">${esc(p.caption)}</div>${rows}`;
+  $("ingCol").innerHTML = `<h3>Ingredients</h3>${rows}<p class="muted small">Tap an ingredient to see each guest's check.</p>`;
+  const steps = (p.recipe || []).map((s) => `<li>${esc(s)}</li>`).join("");
+  $("stepCol").innerHTML = `<h3>Steps</h3><ol class="steps">${steps}</ol>
+    ${p.piping_notes ? `<p class="tip"><b>Piping</b> ${esc(p.piping_notes)}</p>` : ""}
+    ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}
+    <div>${(p.sources || []).slice(0, 5).map((s, i) => `<span class="src"><span class="num">${i + 1}</span>${esc(host(s.url))}</span>`).join("")}</div>`;
 }
-
-$("plan").onclick = (e) => {
+$("ingCol").onclick = (e) => {
   const b = e.target.closest(".ing"); if (!b) return;
-  state.open = state.open === b.dataset.ing ? null : b.dataset.ing; renderPlan();
+  state.open = state.open === b.dataset.ing ? null : b.dataset.ing; renderRecipe();
 };
+function renderAll() { renderSummary(); renderRecipe(); }
 
 // ---------- preview ----------
 function drawPreview() {
-  // SVG y is down; strokes use +Y away from you, so flip.
+  window.pieStrokes = state.strokes || [];
+  if (window.Pie3D) window.Pie3D.show(window.pieStrokes);
+  // 2D fallback (only visible if WebGL is unavailable). SVG y is down; strokes use +Y away from you.
   $("strokes").innerHTML = (state.strokes || []).map((s) =>
     `<polyline points="${s.map(([x, y]) => `${x.toFixed(1)},${(-y).toFixed(1)}`).join(" ")}"/>`).join("");
 }
@@ -138,49 +174,60 @@ function allSafe() {
   if (!state.plan) return false;
   return state.plan.ingredients.every((i) => state.checks[i] && state.checks[i].status === "green");
 }
-
+function reason() {
+  if (!state.plan) return state.busy ? "Perplexity is designing…" : "Make a design to start.";
+  const c = counts();
+  if (c.wait) return "Checking ingredients…";
+  if (c.red || c.yellow) return "Send is locked: an ingredient needs a check (Recipe).";
+  if (state.ready < READY_AT) return "Send is locked: check the pie on the Camera screen.";
+  return "Ready. Stay next to the printer, then tap Send.";
+}
 function updateGate() {
-  const p = !!state.plan, safe = allSafe();
-  const statuses = p ? state.plan.ingredients.map((i) => (state.checks[i] || {}).status) : [];
-  const bad = statuses.includes("red") || statuses.includes("yellow");
-  $("gDesign").className = "dot " + (p ? "ok" : "");
-  $("gSafe").className = "dot " + (safe ? "ok" : bad ? "bad" : statuses.includes("wait") ? "wait" : "");
-  $("safeText").textContent = bad ? "Check ingredients" : "Ingredients";
-  $("gReady").className = "dot " + (state.ready >= READY_AT ? "ok" : state.ready > 0 ? "wait" : "");
-  $("dryBtn").disabled = !p;
-  $("startBtn").disabled = !(p && safe && state.ready >= READY_AT);
+  const p = !!state.plan;
+  $("dryBtn").disabled = !p || state.job;
+  const ok = p && allSafe() && state.ready >= READY_AT;
+  const b = $("sendBtn");
+  if (state.job) { b.disabled = false; b.textContent = "Stop"; b.classList.add("stop"); }
+  else { b.disabled = !ok; b.textContent = "Send"; b.classList.remove("stop"); $("why").textContent = reason(); }
+  renderSummary();
 }
 
 $("readyBtn").onclick = async () => {
-  $("readyText").textContent = "Looking…";
+  $("camMsg").innerHTML = '<span class="spin sm"></span> Taking a photo and asking Perplexity…';
   try {
-    state.ready = state.live ? (await api("/api/ready", {})).probability : (await sleep(800), 0.97);
-    $("readyText").textContent = state.ready >= READY_AT ? "Pie ready" : "Pie not ready";
-  } catch (e) { state.ready = 0; $("readyText").textContent = "Camera error"; log(e.message); }
+    if (state.live) {
+      state.ready = (await apiJson("/api/ready", {})).probability;
+      $("camImg").src = `/api/photo?t=${Date.now()}`; $("camImg").hidden = false; $("camEmpty").hidden = true;
+    } else { await sleep(800); state.ready = 0.97; $("camEmpty").textContent = "Offline: sample check, no photo."; }
+    $("camMsg").textContent = state.ready >= READY_AT ? `Pie looks ready (${Math.round(state.ready * 100)}%).`
+      : `Not ready (${Math.round(state.ready * 100)}%). Center the pie and clear the bed.`;
+  } catch (e) { state.ready = 0; $("camMsg").textContent = `Camera error: ${e.message}`; }
   updateGate();
 };
 
 async function start(dry_run) {
   if (!state.live) { log(dry_run ? "Offline: dry run would trace the path 15 mm above the pie." : "Offline: would pipe now."); return; }
   try {
-    const r = await api("/api/start", { dry_run });
+    const r = await apiJson("/api/start", { dry_run });
+    state.job = true; updateGate();
     log(`${dry_run ? "Dry run" : "Piping"} started (${r.lines} moves). Stay next to the printer.`);
-    for (let i = 0; i < 3600; i++) {
+    for (let i = 0; i < 7200; i++) {
       await sleep(500);
-      const j = await api("/api/job");
+      const j = await apiJson("/api/job");
       $("jobFill").style.width = `${Math.round((100 * j.done) / Math.max(1, j.total))}%`;
       if (!j.running) { log(j.error ? `Stopped: ${j.error}` : `${dry_run ? "Dry run" : "Piping"} done.`); break; }
     }
-  } catch (e) { log(`Start refused: ${e.message}`); }
+  } catch (e) { log(`Send refused: ${e.message}`); }
+  state.job = false; updateGate(); if (note) $("why").textContent = note;
 }
 $("dryBtn").onclick = () => start(true);
-$("startBtn").onclick = () => start(false);
 
-$("stopBtn").onclick = async () => {
-  state.ready = 0; updateGate();
-  if (!state.live) { log("Offline: STOP pressed (M112 would be sent)."); return; }
-  try { await api("/api/stop", {}); log("STOP sent (M112). Power-cycle the printer before continuing."); }
-  catch (e) { log(`STOP failed: ${e.message}. Switch the printer off now.`); }
+// Send turns into Stop while the printer is moving (sends M112).
+$("sendBtn").onclick = async () => {
+  if (!state.job) return start(false);
+  state.ready = 0;
+  try { await api("/api/stop", {}); log("Stopped (M112). Power-cycle the printer before continuing."); }
+  catch (e) { log(`Stop failed: ${e.message}. Switch the printer off now.`); }
 };
 
 // ---------- on-screen keyboard (kiosk Chromium has no OS keyboard) ----------
@@ -191,8 +238,8 @@ function drawKbd() {
     `<button type="button" class="key ${k.length > 1 ? "wide " + (k === "space" ? "space" : "") : ""}" data-k="${esc(k)}">${esc(k === "space" ? "space" : shift && k.length === 1 ? k.toUpperCase() : k)}</button>`).join("")}</div>`).join("");
 }
 function showKbd() { drawKbd(); $("kbd").hidden = false; document.body.classList.add("typing"); }
+function hideKbd() { $("kbd").hidden = true; document.body.classList.remove("typing"); window.Pie3D?.resize(); }
 $("prompt").addEventListener("pointerdown", () => { if ($("kbd").hidden) showKbd(); });
-function hideKbd() { $("kbd").hidden = true; document.body.classList.remove("typing"); }
 $("prompt").addEventListener("focus", showKbd);
 $("kbd").addEventListener("pointerdown", (e) => e.preventDefault()); // keep focus in the input
 $("kbd").onclick = (e) => {
@@ -204,6 +251,12 @@ $("kbd").onclick = (e) => {
   else if (k === "Done") { hideKbd(); el.blur(); ask(); return; }
   else { el.value += shift ? k.toUpperCase() : k; if (shift) { shift = false; drawKbd(); } }
 };
-
 $("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); ask(); };
+
+async function init() {
+  await refreshStatus();
+  if (!state.live) log("Offline: sample results only, no printer.");
+  setInterval(refreshStatus, 10000);
+  updateGate();
+}
 init();

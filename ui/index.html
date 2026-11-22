@@ -6,12 +6,16 @@
 <title>PumpkinPi</title>
 <link rel="stylesheet" href="app.css">
 </head>
-<body>
+<body data-view="design">
 <header class="top">
   <img class="sym" src="brand/perplexity-symbol-offwhite.svg" alt="" aria-hidden="true">
   <h1>pumpkinpi</h1>
   <span class="mode" id="modeBadge"><span class="mdot"></span><span id="modeText">Offline</span></span>
-  <button class="stop" id="stopBtn" type="button" aria-label="Emergency stop">STOP</button>
+  <nav class="tabs" role="tablist" aria-label="Screens">
+    <button class="tab on" type="button" role="tab" data-v="design">Design</button>
+    <button class="tab" type="button" role="tab" data-v="recipe">Recipe</button>
+    <button class="tab" type="button" role="tab" data-v="camera">Camera</button>
+  </nav>
 </header>
 
 <form id="askForm" class="ask" autocomplete="off">
@@ -21,34 +25,48 @@
   </div>
 </form>
 
-<div class="idle" id="idle">
-  <img src="brand/perplexity-symbol-offwhite.svg" alt="" aria-hidden="true">
-  <p>Perplexity designs it, then checks every ingredient for your guests' allergies.</p>
+<main class="screens">
+  <!-- Design: 3D pie + summary -->
+  <section class="screen design" id="designView">
+    <div class="stage">
+      <canvas id="pie3d" aria-label="3D pie preview"></canvas>
+      <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
+        <circle r="58" class="crust"/><circle r="50" class="filling"/><g id="strokes"></g>
+      </svg>
+    </div>
+    <div class="side" id="summary">
+      <div class="hint">
+        <p>Perplexity designs it, then checks every ingredient for your guests' allergies.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recipe: ingredients (with allergen checks) + steps + sources -->
+  <section class="screen recipe" id="recipeView" hidden>
+    <div class="col" id="ingCol"><p class="muted">Make a design first.</p></div>
+    <div class="col" id="stepCol"></div>
+  </section>
+
+  <!-- Camera: photo + pie-ready check + dry run -->
+  <section class="screen camera" id="cameraView" hidden>
+    <div class="camframe"><img id="camImg" alt="Camera view of the pie" hidden><p class="muted" id="camEmpty">No photo yet.</p></div>
+    <div class="side">
+      <p class="cammsg" id="camMsg">Put the pie on the bed, then check it.</p>
+      <button class="btn" id="readyBtn" type="button">Check pie</button>
+      <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
+      <p class="muted small">Dry run traces the path 15 mm above the pie with no topping.</p>
+    </div>
+  </section>
+</main>
+
+<div class="bar" id="bar">
+  <p class="why" id="why">Make a design to start.</p>
+  <div class="meter" aria-hidden="true"><div class="fill" id="jobFill"></div></div>
+  <button class="btn go" id="sendBtn" type="button" disabled>Send</button>
 </div>
 
-<section class="result" id="result" hidden aria-live="polite">
-  <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
-    <circle r="58" class="crust"/><circle r="50" class="filling"/><circle r="45" class="safe"/>
-    <g id="strokes"></g>
-  </svg>
-  <div class="side">
-    <div id="plan" class="plan"></div>
-    <div class="gate">
-      <span class="g"><span class="dot" id="gDesign"></span>Design</span>
-      <span class="g"><span class="dot" id="gSafe"></span><span id="safeText">Ingredients</span></span>
-      <span class="g"><span class="dot" id="gReady"></span><span id="readyText">Pie ready</span></span>
-    </div>
-    <div class="row">
-      <button class="btn" id="readyBtn" type="button">Camera</button>
-      <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
-      <button class="btn go" id="startBtn" type="button" disabled>Start</button>
-    </div>
-    <div class="meter" aria-hidden="true"><div class="fill" id="jobFill"></div></div>
-  </div>
-</section>
-
 <div class="kbd" id="kbd" hidden aria-label="On-screen keyboard"></div>
-<footer class="log" id="log" aria-live="polite"></footer>
 <script src="app.js"></script>
+<script type="module" src="pie3d.js"></script>
 </body>
 </html>

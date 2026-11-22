@@ -10,6 +10,7 @@ Endpoints
     POST /api/check    {"product": "..."} -> Search API sources + Decider verdict per guest allergen
     POST /api/ready    photo -> Decider: is the pie ready?  {"probability": 0.97}
     POST /api/start    {"dry_run": bool} -> refuses until every ingredient is green and readiness >= 0.9
+    GET  /api/photo    latest camera photo
     GET  /api/job      piping progress
     POST /api/stop     sends M112 immediately
 """
@@ -22,12 +23,13 @@ from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
 from .design import plan_design
-from .pie_ready import pie_ready, take_photo
+from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
 from .shapes import strokes_for
 from .toolpath import Machine, to_gcode
@@ -120,6 +122,14 @@ def ready():
         p = pie_ready(client, take_photo())
     state["ready"] = p
     return {"probability": p}
+
+
+@app.get("/api/photo")
+def photo():
+    """Latest camera photo from the pie check, for the Camera screen."""
+    if not PHOTO.exists():
+        raise HTTPException(404, "No photo yet")
+    return FileResponse(PHOTO, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 def gate(dry_run: bool) -> None:
