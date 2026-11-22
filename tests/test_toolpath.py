@@ -9,8 +9,15 @@ from pumpkinpi.toolpath import Machine, OutOfBounds, to_gcode
 @pytest.mark.parametrize("shape", SHAPES)
 def test_every_shape_fits_the_pie(shape):
     for words in ["", "Michael", "WWWWWWWWWWWW"]:
-        for st in strokes_for({"shape": shape, "text": words}):
-            assert all(math.hypot(x, y) <= MAX_R + 0.01 for x, y in st)
+        for font in ["print", "cursive"]:
+            for st in strokes_for({"shape": shape, "text": words, "font": font}):
+                assert all(math.hypot(x, y) <= MAX_R + 0.01 for x, y in st)
+
+
+def test_cursive_differs_from_print():
+    a = strokes_for({"shape": "text", "text": "Debbie", "font": "print"})
+    b = strokes_for({"shape": "text", "text": "Debbie", "font": "cursive"})
+    assert a != b
 
 
 def test_gcode_never_homes_or_heats_and_stays_in_bounds():

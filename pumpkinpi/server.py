@@ -7,7 +7,7 @@ Run on the Pi:
 Endpoints
     GET  /api/status   event, guests (names + allergens only), printer connected?
     POST /api/design   {"prompt": "...", "diets": ["vegan"]} -> Agent API recipe + design plan + piping preview
-    POST /api/check    {"product": "...", "diets": [...]} -> Search API sources + Decider verdict per guest
+    POST /api/check    {"product": "...", "diets": [...]} -> Open Food Facts label + Search API sources + Decider verdict per guest
                        allergen and per chosen diet (vegan, dairy-free, gluten-free, egg-free)
     POST /api/ready    photo -> Decider: is the pie ready?  {"probability": 0.97}
     POST /api/start    {"dry_run": bool} -> refuses until every ingredient is green and readiness >= 0.9,
@@ -38,7 +38,8 @@ from .camera import camera
 from .design import plan_design, revise_design
 from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
-from .shapes import MAX_TEXT, SHAPES, strokes_for
+from .products import enrich
+from .shapes import FONTS, MAX_TEXT, SHAPES, strokes_for
 from .toolpath import Machine, piped_path, to_gcode
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,6 +102,7 @@ class ReviseReq(BaseModel):
 class EditReq(BaseModel):
     shape: str | None = None
     text: str | None = None
+    font: str | None = None
 
 
 class CheckReq(BaseModel):
@@ -148,6 +150,23 @@ def exact(plan: dict) -> tuple[list, dict]:
     return strokes, path
 
 
+def add_labels(plan: dict, old: dict | None = None) -> dict:
+    """Photo + printed label for each exact product (Open Food Facts). Reuses labels already looked up."""
+    known = {p["ingredient"].lower(): p.get("label") for p in (old or {}).get("products", []) if "label" in p}
+    todo = [p for p in plan.get("products", []) if p["ingredient"].lower() not in known]
+    found = {p["ingredient"].lower(): p["label"] for p in enrich(todo)} if todo else {}
+    plan["products"] = [{**p, "label": known.get(p["ingredient"].lower(), found.get(p["ingredient"].lower()))}
+                        for p in plan.get("products", [])]
+    return plan
+
+
+def label_for(product: str) -> dict | None:
+    for p in (state["plan"] or {}).get("products", []):
+        if p["ingredient"].lower() == product.lower():
+            return p.get("label")
+    return None
+
+
 def publish(plan: dict, keep_checks: bool) -> dict:
     strokes, path = exact(plan)
     if not SHOW_HEALTH:
@@ -171,6 +190,7 @@ def design(req: DesignReq):
     with make_client() as client:
         plan = plan_design(client, req.prompt, guests()["guests"], diets=diets)
     plan["diets"] = diets
+    add_labels(plan)
     return publish(plan, keep_checks=False)
 
 
@@ -191,6 +211,7 @@ def revise(req: ReviseReq):
         plan = revise_design(client, old, req.change, guests()["guests"], diets=diets)
     plan["diets"] = diets
     plan["diet_notes"] = plan.get("diet_notes") or old.get("diet_notes", "")
+    add_labels(plan, old)
     return publish(plan, keep_checks=same_ingredients(old, plan))
 
 
@@ -206,6 +227,10 @@ def edit(req: EditReq):
         plan["shape"] = req.shape
     if req.text is not None:
         plan["text"] = req.text.strip()[:MAX_TEXT]
+    if req.font is not None:
+        if req.font not in FONTS:
+            raise HTTPException(400, f"Font must be one of {', '.join(FONTS)}")
+        plan["font"] = req.font
     return publish(plan, keep_checks=True)
 
 
@@ -215,14 +240,17 @@ def check(req: CheckReq):
     diets = [d for d in clean_diets(req.diets) if d in DIET_CHECKS]
     terms = allergens() + [DIET_CHECKS[d] for d in diets if DIET_CHECKS[d] not in allergens()]
     with make_client() as client:
-        res = check_ingredient(client, req.product, terms)
+        label = label_for(req.product)
+        res = check_ingredient(client, req.product, terms, label=label)
     rows = [{"name": x["name"], **asdict(res["checks"][a])} for x in g for a in x.get("avoid", [])]
     rows += [{"name": d.capitalize(), "diet": d, **asdict(res["checks"][DIET_CHECKS[d]])} for d in diets]
     state["checks"][req.product.lower()] = [r["verdict"] for r in rows]
-    return {"product": req.product, "results": rows, "relevance": res["relevance"],
+    off = [{"title": f"Open Food Facts: {label.get('brand', '')} {label.get('name', '')}".strip(), "url": label["url"]}] \
+        if label and label.get("url") else []
+    return {"product": req.product, "results": rows, "relevance": res["relevance"], "label": label,
             "natural_flavor": res["natural_flavor"], "queries": res["search"]["queries"],
-            "sources": [{"title": r.get("title"), "url": r.get("url"), "tag": r.get("tag", "label")}
-                        for r in res["search"]["results"]][:8]}
+            "sources": off + [{"title": r.get("title"), "url": r.get("url"), "tag": r.get("tag", "label")}
+                               for r in res["search"]["results"]][:8]}
 
 
 @app.post("/api/guide")

@@ -6,8 +6,17 @@ import pumpkinpi.server as srv
 from pumpkinpi.allergen_check import Check
 
 PLAN = {"guest": "Michael", "shape": "smiley", "text": "Michael", "topping": "ganache",
-        "ingredients": ["chocolate chips", "heavy cream"], "recipe": [], "piping_notes": "",
+        "ingredients": ["chocolate chips", "heavy cream"],
+        "products": [{"ingredient": "chocolate chips", "brand": "Enjoy Life", "product": "Semi-Sweet Mini Chips", "size": "9 oz", "store": "Safeway", "upc": ""},
+                     {"ingredient": "heavy cream", "brand": "Clover Sonoma", "product": "Organic Heavy Whipping Cream", "size": "1 pint", "store": "Safeway", "upc": ""}],
+        "recipe": [], "piping_notes": "",
         "diet_notes": "Dad limits sugar", "caption": "Smiley", "sources": []}
+
+
+LABEL = {"upc": "0853522000009", "name": "Mini Chips", "brand": "Enjoy Life", "size": "9 oz",
+         "image": "https://images.openfoodfacts.org/x.jpg", "ingredients": "Cane sugar, unsweetened chocolate, cocoa butter",
+         "allergens": [], "traces": [], "url": "https://world.openfoodfacts.org/product/0853522000009"}
+seen_labels: list = []
 
 
 def setup(tmp_path, monkeypatch, verdict="safe"):
@@ -17,7 +26,9 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
     monkeypatch.setattr(srv, "printer", lambda: (_ for _ in ()).throw(RuntimeError("no printer")))
     monkeypatch.setattr(srv, "make_client", lambda: __import__("contextlib").nullcontext(None))
     monkeypatch.setattr(srv, "plan_design", lambda c, p, g, diets=None: dict(PLAN))
-    monkeypatch.setattr(srv, "check_ingredient", lambda c, prod, al: {
+    seen_labels.clear()
+    monkeypatch.setattr(srv, "enrich", lambda ps: [{**p, "label": LABEL if p["ingredient"] == "chocolate chips" else None} for p in ps])
+    monkeypatch.setattr(srv, "check_ingredient", lambda c, prod, al, label=None: seen_labels.append(label) or {
         "checks": {a: Check(prod, a, 0.02, verdict, ["https://example.com"]) for a in al},
         "search": {"queries": ["q"], "results": [{"title": "t", "url": "https://example.com"}]},
         "relevance": 0.9, "natural_flavor": 0.1})
@@ -146,3 +157,20 @@ def test_guide_falls_back_to_cited_lists(tmp_path, monkeypatch):
     monkeypatch.setattr(srv.allergy_guide, "research", lambda *a: (_ for _ in ()).throw(RuntimeError("offline")))
     g = c.post("/api/guide", json={}).json()
     assert g["allergens"][0]["allergen"] == "tree nuts" and g["allergens"][0]["sources"]
+
+
+def test_design_adds_product_photo_and_check_uses_label(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    r = c.post("/api/design", json={"prompt": "x"}).json()
+    assert r["plan"]["products"][0]["label"]["image"].startswith("https://")
+    chk = c.post("/api/check", json={"product": "chocolate chips"}).json()
+    assert seen_labels[-1]["brand"] == "Enjoy Life"
+    assert chk["sources"][0]["url"].startswith("https://world.openfoodfacts.org/")
+
+
+def test_edit_to_cat_in_cursive(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    c.post("/api/design", json={"prompt": "x"})
+    r = c.post("/api/edit", json={"shape": "cat", "text": "Debbie", "font": "cursive"}).json()
+    assert r["plan"]["shape"] == "cat" and r["plan"]["font"] == "cursive" and len(r["strokes"]) > 8
+    assert c.post("/api/edit", json={"font": "gothic"}).status_code == 400

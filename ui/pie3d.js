@@ -212,7 +212,7 @@ if (renderer) {
   }
 
   // ---- camera path: side view -> orbit -> top view ----
-  const DIST = 265, SIDE = THREE.MathUtils.degToRad(16), TOP = THREE.MathUtils.degToRad(89.6);
+  const DIST = 212, SIDE = THREE.MathUtils.degToRad(16), TOP = THREE.MathUtils.degToRad(89.6);
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
   let mode = "idle", t0 = performance.now(), az = -0.9, el = SIDE, azFrom = az, elFrom = el;
   const ORBIT_MS = 3600, PIPE_DELAY = 2000, PIPE_MS = 2800;
