@@ -80,7 +80,7 @@ def test_dry_run_only_needs_design(tmp_path, monkeypatch):
 
 def test_ui_served(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
-    assert "PumpkinPi" in c.get("/").text
+    assert "Perplexity Make" in c.get("/").text
 
 
 def test_vegan_diet_adds_a_gating_row(tmp_path, monkeypatch):
