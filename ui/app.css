@@ -9,12 +9,12 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
-html{font-size:clamp(16px,1.75vw,26px)}
+html{font-size:clamp(18px,min(2.2vw,3.9vh),34px)}
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font:400 1rem/1.35 "Inter",system-ui,sans-serif;letter-spacing:-.005em;
   display:flex;flex-direction:column;height:100vh;overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none}
 button,input{font:inherit;color:inherit}
-.muted{color:var(--muted)}.small{font-size:.8rem}
+.muted{color:var(--muted)}.small{font-size:.9rem}
 
 /* header */
 .top{display:flex;align-items:center;gap:.7rem;padding:.7rem var(--pad) .3rem}
@@ -369,12 +369,12 @@ body[data-view="design"]:not(.editing) .ask{display:none}
 /* dinner menu (Recipe step 1) */
 body[data-mode="menu"] #recipeView .cols{display:none}
 .menuview:empty{display:none}
-.menuview{padding:.4rem var(--pad);overflow:auto;font-size:1rem;flex:1;min-height:0}
+.menuview{padding:.3rem var(--pad);overflow:auto;font-size:.92rem;flex:1;min-height:0}
 .menuview .menuhint{font-size:1.1rem;max-width:40ch}
 .menuview .mhead{display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;margin-bottom:.3rem}
 .menuview .mhead h2{margin:0;font-size:1.5rem}
 .menuview .mbody{display:grid;grid-template-columns:2fr 1fr;gap:1.4rem}
-.menuview .mmenu{display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:0 1.4rem;align-content:start}
+.menuview .mmenu{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:0 1.4rem;align-content:start}
 .menuview h3{margin:.5rem 0 .15rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .menuview .msec p{margin:.1rem 0}
 .menuview .mguest{margin:.2rem 0 .6rem;line-height:1.4}
@@ -383,3 +383,36 @@ body[data-mode="menu"] #recipeView .cols{display:none}
 .menuview .yes{font-weight:700;color:#1b6e3a}
 #cardTitle{margin-right:.6rem;font-size:1rem}
 @media (orientation:portrait){.menuview .mbody{grid-template-columns:1fr}}
+
+/* ---- bigger text for the 7 inch Pi screen: tighter rows so it still fits ---- */
+.top{padding:.45rem var(--pad) .25rem;gap:.6rem}
+.sym{height:1.4rem}
+h1{font-size:1.15rem;white-space:nowrap}
+.tab{height:2.3rem;padding:0 .55rem;white-space:nowrap;font-size:.95rem}
+.tabs{gap:.1rem;padding:.2rem}
+.tab .n{width:1.3rem;height:1.3rem;margin-right:.35rem}
+.npbanner{margin:0;padding:.3rem .6rem;white-space:nowrap;font-size:.8rem;text-decoration:underline}
+.ask{padding:.3rem var(--pad) .4rem}
+.box input{height:2.7rem;font-size:1.25rem}
+.send{height:2.7rem;min-width:6rem}
+.clear{width:2.3rem;height:2.3rem}
+#sendBtn{height:2.9rem;min-width:13rem;font-size:1.15rem}
+.bar{padding:.35rem var(--pad) .5rem}
+.toast{bottom:4rem}
+.pick,.guestpick,.btn.sm{height:2.4rem}
+@media (orientation:landscape){
+  .screen.cards:not([hidden]){display:grid;grid-template-columns:1fr 15rem;grid-template-rows:auto auto 1fr;gap:.6rem 1rem}
+  .cards .cardbar{grid-column:2;grid-row:1;flex-direction:column;align-items:stretch}
+  .cards .cardbar .guestpick{flex:none}
+  .cards .cardnote{grid-column:2;grid-row:2;flex-direction:column;align-items:flex-start;gap:.3rem}
+  .cards .cardframe{grid-column:1;grid-row:1/4}
+}
+@media (orientation:portrait){
+  html{font-size:clamp(18px,3.4vw,34px)}
+  .top{flex-wrap:wrap}
+  .top .tabs{margin-left:0;width:100%;justify-content:space-between}
+  .recipe #diets{flex-wrap:wrap}
+  .cardbar{flex-wrap:wrap}
+  .cardbar .guestpick{flex-basis:100%}
+  .cardbar .btn{flex:1}
+}

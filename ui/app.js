@@ -892,7 +892,15 @@ async function drawCard() {
   try {
     const r = await apiJson("/api/cards/preview", { guest: cards.guest, side: cards.side });
     g.innerHTML = `<path d="${r.strokes.map((s) => "M" + s.map(([x, y]) => `${x},${178 - y}`).join("L")).join("")}"/>`;
+    zoomCard(r.strokes);
   } catch (e) { g.innerHTML = ""; log(`Card: ${e.message}`); }
+}
+// Show only the written part of the card so the preview text is big enough to read on the Pi screen.
+function zoomCard(strokes) {
+  const ys = strokes.flat().map(([, y]) => 178 - y);
+  if (!ys.length) { $("cardSvg").setAttribute("viewBox", "0 0 127 178"); return; }
+  const y0 = Math.max(0, Math.min(...ys) - 6), y1 = Math.min(178, Math.max(...ys) + 6);
+  $("cardSvg").setAttribute("viewBox", `0 ${y0.toFixed(1)} 127 ${(y1 - y0).toFixed(1)}`);
 }
 $("menuBtn").onclick = async () => {
   if (!state.live) return log("Menu check runs on the Pi.");
