@@ -51,8 +51,7 @@ def test_back_lists_exact_label_ingredients_and_fits():
     texts = [r[0] for r in cards.back_rows(cfg)]
     assert any(t.startswith("Tofu: water, soybeans") for t in texts)
     assert any(t.startswith("Soy sauce: water, soybeans, wheat") for t in texts)
-    assert "How to hot pot" in texts
-    st = cards.layout(cfg, [], side="back")
+    st = cards.layout(cfg, [], side="ingredients")
     W, H = cfg["card"]["w"], cfg["card"]["h"]
     assert all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
 
@@ -71,7 +70,30 @@ def test_every_labeled_product_has_a_source_and_reaches_the_decider(monkeypatch)
     monkeypatch.setattr("pumpkinpi.allergen_check.check_ingredient", fake)
     lines = cards.check_menu(None, cfg)
     assert seen["Kikkoman Soy Sauce"]["ingredients"].startswith("Water, Soybeans, Wheat")
-    assert all(ln["text"].endswith("?") for ln in lines)     # no verdicts -> never printed as clean
+    by = {ln["name"]: ln for ln in cards.guest_lines(cfg, lines, "Debbie")}
+    assert by["Satay (Lee Kum Kee)"]["text"] == "Satay (Lee Kum Kee): NO peanut, sesame"
+    assert by["Sha cha (Bull Head)"]["text"] == "Sha cha (Bull Head): NO sesame, fish"   # "No addition of peanut"
+    assert by["Hoisin (Lee Kum Kee)"]["text"] == "Hoisin (Lee Kum Kee): YES, sesame"
+    assert by["Soup base (Little Sheep)"]["text"].startswith("Soup base (Little Sheep): NO")  # may contain fish
+    assert by["Tofu (House Foods)"]["text"] == "Tofu (House Foods): YES"
+
+
+def test_no_source_never_says_yes():
+    ln = cards.item_lines([("Dip", {"item": "Mystery sauce", "brand": "Acme", "label": "water, spices"})], {})[0]
+    assert cards.line_text(ln, ["peanut", "tree nut", "fish"]).endswith("check label")
+
+
+def test_decider_found_beats_clean_label():
+    p = {"item": "X", "brand": "B", "label": "water", "source": "https://x"}
+    r = {"checks": {"peanuts": {"verdict": "found"}}}
+    assert cards.term_status(p, r)["peanut"] == "found"
+
+
+def test_back_has_sauces_and_steps():
+    import pumpkinpi.allergen_check as ac
+    cfg = cards.load()
+    texts = [r[0] for r in cards.sauce_rows(cfg, [], "Debbie")]
+    assert "How to hot pot" in texts and texts[-1].startswith("YES = no peanut, tree nut or fish")
 
 
 def test_recipe_label_is_evidence():

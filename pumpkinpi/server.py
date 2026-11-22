@@ -174,7 +174,7 @@ class RecordReq(BaseModel):
 
 class CardReq(BaseModel):
     guest: str = ""
-    side: str = "front"     # "back" = exact ingredients, how to hot pot, sauces to skip
+    side: str = "front"     # front: menu YES/NO; back: sauces YES/NO + how to; ingredients: exact labels
     confirm: bool = False   # "bed has no food, syringe tip is above the nozzle"
 
 
@@ -701,7 +701,8 @@ def cards_info():
     cfg = cards.load()
     return {"event": cfg.get("event", {}), "guests": cfg.get("guests", []), "card": cfg.get("card", {}),
             "menu": [{"name": d["name"], "recipe": d.get("recipe"), "products": d["products"]} for d in cfg["menu"]],
-            "steps": cfg.get("steps", []), "skip": cfg.get("skip"), "lines": card_lines(),
+            "steps": cfg.get("steps", []), "sauces": cfg.get("sauces", []), "allergies": cfg.get("allergies", {}),
+            "lines": card_lines(),
             "pla": asdict(cards.Pla.load())}
 
 
@@ -720,7 +721,7 @@ def card_strokes(guest: str, side: str = "front") -> list:
     if not lines:
         raise HTTPException(409, "Check the menu first")
     try:
-        return cards.layout(cards.load(), lines, guest.strip()[:16], "back" if side == "back" else "front")
+        return cards.layout(cards.load(), lines, guest.strip()[:16], side if side in ("back", "ingredients") else "front")
     except ValueError as e:
         raise HTTPException(400, str(e))
 

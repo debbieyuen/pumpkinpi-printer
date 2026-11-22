@@ -3,14 +3,14 @@
   "title": "Family Hot Pot",
   "when": "Thu Nov 26  3 PM",
   "for": "Debbie: no tree nuts, peanuts or fish (shellfish OK)",
-  "unsure_note": "? = check the label"
+  "unsure_note": "Brands checked by Perplexity"
  },
  "card": {
   "w": 127,
   "h": 178,
   "margin": 10,
-  "text_mm": 5,
-  "line_gap": 1.8,
+  "text_mm": 4.5,
+  "line_gap": 1.6,
   "back_mm": 3.8,
   "back_gap": 1.5
  },
@@ -30,67 +30,77 @@
  "menu": [
   {
    "name": "Ginger broth",
-   "recipe": "Simmer 3 qt water, 2 lb chicken, 3 in ginger, 4 scallions, 2 tsp salt, 1.5 hr. Strain.",
+   "recipe": "Simmer 3 qt water, 1 Mary's chicken, 3 in ginger, 4 scallions, 2 tsp salt, 1.5 hr. Strain.",
    "products": [
     {
      "item": "Water",
      "short": "water",
      "label": "water",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     },
     {
-     "item": "Chicken (plain, not brined)",
-     "short": "chicken",
-     "label": "chicken",
+     "item": "Mary's Free Range Chicken, whole",
+     "short": "whole chicken",
+     "label": "Whole Chicken. Nothing added or injected.",
      "contains": [],
-     "source": null,
-     "note": "fresh: check the tray label says no added solution or broth"
+     "source": "https://maryschickens.com/product/marys-abf-chicken/",
+     "note": "nothing added or injected",
+     "brand": "Mary's",
+     "tag": "Chicken"
     },
     {
      "item": "Fresh ginger",
      "short": "ginger",
      "label": "ginger",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     },
     {
      "item": "Scallions",
      "short": "scallion",
      "label": "scallion",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     },
     {
      "item": "Salt",
      "short": "salt",
      "label": "salt",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     }
    ]
   },
   {
    "name": "Beef + shrimp",
-   "recipe": "1 lb thin-sliced beef, 1 lb raw peeled shrimp. Plain, no marinade, no fish balls.",
+   "recipe": "1 lb Sky Ranch beef, 2 lb Kirkland raw shrimp, thawed. Plain, no marinade, no fish balls.",
    "products": [
     {
-     "item": "Thin-sliced beef for hot pot (plain)",
-     "short": "beef",
-     "label": "beef",
+     "item": "Sky Ranch Thin-Sliced Beef Short Plate Roll, 12 oz",
+     "short": "beef (no salt, no marinade)",
+     "label": "USDA Choice beef short plate. No added salt, no marinades, no preservatives.",
      "contains": [],
-     "source": null,
-     "note": "check the butcher label: plain beef only"
+     "source": "https://www.weee.com/en/product/Thin-Sliced-Beef-Short-Plate-Roll-USDA-Choice/114295",
+     "note": "frozen, plain",
+     "brand": "Sky Ranch",
+     "tag": "Beef"
     },
     {
-     "item": "Raw peeled shrimp",
-     "short": "shrimp",
-     "label": "shrimp",
+     "item": "Kirkland Signature Frozen Tail-On Raw Shrimp",
+     "short": "shrimp, salt",
+     "label": "Shrimp, Salt",
      "contains": [
       "shellfish"
      ],
-     "source": null,
-     "note": "shellfish is OK for Debbie"
+     "source": "https://www.costco.ca/p/-/kirkland-signature-frozen-tail-on-raw-shrimp/100547553",
+     "note": "shellfish is OK for Debbie",
+     "brand": "Kirkland",
+     "tag": "Shrimp"
     }
    ]
   },
@@ -106,7 +116,8 @@
       "soy"
      ],
      "source": "https://www.goodeggs.com/housefoods/organic-firm-tofu/63530b588d6c020012f2e682",
-     "tag": "Tofu"
+     "tag": "Tofu",
+     "brand": "House Foods"
     },
     {
      "item": "Longkou Bean Thread Vermicelli",
@@ -115,7 +126,8 @@
      "contains": [],
      "source": "https://www.worldfoodshop.com/products/longkou-mung-bean-vermicelli-yuanbao-style-250g-case-of-30",
      "note": "brands differ: check the label on the bag you buy",
-     "tag": "Noodles"
+     "tag": "Noodles",
+     "brand": "Longkou"
     }
    ]
   },
@@ -128,21 +140,24 @@
      "short": "napa",
      "label": "napa cabbage",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     },
     {
      "item": "Baby bok choy",
      "short": "bok choy",
      "label": "bok choy",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     },
     {
      "item": "Enoki mushrooms",
      "short": "enoki",
      "label": "enoki mushrooms",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     }
    ]
   },
@@ -159,7 +174,8 @@
       "wheat"
      ],
      "source": "https://kikkomanusa.com/foodservice/products/soy-sauce/",
-     "tag": "Soy sauce"
+     "tag": "Soy sauce",
+     "brand": "Kikkoman"
     },
     {
      "item": "Marukan Genuine Brewed Rice Vinegar (unseasoned)",
@@ -167,14 +183,16 @@
      "label": "Rice vinegar (water, rice)",
      "contains": [],
      "source": "https://www.marukan-usa.com/products/genuine-brewed-rice-vinegar/",
-     "tag": "Vinegar"
+     "tag": "Vinegar",
+     "brand": "Marukan"
     },
     {
      "item": "Garlic",
      "short": "garlic",
      "label": "garlic",
      "contains": [],
-     "source": null
+     "source": "https://www.fda.gov/food/food-allergensgluten-free-guidance-documents-regulatory-information/frequently-asked-questions-food-allergen-labeling-guidance-industry",
+     "note": "fresh, single ingredient: not on FDA's tree nut list"
     }
    ]
   },
@@ -191,7 +209,8 @@
      ],
      "source": "https://www.target.com/p/lao-gan-ma-spicy-chili-crisp-7-41oz/-/A-88708198",
      "note": "a peanut version exists (case listing): read the jar",
-     "tag": "Chili crisp"
+     "tag": "Chili crisp",
+     "brand": "Lao Gan Ma"
     }
    ]
   }
@@ -203,5 +222,138 @@
   "4 Noodles last",
   "5 Dip: soy, vinegar, garlic, chili"
  ],
- "skip": "Skip: satay, sha cha, peanut/sesame dip, ponzu, fish balls"
+ "allergies": {
+  "Debbie": [
+   "peanut",
+   "tree nut",
+   "fish"
+  ],
+  "Michael": [
+   "tree nut"
+  ]
+ },
+ "sauces": [
+  {
+   "item": "Lee Kum Kee Satay Sauce",
+   "tag": "Satay",
+   "brand": "Lee Kum Kee",
+   "label": "Peanuts, peanut paste, sesame paste, coconut, dried shrimp, shrimp paste, milk (sodium caseinate). Allergens: soybeans, peanuts, coconuts, shrimps, milk.",
+   "contains": [
+    "peanut",
+    "sesame",
+    "shellfish",
+    "milk",
+    "soy"
+   ],
+   "source": "https://usa.lkk.com/en/products/satay-sauce"
+  },
+  {
+   "item": "Bull Head Barbecue Sauce (Sha Cha)",
+   "tag": "Sha cha",
+   "brand": "Bull Head",
+   "label": "Soybean oil, brill fish, garlic, ginger, shallots, sesame, coconut powder, dried shrimp, chili, salt, pepper. No addition of peanut.",
+   "contains": [
+    "fish",
+    "sesame",
+    "shellfish"
+   ],
+   "source": "https://www.waiyeehong.com/food-ingredients/sauces-oils/other-sauces/barbecue-sauce-sha-cha"
+  },
+  {
+   "item": "Lee Kum Kee Sa Cha Sauce",
+   "tag": "Sa cha",
+   "brand": "Lee Kum Kee",
+   "label": "Soybean oil, dried flatfish, texturized soybean protein, water, sugar, onion powder, sesame paste, salt, garlic powder, spices, shrimp paste (shrimp, salt). Contains soybeans, flatfish, shrimp.",
+   "contains": [
+    "fish",
+    "sesame",
+    "shellfish",
+    "soy"
+   ],
+   "source": "https://usa.lkk.com/en/products/sa-cha-sauce"
+  },
+  {
+   "item": "Haidilao Peanut Sesame Sauce",
+   "tag": "Peanut dip",
+   "brand": "Haidilao",
+   "label": "Peanut paste 80%, sesame paste 20%.",
+   "contains": [
+    "peanut",
+    "sesame"
+   ],
+   "source": "https://yihaius.com/products/peanut-sesame-sauce"
+  },
+  {
+   "item": "Kikkoman Ponzu",
+   "tag": "Ponzu",
+   "brand": "Kikkoman",
+   "label": "Contains bonito extract (fish).",
+   "contains": [
+    "fish",
+    "soy",
+    "wheat"
+   ],
+   "source": "https://kikkomanusa.com/products/ponzu/ponzu-15-oz/"
+  },
+  {
+   "item": "Lee Kum Kee Hoisin Sauce",
+   "tag": "Hoisin",
+   "brand": "Lee Kum Kee",
+   "label": "Sugar, water, fermented soybean paste (water, salt, soybeans, wheat flour), salt, modified food starch, sweet potato powder, sesame paste, caramel color, spices, dehydrated garlic, salted chili peppers, acetic acid, FD&C red no. 40, potassium sorbate. Allergens: sesame, soybeans, wheat.",
+   "contains": [
+    "sesame",
+    "soy",
+    "wheat"
+   ],
+   "source": "https://usa.lkk.com/en/products/hoisin-sauce-l"
+  },
+  {
+   "item": "Lee Kum Kee Chiu Chow Chili Crisp Oil",
+   "tag": "Chili oil",
+   "brand": "Lee Kum Kee",
+   "label": "Soybean oil, water, dehydrated garlic, dried chili peppers, salted chili peppers, soy sauce (water, salt, soybeans, wheat flour), salt, sesame oil, sugar, disodium inosinate and guanylate. Allergens: soybeans, wheat, sesame.",
+   "contains": [
+    "sesame",
+    "soy",
+    "wheat"
+   ],
+   "source": "https://usa.lkk.com/en/products/chiu-chow-style-chili-oil"
+  },
+  {
+   "item": "Lee Kum Kee XO Sauce",
+   "tag": "XO sauce",
+   "brand": "Lee Kum Kee",
+   "label": "Soybean oil, dried shrimps, dried scallops, chili peppers, shallots, oyster sauce (water, sugar, salt, oyster extractives, modified corn starch, caramel color), dehydrated garlic, sugar, salt, shrimp roes, spices, disodium inosinate and guanylate. Allergens: soybeans, shrimps.",
+   "contains": [
+    "shellfish",
+    "soy"
+   ],
+   "source": "https://usa.lkk.com/en/products/xo-sauce-extra-hot",
+   "note": "shellfish only: OK for Debbie"
+  },
+  {
+   "item": "Lee Kum Kee Seasoned Soy Sauce for Seafood",
+   "tag": "Seafood soy",
+   "brand": "Lee Kum Kee",
+   "label": "Water, sugar, salt, soybeans, wheat flour, yeast extract (yeast extract, salt), caramel color, disodium 5'-inosinate and disodium 5'-guanylate. Allergens: soybeans, wheat.",
+   "contains": [
+    "soy",
+    "wheat"
+   ],
+   "source": "https://usa.lkk.com/en/products/seasoned-soy-sauce-for-seafood"
+  },
+  {
+   "item": "Little Sheep Hot Pot Soup Base, Plain (Target pack)",
+   "tag": "Soup base",
+   "brand": "Little Sheep",
+   "label": "Contains wheat, soybean. May contain fish (whitebait) and eggs.",
+   "contains": [
+    "fish",
+    "wheat",
+    "soy"
+   ],
+   "source": "https://www.target.com/p/little-sheep-original-hot-pot-base-4-59oz/-/A-91741205",
+   "note": "may contain fish: NO for a fish allergy"
+  }
+ ]
 }

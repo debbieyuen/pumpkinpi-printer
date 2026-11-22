@@ -822,7 +822,8 @@ function renderCards() {
   $("cardGuests").innerHTML = cards.guests.map((g) =>
     `<button type="button" class="chip${g === cards.guest ? " on" : ""}" data-g="${g}">${g}</button>`).join("");
   $("dishList").innerHTML = cards.lines.length ? cards.lines.map((l) => {
-    const cls = l.unsure.length ? "yellow" : "green";
+    const has = Object.values(l.terms || {}).includes("found");
+    const cls = has ? "red" : l.unsure.length ? "yellow" : "green";
     const why = l.unsure.length ? `check the label: ${l.unsure.join(", ")}` : `${l.sources.length} sources`;
     return `<li class="${cls}"><span class="sdot"></span><span><b>${l.text}</b><small>${why}</small></span></li>`;
   }).join("") : `<li class="empty">Tap Check menu: Search finds each product's label, the Decider lists its allergens.</li>`;

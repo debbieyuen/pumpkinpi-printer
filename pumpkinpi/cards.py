@@ -70,6 +70,87 @@ def prod_label(p) -> dict | None:
             "allergens": p.get("contains") or [], "url": p.get("source")}
 
 
+# What every card line answers, guest by guest. key = TERMS key, value = word printed on the card.
+WATCH = {"peanut": "peanut", "tree nut": "tree nut", "sesame": "sesame", "fish": "fish"}
+SESAME_RX = r"sesame|tahini|芝麻|참깨|참기름|ごま|胡麻"
+
+
+def term_status(p, r: dict | None) -> dict[str, str]:
+    """{"peanut": "found"|"safe"|"unsure", ...} for one product.
+
+    found: the Decider found it, OR the exact label we wrote down lists it (contains / label words).
+    safe: not found, and the Decider said safe or the label has a cited source (https) naming none.
+    unsure: no source, or a "check" word (natural flavor, coconut, may contain) on the label."""
+    import re
+    from .allergens import name_hits
+    d = p if isinstance(p, dict) else {}
+    # "No addition of peanut" / "no added peanuts" is not a hit
+    label = re.sub(r"\bno (addition of|added)\s+\w+", " ", d.get("label", ""), flags=re.I)
+    cited = str(d.get("source") or "").startswith("https://")
+    listed = set(d.get("contains") or [])
+    checks = (r or {}).get("checks", {})
+    out = {}
+    for t in WATCH:
+        v = (checks.get(TERMS[t]) or {}).get("verdict", "unsure")
+        if t == "sesame":
+            hit, check = bool(re.search(SESAME_RX, label, re.I)), False
+        else:
+            h = name_hits(label, {"peanut": "peanuts", "tree nut": "tree nuts", "fish": "fish"}[t])
+            hit, check = bool(h["contains"]), bool(h["check"])
+        if v == "found" or t in listed or hit:
+            out[t] = "found"
+        elif check and t != "peanut" and "may contain" in label.lower():
+            out[t] = "found"                       # "may contain fish" counts as a NO for an allergy
+        elif check or not (cited or v == "safe"):
+            out[t] = "unsure"
+        else:
+            out[t] = "safe"
+    return out
+
+
+def item_lines(products: list[tuple[str, object]], results: dict[str, dict]) -> list[dict]:
+    """One entry per branded product; unbranded fresh foods share one "Fresh veg + spices" entry."""
+    out, fresh = [], []
+    for dish, p in products:
+        st = term_status(p, results.get(prod_name(p)))
+        src = [p["source"]] if isinstance(p, dict) and p.get("source") else []
+        if isinstance(p, dict) and p.get("brand"):
+            out.append({"name": f"{p.get('tag') or dish} ({p['brand']})", "item": p["item"], "terms": st,
+                        "sources": src})
+        else:
+            fresh.append((prod_name(p), st, src))
+    if fresh:
+        rank = {"found": 2, "unsure": 1, "safe": 0}
+        st = {t: max((f[1][t] for f in fresh), key=rank.get) for t in WATCH}
+        out.append({"name": "Fresh veg + spices", "item": ", ".join(f[0] for f in fresh), "terms": st,
+                    "sources": sorted({u for f in fresh for u in f[2]})})
+    for ln in out:
+        ln["text"] = line_text(ln, None)
+        ln["unsure"] = [WATCH[t] for t, v in ln["terms"].items() if v == "unsure"]
+    return out
+
+
+def line_text(ln: dict, allergies: list[str] | None) -> str:
+    """"Satay (Lee Kum Kee): NO peanut, sesame"  /  "Hoisin (Lee Kum Kee): YES, sesame"  /  "Tofu (House Foods): YES".
+
+    Without a guest's allergy list it just names what's in it ("none" if nothing)."""
+    st = ln["terms"]
+    has = list(dict.fromkeys(WATCH[t] for t in WATCH if st.get(t) == "found"))
+    if allergies is None:
+        words = ", ".join(has) or "none"
+        return f"{ln['name']}: {words}" + (" (check label)" if any(v == "unsure" for v in st.values()) else "")
+    if any(st.get(t) == "found" for t in allergies):
+        return f"{ln['name']}: NO {', '.join(has)}"
+    if any(st.get(t) == "unsure" for t in allergies):
+        return f"{ln['name']}: check label"
+    return f"{ln['name']}: YES" + (f", {', '.join(has)}" if has else "")
+
+
+def guest_lines(cfg: dict, lines: list[dict], guest: str) -> list[dict]:
+    allergies = (cfg.get("allergies") or {}).get(guest)
+    return [{**ln, "text": line_text(ln, allergies)} if "terms" in ln else ln for ln in lines]
+
+
 def dish_line(dish: dict, results: dict[str, dict]) -> dict:
     """Combine each product's verdicts into one printed line for the dish."""
     terms = dish.get("terms") or list(TERMS)
@@ -100,11 +181,11 @@ def check_menu(client, cfg: dict) -> list[dict]:
     from .allergen_check import check_ingredient
     want: dict[str, list[str]] = {}
     labels: dict[str, dict | None] = {}
-    for dish in cfg["menu"]:
+    for dish in cfg["menu"] + [{"name": "Sauce", "products": cfg.get("sauces", [])}]:
         for p in dish["products"]:
             prod = prod_name(p)
             labels[prod] = prod_label(p)
-            for t in dish.get("terms") or list(TERMS):
+            for t in list(WATCH):
                 if TERMS[t] not in want.setdefault(prod, []):
                     want[prod].append(TERMS[t])
     results = {}
@@ -112,7 +193,9 @@ def check_menu(client, cfg: dict) -> list[dict]:
             r = check_ingredient(client, prod, allergens, label=labels[prod])
             results[prod] = {"checks": {a: asdict(c) for a, c in r["checks"].items()},
                              "relevance": r.get("relevance")}
-    return [dish_line(d, results) for d in cfg["menu"]]
+    menu = item_lines([(d["name"], p) for d in cfg["menu"] for p in d["products"]], results)
+    sauces = item_lines([("Sauce", p) for p in cfg.get("sauces", [])], results)
+    return [{**ln, "part": "menu"} for ln in menu] + [{**ln, "part": "sauce"} for ln in sauces]
 
 
 # ---------------------------------------------------------------- layout (mm, card's front-left corner = 0,0)
@@ -156,8 +239,36 @@ def wrap(s: str, h: float, max_w: float, font: str = "print", indent: str = " ")
     return out + ([cur] if cur else [])
 
 
+def legend(cfg: dict, guest: str) -> str:
+    al = (cfg.get("allergies") or {}).get(guest)
+    if not al:
+        return "Lists any peanut, tree nut, sesame or fish"
+    words = list(dict.fromkeys(WATCH[t] for t in al if t in WATCH))
+    words = ", ".join(words[:-1]) + " or " + words[-1] if len(words) > 1 else words[0]
+    return f"YES = no {words} on the label"
+
+
+def sauce_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
+    """Back of the card: every sauce by exact brand, YES/NO for this guest, then how to hot pot."""
+    card = cfg.get("card", {})
+    bh = card.get("back_mm", 3.8)
+    th = card.get("text_mm", 4.5)
+    pitch = th * card.get("line_gap", 1.6)
+    rows = [("Sauces: can I eat it?", 6, "print", True, pitch + 3)]
+    sh = card.get("sauce_mm", 4.0)                            # brand names are long: one size for every sauce line
+    rows += [(ln["text"], sh, "print", False, pitch) for ln in
+             guest_lines(cfg, [x for x in lines if x.get("part") == "sauce"], guest)]
+    if cfg.get("steps"):
+        rows[-1] = rows[-1][:4] + (pitch + 5,)
+        rows.append(("How to hot pot", 6, "print", True, pitch + 2))
+        rows += [(t, th, "print", False, pitch) for t in cfg["steps"]]
+    rows[-1] = rows[-1][:4] + (pitch + 1,)
+    rows.append((legend(cfg, guest), bh, "print", True, pitch))
+    return rows
+
+
 def back_rows(cfg: dict) -> list[tuple]:
-    """Back of the card: exactly what's in each dish (from the labels), how to eat it, sauces to skip."""
+    """The ingredients insert: exactly what's in each dish, from the labels (a second card)."""
     card = cfg.get("card", {})
     W, m = card.get("w", 127.0), card.get("margin", 10.0)
     bh = card.get("back_mm", 3.6)
@@ -178,13 +289,6 @@ def back_rows(cfg: dict) -> list[tuple]:
             own = [f"{d['name']}: {', '.join(whole)}"]
         for t in own:
             rows += [(x, bh, "print", False, pitch) for x in wrap(t, bh, W - 2 * m)]
-    if cfg.get("steps"):
-        rows[-1] = rows[-1][:4] + (pitch + 4,)
-        rows.append(("How to hot pot", 6, "print", True, pitch + 3))
-        rows += [(t, bh, "print", False, pitch) for t in cfg["steps"]]
-    if cfg.get("skip"):
-        rows[-1] = rows[-1][:4] + (pitch + 2,)
-        rows += [(t, bh, "print", False, pitch) for t in wrap(cfg["skip"], bh, W - 2 * m)]
     return rows
 
 
@@ -204,9 +308,10 @@ def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.
     return out, y
 
 
-def layout_back(cfg: dict) -> list[Stroke]:
+def layout_back(cfg: dict, lines: list[dict] | None = None, guest: str = "", side: str = "back") -> list[Stroke]:
     card = cfg.get("card", {})
-    st, _ = draw_rows(back_rows(cfg), card.get("w", 127.0), card.get("h", 178.0), card.get("margin", 10.0))
+    rows = back_rows(cfg) if side == "ingredients" else sauce_rows(cfg, lines or [], guest)
+    st, _ = draw_rows(rows, card.get("w", 127.0), card.get("h", 178.0), card.get("margin", 10.0))
     return st
 
 
@@ -215,8 +320,8 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
 
     Fixed line pitch (baselines), block centered top to bottom, a small pumpkin under the menu."""
     from .shapes import pumpkin
-    if side == "back":
-        return layout_back(cfg)
+    if side in ("back", "ingredients"):
+        return layout_back(cfg, lines, guest, side)
     card = cfg.get("card", {})
     W, H = card.get("w", 127.0), card.get("h", 178.0)       # 5 x 7 inch
     m = card.get("margin", 10.0)
@@ -228,12 +333,16 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
         rows.append((ev["when"], 5, "print", True, 17))
     if guest:
         rows.append((guest, 9, "cursive", True, 18))
-    rows.append(("Menu", 6, "print", True, pitch + 3))
-    rows += [(ln["text"], th, "print", False, pitch) for ln in lines]
-    if any(ln.get("unsure") for ln in lines):
-        rows.append((ev.get("unsure_note", "? = check with host"), 4, "print", True, 10))
+    rows.append(("Menu", 6, "print", True, pitch + 2))
+    menu = guest_lines(cfg, [x for x in lines if x.get("part", "menu") == "menu"], guest)
+    rows += [(ln["text"], th, "print", False, pitch) for ln in menu]
+    if menu:
+        rows.append((legend(cfg, guest), 4, "print", True, 10))
     art = 16.0                                                # pumpkin height
-    out, y = draw_rows(rows, W, H, m, extra=10 + art)
+    try:
+        out, y = draw_rows(rows, W, H, m, extra=10 + art)
+    except ValueError:                                        # long menu: drop the pumpkin, keep the words
+        return draw_rows(rows, W, H, m)[0]
     out.extend(move(pumpkin(), dx=W / 2, dy=y - 10 - art / 2, k=art / 2 / 40 / 0.9))
     return out
 
@@ -320,7 +429,8 @@ def main() -> None:
     ap.add_argument("--check", action="store_true", help="run Search + Decider on every product (needs the API key)")
     ap.add_argument("--guest", default="", help="name printed on the card")
     ap.add_argument("--gcode", action="store_true", help="print the card's G-code")
-    ap.add_argument("--back", action="store_true", help="the back: exact ingredients, how to hot pot, sauces to skip")
+    ap.add_argument("--side", default="front", choices=["front", "back", "ingredients"],
+                    help="front: menu YES/NO; back: sauces YES/NO + how to hot pot; ingredients: exact labels")
     args = ap.parse_args()
     cfg = load()
     if args.check:
@@ -334,8 +444,7 @@ def main() -> None:
     else:
         raise SystemExit("Run with --check first")
     if args.gcode:
-        side = "back" if args.back else "front"
-        print("\n".join(card_gcode(layout(cfg, lines, args.guest, side), Pla.load())))
+        print("\n".join(card_gcode(layout(cfg, lines, args.guest, args.side), Pla.load())))
     else:
         for ln in lines:
             print(ln["text"], "  (check:", ", ".join(ln["unsure"]) + ")" if ln["unsure"] else "")
