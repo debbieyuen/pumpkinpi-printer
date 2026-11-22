@@ -24,6 +24,7 @@ These are streamed over USB, never written to the microSD as a food file, and ne
 """
 from __future__ import annotations
 
+import re
 import argparse
 import json
 import math
@@ -425,6 +426,42 @@ def dessert_verdict(cfg: dict, lines: list[dict], guest: str) -> str:
     return "YES"
 
 
+def simple_avoid(cfg: dict, lines: list[dict], guest: str) -> list[str]:
+    """ "Lee Kum Kee Satay: peanut, sesame" (brand first, like a handwritten note), then unchecked items."""
+    out = []
+    for b in avoid_lines(cfg, lines, guest):
+        mt = re.match(r"(.+?) \((.+?)\): (.+)", b)
+        out.append(f"{mt[2]} {mt[1]}: {mt[3]}" if mt else b)
+    todo = [x["name"] for x in cfg.get("unchecked", [])]
+    if todo and (cfg.get("allergies") or {}).get(guest):
+        out.append("Check label: " + ", ".join(todo))
+    return out
+
+
+def simple_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
+    """Plain list card: name, then each section ("Hot Pot Menu:", "Dessert:", "Allergens:") left-aligned."""
+    card = cfg.get("card", {})
+    W, m = card.get("w", 127.0), card.get("margin", 10.0)
+    h = card.get("simple_mm", 4.4)
+    ah = card.get("simple_avoid_mm", 3.8)
+    p, ap = h * 1.55, ah * 1.5
+    rows = []
+    if guest:
+        rows.append((guest, 8, "cursive", True, 14))
+    for title, items in (cfg.get("simple") or {}).items():
+        rows.append((f"{title}:", h + 0.6, "print", False, p + 1))
+        for t in items:
+            rows += [(x, h, "print", False, p) for x in wrap(t, h, W - 2 * m)]
+        rows[-1] = rows[-1][:4] + (p + 5,)
+    rows.append(("Allergens:", h + 0.6, "print", False, p + 1))
+    if not (cfg.get("allergies") or {}).get(guest):
+        rows.append(("No food allergies on file", ah, "print", False, ap))
+    else:
+        for b in simple_avoid(cfg, lines, guest) or ["None on the menu"]:
+            rows += [(x, ah, "print", False, ap) for x in wrap(b, ah, W - 2 * m)]
+    return rows
+
+
 def one_page_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
     """Everything on one side: date, name, menu overview, then this guest's don't-eat list."""
     card = cfg.get("card", {})
@@ -485,7 +522,7 @@ def layout_back(cfg: dict, lines: list[dict] | None = None, guest: str = "", sid
     """Back: short style = this guest's "don't eat" list; full style = pie + sauces YES/NO."""
     card = cfg.get("card", {})
     lines = lines or []
-    if card.get("style", "short") == "one":
+    if card.get("style", "short") in ("one", "simple"):
         return []                                              # one-page card: nothing on the back
     if card.get("style", "short") == "short":
         st, _ = draw_rows(short_back_rows(cfg, lines, guest), card.get("w", 127.0), card.get("h", 178.0),
@@ -517,6 +554,8 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
         rows.append((ev["when"], 5, "print", True, 11))
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
+    if card.get("style", "short") == "simple":
+        return draw_rows(simple_rows(cfg, lines, guest), W, H, m)[0]
     if card.get("style", "short") == "one":
         return draw_rows(one_page_rows(cfg, lines, guest), W, H, m)[0]
     if card.get("style", "short") == "short":

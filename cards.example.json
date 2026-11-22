@@ -17,7 +17,7 @@
   "show_title": false,
   "detail_mm": 3.2,
   "detail_gap": 1.35,
-  "style": "one",
+  "style": "simple",
   "one_avoid_mm": 3.8
  },
  "guests": [
@@ -456,5 +456,32 @@
   "Beef, shrimp, tofu, noodles",
   "Vegetables, dips, sauce bar",
   "Pumpkin pie"
+ ],
+ "simple": {
+  "Hot Pot Menu": [
+   "Haidilao mushroom broth",
+   "Meats: beef, lamb, shrimp",
+   "Tofu, ramen noodles, vermicelli",
+   "Bok choy, cabbage, mushroom"
+  ],
+  "Dessert": [
+   "Pumpkin pie",
+   "Apple pie",
+   "Chocolate, vanilla ice cream"
+  ]
+ },
+ "unchecked": [
+  {
+   "name": "lamb"
+  },
+  {
+   "name": "ramen"
+  },
+  {
+   "name": "apple pie"
+  },
+  {
+   "name": "ice cream"
+  }
  ]
 }

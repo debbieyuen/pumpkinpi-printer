@@ -224,9 +224,20 @@ def test_broth_is_haidilao_mushroom_with_label():
 
 def test_one_page_has_menu_and_dont_eat():
     cfg = cards.load()
-    assert cfg["card"]["style"] == "one"
+    cfg["card"]["style"] = "one"
     L = _lines(cfg)
     t = [r[0] for r in cards.one_page_rows(cfg, L, "Debbie")]
     assert "Pumpkin pie: YES" in t and "Don't eat" in t
     assert "Satay (Lee Kum Kee): peanut, sesame" in t and "Peanut topping on pie" in t
     assert "No food allergies on file" in [r[0] for r in cards.one_page_rows(cfg, L, "Dad")]
+
+
+def test_simple_card_like_the_note():
+    cfg = cards.load()
+    assert cfg["card"]["style"] == "simple"
+    L = _lines(cfg)
+    t = [r[0] for r in cards.simple_rows(cfg, L, "Debbie")]
+    assert t[0] == "Debbie" and "Hot Pot Menu:" in t and "Dessert:" in t and "Allergens:" in t
+    assert "Lee Kum Kee Satay: peanut, sesame" in t
+    assert any(x.startswith("Check label: lamb") for x in t)      # new items have no checked brand yet
+    assert cards.layout(cfg, L, "Debbie", "front") and cards.layout(cfg, L, "Debbie", "back") == []
