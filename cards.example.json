@@ -18,7 +18,9 @@
   "detail_mm": 3.2,
   "detail_gap": 1.35,
   "style": "simple",
-  "one_avoid_mm": 3.8
+  "one_avoid_mm": 3.8,
+  "simple_mm": 3.9,
+  "simple_avoid_mm": 3.4
  },
  "guests": [
   "Debbie",
@@ -460,28 +462,75 @@
  "simple": {
   "Hot Pot Menu": [
    "Haidilao mushroom broth",
-   "Meats: beef, lamb, shrimp",
-   "Tofu, ramen noodles, vermicelli",
-   "Bok choy, cabbage, mushroom"
+   "Sky Ranch beef, Little Sheep lamb",
+   "Kirkland shrimp, House Foods tofu",
+   "Hakubaku ramen, Longkou vermicelli",
+   "Bok choy, napa cabbage, enoki"
   ],
   "Dessert": [
-   "Pumpkin pie",
-   "Apple pie",
-   "Chocolate, vanilla ice cream"
+   "Pumpkin pie (Libby's recipe)",
+   "Mrs. Smith's apple pie",
+   "Straus chocolate + vanilla ice cream"
   ]
  },
- "unchecked": [
+ "more": [
   {
-   "name": "lamb"
+   "item": "Little Sheep Sliced Lamb Shoulder Rolls for Hot Pot, Frozen 1 lb",
+   "tag": "Lamb",
+   "brand": "Little Sheep",
+   "short": "lamb shoulder",
+   "label": "Thin-sliced lamb shoulder rolls (plain lamb shoulder, nothing added per listing)",
+   "contains": [],
+   "source": "https://www.weee.com/product/Little-Sheep-Sliced-Lamb-Shoulder-Rolls-for-Hot-Pot/84729"
   },
   {
-   "name": "ramen"
+   "item": "Hakubaku Organic Ramen Noodles, 9.5 oz",
+   "tag": "Ramen",
+   "brand": "Hakubaku",
+   "short": "organic wheat flour, salt, mineral salts, water",
+   "label": "Organic Wheat Flour, Salt, Mineral Salts, Water. Contains wheat gluten. Manufactured on shared equipment with soy, egg and buckwheat.",
+   "contains": [
+    "wheat"
+   ],
+   "source": "https://www.heb.com/product-detail/hakubaku-organic-wheat-ramen-noodles/1991145"
   },
   {
-   "name": "apple pie"
+   "item": "Mrs. Smith's Original Flaky Crust Apple Pie, 37 oz",
+   "tag": "Apple pie",
+   "brand": "Mrs. Smith's",
+   "short": "apples, sugar, starch, corn syrup, brown sugar, spice; crust: wheat flour, palm oil, butter, soybean oil",
+   "label": "FILLING: APPLES, WATER, SUGAR, MODIFIED FOOD STARCH, CORN SYRUP, BROWN SUGAR, SALT, SPICE, XANTHAN GUM. CRUST: WHEAT FLOUR, PALM OIL, WATER, BUTTER (CREAM, SALT), SOYBEAN OIL, SALT, DEXTROSE, YEAST. CONTAINS: WHEAT AND MILK.",
+   "contains": [
+    "wheat",
+    "milk"
+   ],
+   "source": "https://www.mrssmiths.com/products/original-flaky-crust-apple-pie"
   },
   {
-   "name": "ice cream"
+   "item": "Straus Family Creamery Organic Dutch Chocolate Ice Cream",
+   "tag": "Chocolate ice cream",
+   "brand": "Straus",
+   "short": "cream, nonfat milk, cane sugar, Dutch cocoa, egg yolks, vanilla extract",
+   "label": "Pasteurized Organic Cream and Organic Nonfat Milk, Organic Cane Sugar, Organic Dutch Cocoa, Organic Egg Yolks, Organic Vanilla Extract. Contains: milk, eggs.",
+   "contains": [
+    "milk",
+    "egg"
+   ],
+   "source": "https://www.strausfamilycreamery.com/product/organic-dutch-chocolate-ice-cream/",
+   "note": "creamery is peanut-free and nut-free: https://www.strausfamilycreamery.com/faq/"
+  },
+  {
+   "item": "Straus Family Creamery Organic Vanilla Bean Ice Cream",
+   "tag": "Vanilla ice cream",
+   "brand": "Straus",
+   "short": "cream, nonfat milk, cane sugar, egg yolks, vanilla extract, vanilla bean",
+   "label": "Pasteurized Organic Cream and Organic Nonfat Milk, Organic Cane Sugar, Organic Egg Yolks, Organic Vanilla Extract, Organic Ground Vanilla Bean. Contains: milk, eggs.",
+   "contains": [
+    "milk",
+    "egg"
+   ],
+   "source": "https://www.strausfamilycreamery.com/wholesale-product/organic-vanilla-bean-ice-cream/",
+   "note": "creamery is peanut-free and nut-free: https://www.strausfamilycreamery.com/faq/"
   }
  ]
 }

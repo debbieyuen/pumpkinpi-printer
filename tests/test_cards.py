@@ -239,5 +239,7 @@ def test_simple_card_like_the_note():
     t = [r[0] for r in cards.simple_rows(cfg, L, "Debbie")]
     assert t[0] == "Debbie" and "Hot Pot Menu:" in t and "Dessert:" in t and "Allergens:" in t
     assert "Lee Kum Kee Satay: peanut, sesame" in t
-    assert any(x.startswith("Check label: lamb") for x in t)      # new items have no checked brand yet
+    assert not any("check label" in x.lower() for x in t)         # every item decided YES/NO
+    assert "Everything else: YES" in t and any("Little Sheep lamb" in x for x in t)
+    assert any("Mrs. Smith" in x for x in t) and any("Straus" in x for x in t)
     assert cards.layout(cfg, L, "Debbie", "front") and cards.layout(cfg, L, "Debbie", "back") == []

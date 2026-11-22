@@ -183,7 +183,8 @@ def check_menu(client, cfg: dict) -> list[dict]:
     want: dict[str, list[str]] = {}
     labels: dict[str, dict | None] = {}
     dessert = [cfg["dessert"]] if cfg.get("dessert") else []
-    for dish in cfg["menu"] + dessert + [{"name": "Sauce", "products": cfg.get("sauces", [])}]:
+    more = [{"name": "More", "products": cfg.get("more", [])}]
+    for dish in cfg["menu"] + dessert + more + [{"name": "Sauce", "products": cfg.get("sauces", [])}]:
         for p in dish["products"]:
             prod = prod_name(p)
             labels[prod] = prod_label(p)
@@ -198,7 +199,9 @@ def check_menu(client, cfg: dict) -> list[dict]:
     menu = item_lines([(d["name"], p) for d in cfg["menu"] for p in d["products"]], results)
     sauces = item_lines([("Sauce", p) for p in cfg.get("sauces", [])], results)
     sweet = item_lines([(d["name"], p) for d in dessert for p in d["products"]], results)
+    extra = item_lines([("More", p) for p in cfg.get("more", [])], results)
     return ([{**ln, "part": "menu"} for ln in menu] + [{**ln, "part": "dessert"} for ln in sweet]
+            + [{**ln, "part": "more"} for ln in extra]
             + [{**ln, "part": "sauce"} for ln in sauces])
 
 
@@ -432,9 +435,6 @@ def simple_avoid(cfg: dict, lines: list[dict], guest: str) -> list[str]:
     for b in avoid_lines(cfg, lines, guest):
         mt = re.match(r"(.+?) \((.+?)\): (.+)", b)
         out.append(f"{mt[2]} {mt[1]}: {mt[3]}" if mt else b)
-    todo = [x["name"] for x in cfg.get("unchecked", [])]
-    if todo and (cfg.get("allergies") or {}).get(guest):
-        out.append("Check label: " + ", ".join(todo))
     return out
 
 
@@ -459,6 +459,8 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
     else:
         for b in simple_avoid(cfg, lines, guest) or ["None on the menu"]:
             rows += [(x, ah, "print", False, ap) for x in wrap(b, ah, W - 2 * m)]
+        rows[-1] = rows[-1][:4] + (ap + 2,)
+        rows.append(("Everything else: YES", ah, "print", False, ap))
     return rows
 
 
