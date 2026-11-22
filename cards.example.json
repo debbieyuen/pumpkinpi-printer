@@ -9,12 +9,14 @@
   "w": 127,
   "h": 178,
   "margin": 8,
-  "text_mm": 3.6,
-  "line_gap": 1.4,
+  "text_mm": 4.2,
+  "line_gap": 1.5,
   "back_mm": 3.4,
   "back_gap": 1.45,
   "sauce_mm": 3.4,
-  "show_title": false
+  "show_title": false,
+  "detail_mm": 3.2,
+  "detail_gap": 1.35
  },
  "guests": [
   "Debbie",

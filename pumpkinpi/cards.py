@@ -316,50 +316,88 @@ def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.
     return out, y
 
 
-def layout_back(cfg: dict, lines: list[dict] | None = None, guest: str = "", side: str = "back") -> list[Stroke]:
+def entry_rows(cfg: dict, dishes: list[dict], lines: list[dict], guest: str) -> list[tuple]:
+    """One entry per item: "Tofu (House Foods): YES" and its label ingredients right under it.
+
+    Menu YES/NO and the ingredient list used to be printed twice (front and back); now they're merged."""
     card = cfg.get("card", {})
-    rows = back_rows(cfg)
-    rows[-1] = rows[-1][:4] + (rows[-1][4] + 3,)
-    rows += sauce_rows(cfg, lines or [], guest)
+    W, m = card.get("w", 127.0), card.get("margin", 10.0)
+    th = card.get("text_mm", 3.6)
+    pitch = th * card.get("line_gap", 1.4)
+    dh = card.get("detail_mm", 3.2)
+    dp = dh * card.get("detail_gap", 1.35)
+    glines = guest_lines(cfg, lines, guest)
+    names = {ln["name"]: ln for ln in glines if "name" in ln}
+    rows, fresh, used = [], [], set()
+    for d in dishes:
+        for p in d["products"]:
+            short = (p.get("short") or p["item"]) if isinstance(p, dict) else p
+            if isinstance(p, dict) and p.get("brand"):
+                ln = names.get(f"{p.get('tag') or d['name']} ({p['brand']})")
+                if ln:
+                    used.add(ln["name"])
+                    rows += _entry(ln["text"], short, th, pitch, dh, dp, W, m)
+            elif short not in fresh:
+                fresh.append(short)
+    ln = names.get("Fresh veg + spices")
+    if fresh and ln:
+        used.add(ln["name"])
+        rows += _entry(ln["text"], ", ".join(fresh), th, pitch, dh, dp, W, m)
+    rows += [(ln["text"], th, "print", False, pitch) for ln in glines if ln.get("name") not in used]
+    return rows
+
+
+def _entry(head: str, short: str, th, pitch, dh, dp, W, m) -> list[tuple]:
+    key = head.split(" (")[0].split(":")[0].lower()
+    if short.lower() in (key, key.rstrip("s"), key + "s"):     # "Eggs: eggs" adds nothing
+        return [(head, th, "print", False, pitch)]
+    body = wrap(short, dh, W - 2 * m - 4)
+    rows = [(head, th, "print", False, dh + 2.2)]
+    rows += [("  " + x.strip(), dh, "print", False, dp) for x in body]
+    rows[-1] = rows[-1][:4] + (pitch,)
+    return rows
+
+
+def section(title: str, h: float = 5.5, step: float = 8.0) -> tuple:
+    return (title, h, "print", True, step)
+
+
+def layout_back(cfg: dict, lines: list[dict] | None = None, guest: str = "", side: str = "back") -> list[Stroke]:
+    """Back: the pie (YES/NO + label ingredients), then every sauce YES/NO, then the legend."""
+    card = cfg.get("card", {})
+    lines = lines or []
+    rows = []
+    if cfg.get("dessert"):
+        rows.append(section(f"Dessert: {cfg['dessert']['name'].lower()}"))
+        rows += entry_rows(cfg, [cfg["dessert"]], [x for x in lines if x.get("part") == "dessert"], guest)
+        rows[-1] = rows[-1][:4] + (rows[-1][4] + 4,)
+    rows += sauce_rows(cfg, lines, guest)
     st, _ = draw_rows(rows, card.get("w", 127.0), card.get("h", 178.0), card.get("margin", 10.0))
     return st
 
 
 def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -> list[Stroke]:
-    """The whole card as strokes in mm. Portrait: x across the card, y from the bottom edge up.
-
-    Fixed line pitch (baselines), block centered top to bottom, a small pumpkin under the menu."""
+    """Front: date, guest, then the hot pot menu: each item YES/NO with its label ingredients under it."""
     from .shapes import pumpkin
     if side == "back":
         return layout_back(cfg, lines, guest, side)
     card = cfg.get("card", {})
     W, H = card.get("w", 127.0), card.get("h", 178.0)       # 5 x 7 inch
     m = card.get("margin", 10.0)
-    th = card.get("text_mm", 5.0)                             # letter height for menu lines (5 mm = readable in PLA)
-    pitch = th * card.get("line_gap", 1.8)
     ev = cfg.get("event", {})
     rows = []
     if card.get("show_title", True):
         rows.append((ev.get("title", "Thanksgiving"), 11, "cursive", True, 17))
     if ev.get("when"):
-        rows.append((ev["when"], 5, "print", True, 13))
+        rows.append((ev["when"], 5, "print", True, 11))
     if guest:
-        rows.append((guest, 8, "cursive", True, 14))
-    rows.append(("Menu", 6, "print", True, pitch + 2))
-    menu = guest_lines(cfg, [x for x in lines if x.get("part", "menu") == "menu"], guest)
-    rows += [(ln["text"], th, "print", False, pitch) for ln in menu]
-    sweet = guest_lines(cfg, [x for x in lines if x.get("part") == "dessert"], guest)
-    if sweet:
-        rows[-1] = rows[-1][:4] + (pitch + 2,)
-        rows.append((f"Dessert: {cfg['dessert']['name'].lower()}", 6, "print", True, pitch + 2))
-        rows += [(ln["text"], th, "print", False, pitch) for ln in sweet]
-    if cfg.get("steps"):
-        rows[-1] = rows[-1][:4] + (pitch + 3,)
-        rows.append(("How to hot pot", 6, "print", True, pitch + 2))
-        rows += [(t, th, "print", False, pitch) for t in cfg["steps"]]
+        rows.append((guest, 8, "cursive", True, 12))
+    menu = [x for x in lines if x.get("part", "menu") == "menu"]
+    rows.append(section("Menu", 6))
+    rows += entry_rows(cfg, cfg["menu"], menu, guest)
     if menu:
-        rows[-1] = rows[-1][:4] + (pitch + 2,)
-        rows.append((legend(cfg, guest), 3.6, "print", True, 10))
+        rows[-1] = rows[-1][:4] + (rows[-1][4] + 2,)
+        rows.append((legend(cfg, guest), 3.4, "print", True, 10))
     art = 16.0                                                # pumpkin height
     try:
         out, y = draw_rows(rows, W, H, m, extra=10 + art)

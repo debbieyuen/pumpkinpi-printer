@@ -130,3 +130,20 @@ def test_dessert_lines_on_front_with_brands():
     assert len(sweet) == len(cfg["dessert"]["products"])
     assert all("(" in ln["name"] for ln in sweet)
     assert all(p.get("source", "").startswith("https://") for p in cfg["dessert"]["products"])
+
+
+def test_each_item_printed_once_with_its_ingredients():
+    import pumpkinpi.allergen_check as ac
+    cfg = cards.load()
+    orig = ac.check_ingredient
+    ac.check_ingredient = lambda c, p, a, label=None: {"checks": {}, "relevance": None}
+    try:
+        lines = cards.check_menu(None, cfg)
+    finally:
+        ac.check_ingredient = orig
+    front = [r[0] for r in cards.entry_rows(cfg, cfg["menu"], [x for x in lines if x["part"] == "menu"], "Debbie")]
+    back = [r[0] for r in cards.entry_rows(cfg, [cfg["dessert"]], [x for x in lines if x["part"] == "dessert"], "Debbie")]
+    heads = [t.split(":")[0] for t in front + back if not t.startswith(" ")]
+    assert len(heads) == len(set(heads))
+    i = front.index("Tofu (House Foods): YES")
+    assert "calcium sulfate" in front[i + 1]
