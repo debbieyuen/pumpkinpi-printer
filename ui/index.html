@@ -6,14 +6,14 @@
 <title>PumpkinPi</title>
 <link rel="stylesheet" href="app.css">
 </head>
-<body data-view="design">
+<body data-view="recipe">
 <header class="top">
   <img class="sym" src="brand/perplexity-symbol-offwhite.svg" alt="" aria-hidden="true">
   <h1>pumpkinpi</h1>
   <span class="mode" id="modeBadge"><span class="mdot"></span><span id="modeText">Offline</span></span>
   <nav class="tabs" role="tablist" aria-label="Screens">
-    <button class="tab on" type="button" role="tab" data-v="design">Design</button>
-    <button class="tab" type="button" role="tab" data-v="recipe">Recipe</button>
+    <button class="tab on" type="button" role="tab" data-v="recipe">Recipe</button>
+    <button class="tab" type="button" role="tab" data-v="design">Design</button>
     <button class="tab" type="button" role="tab" data-v="camera">Camera</button>
   </nav>
 </header>
@@ -26,26 +26,29 @@
 </form>
 
 <main class="screens">
-  <!-- Design: 3D pie + summary -->
-  <section class="screen design" id="designView">
+  <!-- Recipe: diet chips, ingredients (allergen checks), steps, sources -->
+  <section class="screen recipe" id="recipeView">
+    <div class="chips" id="diets" role="group" aria-label="Diet options"></div>
+    <div class="cols">
+      <div class="col" id="ingCol"><p class="muted">Type what you'd like, then tap Make.</p></div>
+      <div class="col" id="stepCol"></div>
+      <div class="col srccol" id="srcCol"></div>
+    </div>
+  </section>
+
+  <!-- Design: just the 3D pie -->
+  <section class="screen design" id="designView" hidden>
     <div class="stage">
       <canvas id="pie3d" aria-label="3D pie preview"></canvas>
       <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
         <circle r="58" class="crust"/><circle r="50" class="filling"/><g id="strokes"></g>
       </svg>
     </div>
-    <div id="summary" hidden></div>
   </section>
 
-  <!-- Recipe: ingredients (with allergen checks) + steps + sources -->
-  <section class="screen recipe" id="recipeView" hidden>
-    <div class="col" id="ingCol"><p class="muted">Make a design first.</p></div>
-    <div class="col" id="stepCol"></div>
-  </section>
-
-  <!-- Camera: photo + pie-ready check + dry run -->
+  <!-- Camera: live Pi camera preview + pie-ready check + dry run -->
   <section class="screen camera" id="cameraView" hidden>
-    <div class="camframe"><img id="camImg" alt="Camera view of the pie" hidden><p class="muted" id="camEmpty">No photo yet.</p></div>
+    <div class="camframe"><img id="camImg" alt="Live camera view of the printer bed" hidden><span class="live" id="liveTag" hidden>Live</span><p class="muted" id="camEmpty">Camera preview runs on the Pi.</p></div>
     <div class="side">
       <p class="cammsg" id="camMsg">Put the pie on the bed, then check it.</p>
       <button class="btn" id="readyBtn" type="button">Check pie</button>

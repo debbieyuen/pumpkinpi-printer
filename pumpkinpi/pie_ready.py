@@ -18,6 +18,9 @@ PHOTO = Path("captures/pie.jpg")
 
 
 def take_photo(path: Path = PHOTO) -> Path:
+    from .camera import camera
+    if camera.snapshot(path):  # live preview owns the camera: use its newest frame
+        return path
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["rpicam-still", "-n", "-t", "800", "--width", "1280", "--height", "960", "-o", str(path)], check=True)
     return path

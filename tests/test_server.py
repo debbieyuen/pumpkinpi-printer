@@ -16,7 +16,7 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
     monkeypatch.setattr(srv, "GUESTS_FILE", f)
     monkeypatch.setattr(srv, "printer", lambda: (_ for _ in ()).throw(RuntimeError("no printer")))
     monkeypatch.setattr(srv, "make_client", lambda: __import__("contextlib").nullcontext(None))
-    monkeypatch.setattr(srv, "plan_design", lambda c, p, g: dict(PLAN))
+    monkeypatch.setattr(srv, "plan_design", lambda c, p, g, diets=None: dict(PLAN))
     monkeypatch.setattr(srv, "check_ingredient", lambda c, prod, al: {
         "checks": {a: Check(prod, a, 0.02, verdict, ["https://example.com"]) for a in al},
         "search": {"queries": ["q"], "results": [{"title": "t", "url": "https://example.com"}]},
@@ -81,3 +81,16 @@ def test_dry_run_only_needs_design(tmp_path, monkeypatch):
 def test_ui_served(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     assert "PumpkinPi" in c.get("/").text
+
+
+def test_vegan_diet_adds_a_gating_row(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    r = c.post("/api/design", json={"prompt": "x", "diets": ["vegan", "low sugar"]}).json()
+    assert r["plan"]["diets"] == ["vegan", "low sugar"]
+    rows = c.post("/api/check", json={"product": "heavy cream", "diets": ["vegan", "low sugar"]}).json()["results"]
+    assert [x["name"] for x in rows] == ["Michael", "Vegan"]
+
+
+def test_unknown_diet_rejected(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    assert c.post("/api/design", json={"prompt": "x", "diets": ["keto"]}).status_code == 400

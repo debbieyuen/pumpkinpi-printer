@@ -6,11 +6,13 @@ Run on the Pi:
 
 Endpoints
     GET  /api/status   event, guests (names + allergens only), printer connected?
-    POST /api/design   {"prompt": "..."} -> Agent API design plan + piping preview
-    POST /api/check    {"product": "..."} -> Search API sources + Decider verdict per guest allergen
+    POST /api/design   {"prompt": "...", "diets": ["vegan"]} -> Agent API recipe + design plan + piping preview
+    POST /api/check    {"product": "...", "diets": [...]} -> Search API sources + Decider verdict per guest
+                       allergen and per chosen diet (vegan, dairy-free, gluten-free, egg-free)
     POST /api/ready    photo -> Decider: is the pie ready?  {"probability": 0.97}
     POST /api/start    {"dry_run": bool} -> refuses until every ingredient is green and readiness >= 0.9
     GET  /api/photo    latest camera photo
+    GET  /api/camera.mjpg  live camera preview (MJPEG)
     GET  /api/job      piping progress
     POST /api/stop     sends M112 immediately
 """
@@ -23,11 +25,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
+from .camera import camera
 from .design import plan_design
 from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
@@ -63,12 +66,32 @@ def printer():
     return _printer
 
 
+# Diet chips on the Recipe screen. Each one the Decider can check becomes an extra "avoid" term,
+# so a red/yellow diet result locks Send just like an allergen. "low sugar" only changes the recipe.
+DIET_CHECKS = {
+    "vegan": "animal-derived ingredients (milk, butter, cream, eggs, honey, gelatin)",
+    "dairy-free": "milk or milk-derived ingredients",
+    "gluten-free": "gluten (wheat, barley or rye)",
+    "egg-free": "eggs",
+}
+DIETS = [*DIET_CHECKS, "low sugar"]
+
+
+def clean_diets(diets: list[str]) -> list[str]:
+    bad = [d for d in diets if d not in DIETS]
+    if bad:
+        raise HTTPException(400, f"Unknown diet: {', '.join(bad)}")
+    return list(dict.fromkeys(diets))
+
+
 class DesignReq(BaseModel):
     prompt: str
+    diets: list[str] = []
 
 
 class CheckReq(BaseModel):
     product: str
+    diets: list[str] = []
 
 
 class StartReq(BaseModel):
@@ -84,7 +107,7 @@ def status():
     except Exception:
         connected = False
     # Only names and allergens go to the screen; health notes stay off camera.
-    return {"event": g.get("event"), "printer": connected,
+    return {"event": g.get("event"), "printer": connected, "diets": DIETS,
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}
 
 
@@ -92,8 +115,10 @@ def status():
 def design(req: DesignReq):
     if not req.prompt.strip():
         raise HTTPException(400, "Type what you'd like on the pie")
+    diets = clean_diets(req.diets)
     with make_client() as client:
-        plan = plan_design(client, req.prompt, guests()["guests"])
+        plan = plan_design(client, req.prompt, guests()["guests"], diets=diets)
+    plan["diets"] = diets
     try:
         strokes = strokes_for(plan)
     except ValueError as e:
@@ -107,9 +132,12 @@ def design(req: DesignReq):
 @app.post("/api/check")
 def check(req: CheckReq):
     g = guests()["guests"]
+    diets = [d for d in clean_diets(req.diets) if d in DIET_CHECKS]
+    terms = allergens() + [DIET_CHECKS[d] for d in diets if DIET_CHECKS[d] not in allergens()]
     with make_client() as client:
-        res = check_ingredient(client, req.product, allergens())
+        res = check_ingredient(client, req.product, terms)
     rows = [{"name": x["name"], **asdict(res["checks"][a])} for x in g for a in x.get("avoid", [])]
+    rows += [{"name": d.capitalize(), "diet": d, **asdict(res["checks"][DIET_CHECKS[d]])} for d in diets]
     state["checks"][req.product.lower()] = [r["verdict"] for r in rows]
     return {"product": req.product, "results": rows, "relevance": res["relevance"],
             "natural_flavor": res["natural_flavor"], "queries": res["search"]["queries"],
@@ -130,6 +158,21 @@ def photo():
     if not PHOTO.exists():
         raise HTTPException(404, "No photo yet")
     return FileResponse(PHOTO, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/camera.mjpg")
+def camera_stream():
+    """Live preview for the Camera screen. Stops on its own a few seconds after the screen closes."""
+    gen = camera.frames()
+    first = next(gen, None)
+    if first is None:
+        raise HTTPException(503, camera.error or "Camera not available")
+
+    def body():
+        yield first
+        yield from gen
+    return StreamingResponse(body(), media_type="multipart/x-mixed-replace; boundary=frame",
+                             headers={"Cache-Control": "no-store"})
 
 
 def gate(dry_run: bool) -> None:

@@ -29,9 +29,10 @@ SCHEMA = {
         "recipe": {"type": "array", "items": {"type": "string"}, "description": "3-5 short steps"},
         "piping_notes": {"type": "string", "description": "Consistency and temperature for a cold syringe"},
         "diet_notes": {"type": "string", "description": "Sugar or other diet notes for guests who limit something"},
+        "allergy_notes": {"type": "string", "description": "How the recipe avoids each guest allergen, one short line"},
         "caption": {"type": "string", "description": "One short on-screen line, under 60 characters"},
     },
-    "required": ["guest", "shape", "text", "topping", "ingredients", "recipe", "piping_notes", "diet_notes", "caption"],
+    "required": ["guest", "shape", "text", "topping", "ingredients", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption"],
     "additionalProperties": False,
 }
 
@@ -46,22 +47,24 @@ Rules:
 - The topping must avoid every allergen any guest avoids. Prefer 2-3 simple, widely sold ingredients.
 - List each ingredient as a product you'd buy (e.g. "semi-sweet chocolate chips"), not a brand claim of safety.
 - Never say an ingredient is safe; PumpkinPi checks each one separately. Do not put URLs in the JSON.
+- If diet options are given (vegan, dairy-free, gluten-free, egg-free, low sugar), every ingredient must fit them,
+  e.g. vegan ganache uses dairy-free chocolate and full-fat coconut cream or another plant cream.
 - Search the web for a ganache/frosting ratio and piping consistency; prefer university extension and
   food-safety sites.
 Return only a JSON object matching the schema."""
 
 
-def plan_design(client: httpx.Client, prompt: str, guests: list[dict]) -> dict:
+def plan_design(client: httpx.Client, prompt: str, guests: list[dict], diets: list[str] | None = None) -> dict:
     roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
     text, results = pplx.agent(
         client, instructions=INSTRUCTIONS, name="pumpkinpi_design", schema=SCHEMA,
-        input=f"Guests: {json.dumps(roster)}\n\nRequest: {prompt}",
+        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\n\nRequest: {prompt}",
     )
     plan = json.loads(text)
     if plan.get("shape") not in SHAPES:
         plan["shape"] = "text"
     plan["text"] = (plan.get("text") or "")[:MAX_TEXT]
-    plan["sources"] = [{"title": r.get("title"), "url": r.get("url")} for r in results if r.get("url")][:6]
+    plan["sources"] = [{"title": r.get("title"), "url": r.get("url")} for r in results if r.get("url")][:8]
     return plan
 
 

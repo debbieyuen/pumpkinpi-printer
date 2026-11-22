@@ -15,8 +15,15 @@ const DEMO_PROBS = {
   "heavy cream": { "tree nuts": 0.01, peanuts: 0.01, fish: 0.01 },
 };
 
+// Diet chips. Checked diets go to the Decider like allergens; "low sugar" only changes the recipe.
+const DIETS = [["vegan", "Vegan"], ["dairy-free", "Dairy-free"], ["gluten-free", "Gluten-free"], ["egg-free", "Egg-free"], ["low sugar", "Low sugar"]];
+const DEMO_DIET_PROBS = {  // offline sample only
+  vegan: { "heavy cream": 0.99, "semi-sweet chocolate chips": 0.4 }, "dairy-free": { "heavy cream": 0.99, "semi-sweet chocolate chips": 0.4 },
+  "gluten-free": { "heavy cream": 0.02, "semi-sweet chocolate chips": 0.2 }, "egg-free": { "heavy cream": 0.02, "semi-sweet chocolate chips": 0.05 },
+};
+
 const state = { live: false, everLive: false, guests: DEMO_GUESTS, plan: null, strokes: [], checks: {},
-  ready: 0, busy: false, open: null, job: false, photo: null };
+  ready: 0, busy: false, open: null, job: false, photo: null, diets: [] };
 
 const verdict = (p) => (p >= 0.7 ? "red" : p <= 0.1 ? "green" : "yellow");
 const toColor = { found: "red", unsure: "yellow", safe: "green" };
@@ -56,6 +63,23 @@ function show(view) {
   $("recipeView").hidden = view !== "recipe";
   $("cameraView").hidden = view !== "camera";
   if (view === "design") window.Pie3D?.resize();
+  liveCamera(view === "camera");
+}
+
+// Live Pi camera preview (MJPEG). Closing the <img> stream lets the Pi stop the camera.
+function liveCamera(on) {
+  const img = $("camImg");
+  if (!on || !state.live) {
+    if (img.dataset.live) { img.removeAttribute("src"); delete img.dataset.live; img.hidden = true; $("liveTag").hidden = true; $("camEmpty").hidden = false; }
+    if (on) $("camEmpty").textContent = "Offline: the live camera runs on the Pi.";
+    return;
+  }
+  if (img.dataset.live) return;
+  img.dataset.live = "1";
+  $("camEmpty").textContent = "Starting camera…";
+  img.onload = () => { img.hidden = false; $("liveTag").hidden = false; $("camEmpty").hidden = true; };
+  img.onerror = () => { delete img.dataset.live; img.hidden = true; $("liveTag").hidden = true; $("camEmpty").hidden = false; $("camEmpty").textContent = "Camera not available. Check the ribbon cable."; };
+  img.src = `/api/camera.mjpg?t=${Date.now()}`;
 }
 document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".tab"); if (t) show(t.dataset.v); };
 
@@ -65,22 +89,21 @@ async function ask() {
   if (!prompt || state.busy) return;
   state.busy = true; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
-  show("design"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
-  $("summary").innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-offwhite.svg" alt=""> Perplexity is designing…</p>`;
+  show("recipe"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
   renderRecipe(); updateGate();
   try {
-    const res = state.live ? await apiJson("/api/design", { prompt })
+    const res = state.live ? await apiJson("/api/design", { prompt, diets: state.diets })
       : (await sleep(1400), await (await fetch("demo.json")).json());
     state.plan = res.plan; state.strokes = res.strokes;
     window.Pie3D?.thinking(false); drawPreview();
     renderAll();
     log(`Checking ${res.plan.ingredients.length} ingredients…`);
     for (const ing of res.plan.ingredients) await check(ing);
-    log(allSafe() ? "All ingredients safe. Check the pie on the Camera screen." : "An ingredient needs a check. See Recipe.");
+    log(allSafe() ? "All ingredients safe. See Design, then check the pie on Camera." : "An ingredient needs a check.");
   } catch (e) {
     window.Pie3D?.thinking(false);
-    $("summary").innerHTML = `<p class="msg">Couldn't make that: ${esc(e.message)}</p>`;
-    state.plan = null; state.strokes = []; drawPreview();
+    state.plan = null; state.strokes = []; drawPreview(); renderRecipe();
+    $("ingCol").innerHTML = `<p class="msg">Couldn't make that: ${esc(e.message)}</p>`;
   } finally {
     state.busy = false; $("askBtn").textContent = "Make"; updateGate();
   }
@@ -91,16 +114,20 @@ async function check(product) {
   state.checks[product] = { status: "wait" }; renderAll();
   try {
     let res;
-    if (state.live) res = await apiJson("/api/check", { product });
+    if (state.live) res = await apiJson("/api/check", { product, diets: state.diets });
     else {
       await sleep(900);
       const p = DEMO_PROBS[product] || {};
-      res = { sources: [{ title: "Sample: product label page", url: "https://example.com/label" }], relevance: 0.9,
-        results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p[a] ?? 0.3 }))) };
+      res = { sources: [{ title: "Have Food Allergies? Read the Label", url: "https://www.fda.gov/consumers/consumer-updates/have-food-allergies-read-label" }], relevance: 0.9,
+        results: state.guests.flatMap((g) => g.avoid.map((a) => ({ name: g.name, allergen: a, probability: p[a] ?? 0.3 })))
+          .concat(state.diets.filter((d) => DEMO_DIET_PROBS[d]).map((d) => ({ name: d[0].toUpperCase() + d.slice(1), diet: d, allergen: d, probability: DEMO_DIET_PROBS[d][product] ?? 0.3 }))) };
     }
     res.results.forEach((r) => (r.color = r.verdict ? toColor[r.verdict] : verdict(r.probability)));
     const worst = res.results.some((r) => r.color === "red") ? "red" : res.results.some((r) => r.color === "yellow") ? "yellow" : "green";
-    state.checks[product] = { status: worst, ...res };
+    // Red only because of a diet chip (e.g. cream with Vegan on) reads "Not vegan", not "Allergen".
+    const redRows = res.results.filter((r) => r.color === "red");
+    const tag = worst === "red" && redRows.every((r) => r.diet) ? `Not ${redRows[0].diet}` : null;
+    state.checks[product] = { status: worst, tag, ...res };
   } catch (e) {
     state.checks[product] = { status: "yellow", error: e.message, results: [], sources: [] };
   }
@@ -114,43 +141,63 @@ function counts() {
     yellow: st.filter((s) => s === "yellow").length, wait: st.filter((s) => s === "wait").length };
 }
 
-function renderSummary() {
-  const p = state.plan; if (!p) return;
-  const ready = state.ready >= READY_AT ? ["green", "Pie looks ready"] : state.ready > 0 ? ["yellow", "Pie not ready"] : ["", "Pie not checked yet"];
-  $("summary").innerHTML = `
-    <h2 class="cap">${esc(p.caption)}</h2>
-    ${p.guest ? `<p class="for">For <b>${esc(p.guest)}</b></p>` : ""}
-    <button type="button" class="stat ${ready[0]}" data-go="camera"><span class="sdot"></span>${ready[1]}<span class="go">Camera ›</span></button>`;
+const srcItem = (src, n, tag) => `<li class="srcitem"><span class="num">${n}</span><span class="st"><b>${esc(src.title || host(src.url))}</b>
+  <span class="url">${esc(host(src.url))}${tag ? ` · ${esc(tag)}` : ""}</span></span></li>`;
+
+function renderDiets() {
+  const avoid = [...new Set(state.guests.flatMap((g) => g.avoid))];
+  $("diets").innerHTML = `<span class="chip on lock" title="${esc(avoid.join(", "))}">Allergy-safe</span>` +
+    DIETS.map(([k, t]) => `<button type="button" class="chip ${state.diets.includes(k) ? "on" : ""}" data-d="${k}" aria-pressed="${state.diets.includes(k)}">${t}</button>`).join("");
 }
-$("summary").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) show(b.dataset.go); };
+$("diets").onclick = (e) => {
+  const b = e.target.closest("[data-d]"); if (!b || state.busy) return;
+  const d = b.dataset.d;
+  state.diets = state.diets.includes(d) ? state.diets.filter((x) => x !== d) : [...state.diets, d];
+  renderDiets();
+  if (state.plan && $("prompt").value.trim()) ask();  // remake the recipe for the new diet
+};
 
 function renderRecipe() {
+  renderDiets();
   const p = state.plan;
-  if (!p) { $("ingCol").innerHTML = `<p class="muted">${state.busy ? "Perplexity is writing the recipe…" : "Make a design first."}</p>`; $("stepCol").innerHTML = ""; return; }
+  if (!p) {
+    $("ingCol").innerHTML = state.busy ? `<p class="msg"><img class="think" src="brand/perplexity-symbol-offwhite.svg" alt=""> Perplexity is writing the recipe…</p>`
+      : `<p class="muted big">Type what you'd like, then tap Make.</p>`;
+    $("stepCol").innerHTML = ""; $("srcCol").innerHTML = ""; return;
+  }
   const rows = p.ingredients.map((ing) => {
     const c = state.checks[ing] || { status: "wait" };
     const open = state.open === ing;
     let detail = "";
     if (open && c.results) {
-      detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)} · ${esc(r.allergen)}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div>No guest avoids an allergen for this.</div>`}
-        ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}<div>${(c.sources || []).slice(0, 4).map((s, i) => `<span class="src"><span class="num">${i + 1}</span>${esc(host(s.url))}</span>`).join("")}</div></div>`;
+      detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)}${r.diet ? "" : ` · ${esc(r.allergen)}`}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div>No guest avoids an allergen for this.</div>`}
+        ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}</div>`;
     }
     return `<button type="button" class="ing ${open ? "open" : ""}" data-ing="${esc(ing)}">
-      <span class="pill ${c.status}">${c.status === "wait" ? '<span class="spin sm"></span>' : label[c.status]}</span>
+      <span class="pill ${c.status}">${c.status === "wait" ? '<span class="spin sm"></span>' : esc(c.tag || label[c.status])}</span>
       <span class="who">${esc(ing)}</span></button>${detail}`;
   }).join("");
-  $("ingCol").innerHTML = `<h3>Ingredients</h3>${rows}<p class="muted small">Tap an ingredient to see each guest's check.</p>`;
+  $("ingCol").innerHTML = `<h3>Ingredients</h3>${rows}
+    ${p.allergy_notes ? `<p class="tip"><b>Allergies</b> ${esc(p.allergy_notes)}</p>` : ""}
+    <p class="muted small">Tap an ingredient to see each guest's check.</p>`;
   const steps = (p.recipe || []).map((s) => `<li>${esc(s)}</li>`).join("");
   $("stepCol").innerHTML = `<h3>Steps</h3><ol class="steps">${steps}</ol>
     ${p.piping_notes ? `<p class="tip"><b>Piping</b> ${esc(p.piping_notes)}</p>` : ""}
-    ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}
-    <div>${(p.sources || []).slice(0, 5).map((s, i) => `<span class="src"><span class="num">${i + 1}</span>${esc(host(s.url))}</span>`).join("")}</div>`;
+    ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}`;
+  // Sources: recipe research (Agent API web search) + label pages per ingredient (Search API, judged by Decider).
+  let n = 0;
+  const recipe = (p.sources || []).slice(0, 4).map((s) => srcItem(s, ++n, "")).join("");
+  const seen = new Set();
+  const labels = p.ingredients.flatMap((ing) => ((state.checks[ing] || {}).sources || []).slice(0, 2).map((s) => [s, ing]))
+    .filter(([s]) => !seen.has(s.url) && seen.add(s.url)).slice(0, 4).map(([s, ing]) => srcItem(s, ++n, ing)).join("");
+  $("srcCol").innerHTML = `<h3>Sources</h3><ol class="srcs">${recipe}${labels}</ol>
+    <p class="muted small">Found with Perplexity search. Allergen and diet checks by Decider.${state.live ? "" : " Offline: sample results."}</p>`;
 }
 $("ingCol").onclick = (e) => {
   const b = e.target.closest(".ing"); if (!b) return;
   state.open = state.open === b.dataset.ing ? null : b.dataset.ing; renderRecipe();
 };
-function renderAll() { renderSummary(); renderRecipe(); }
+function renderAll() { renderRecipe(); }
 
 // ---------- preview ----------
 function drawPreview() {
@@ -181,7 +228,6 @@ function updateGate() {
   const b = $("sendBtn");
   if (state.job) { b.disabled = false; b.textContent = "Stop"; b.classList.add("stop"); }
   else { b.disabled = !ok; b.textContent = "Send"; b.classList.remove("stop"); $("why").textContent = reason(); }
-  renderSummary();
 }
 
 $("readyBtn").onclick = async () => {
@@ -189,8 +235,7 @@ $("readyBtn").onclick = async () => {
   try {
     if (state.live) {
       state.ready = (await apiJson("/api/ready", {})).probability;
-      $("camImg").src = `/api/photo?t=${Date.now()}`; $("camImg").hidden = false; $("camEmpty").hidden = true;
-    } else { await sleep(800); state.ready = 0.97; $("camEmpty").textContent = "Offline: sample check, no photo."; }
+    } else { await sleep(800); state.ready = 0.97; }
     $("camMsg").textContent = state.ready >= READY_AT ? `Pie looks ready (${Math.round(state.ready * 100)}%).`
       : `Not ready (${Math.round(state.ready * 100)}%). Center the pie and clear the bed.`;
   } catch (e) { state.ready = 0; $("camMsg").textContent = `Camera error: ${e.message}`; }
@@ -247,6 +292,7 @@ $("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); ask(); };
 
 async function init() {
   await refreshStatus();
+  renderRecipe();
   if (!state.live) log("Offline: sample results only, no printer.");
   setInterval(refreshStatus, 10000);
   updateGate();
