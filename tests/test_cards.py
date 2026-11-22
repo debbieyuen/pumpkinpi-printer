@@ -37,7 +37,7 @@ def test_card_fits_and_gcode_stays_on_card():
 
 def test_too_many_dishes_refused():
     with pytest.raises(ValueError):
-        cards.layout(cards.load(), [{"text": "x: y", "unsure": []}] * 20)
+        cards.layout(cards.load(), [{"text": "x: y", "unsure": []}] * 40)
 
 
 def test_prep_homes_then_parks_high():
@@ -115,3 +115,18 @@ def test_recipe_label_is_evidence():
     from pumpkinpi.allergen_check import label_evidence
     ev = label_evidence(cards.prod_label({"item": "Tofu", "label": "Water, Soybeans", "source": "https://x"}))
     assert "Water, Soybeans" in ev[0]["text"] and ev[0]["url"] == "https://x"
+
+
+def test_dessert_lines_on_front_with_brands():
+    import pumpkinpi.allergen_check as ac
+    cfg = cards.load()
+    orig = ac.check_ingredient
+    ac.check_ingredient = lambda c, p, a, label=None: {"checks": {}, "relevance": None}
+    try:
+        lines = cards.check_menu(None, cfg)
+    finally:
+        ac.check_ingredient = orig
+    sweet = [ln for ln in lines if ln["part"] == "dessert"]
+    assert len(sweet) == len(cfg["dessert"]["products"])
+    assert all("(" in ln["name"] for ln in sweet)
+    assert all(p.get("source", "").startswith("https://") for p in cfg["dessert"]["products"])

@@ -9,11 +9,12 @@
   "w": 127,
   "h": 178,
   "margin": 8,
-  "text_mm": 4.2,
-  "line_gap": 1.5,
+  "text_mm": 3.6,
+  "line_gap": 1.4,
   "back_mm": 3.4,
   "back_gap": 1.45,
-  "sauce_mm": 3.4
+  "sauce_mm": 3.4,
+  "show_title": false
  },
  "guests": [
   "Debbie",
@@ -211,9 +212,8 @@
  "steps": [
   "1 Boil the broth",
   "2 Beef + shrimp: cook until done",
-  "3 Tofu + vegetables",
-  "4 Noodles last",
-  "5 Dip: soy, vinegar, garlic, chili"
+  "3 Tofu + vegetables, noodles last",
+  "4 Dip: soy, vinegar, garlic, chili"
  ],
  "allergies": {
   "Debbie": [
@@ -348,5 +348,84 @@
    "source": "https://www.target.com/p/little-sheep-original-hot-pot-base-4-59oz/-/A-91741205",
    "note": "may contain fish: NO for a fish allergy"
   }
- ]
+ ],
+ "dessert": {
+  "name": "Pumpkin pie",
+  "recipe": "Libby's Famous Pumpkin Pie: 1 crust, 15 oz pumpkin, 12 oz evaporated milk, 2 eggs, 3/4 cup sugar, 1 3/4 tsp spice, 1/2 tsp salt.",
+  "recipe_source": "https://www.verybestbaking.com/libbys/recipes/libby-s-famous-pumpkin-pie/",
+  "products": [
+   {
+    "item": "Pillsbury Refrigerated Pie Crusts, 14.1 oz",
+    "tag": "Crust",
+    "brand": "Pillsbury",
+    "short": "wheat flour, lard, water, wheat + corn starch, salt, rice flour, xanthan gum, preservatives, annatto",
+    "label": "Enriched Flour Bleached (wheat flour, niacin, ferrous sulfate, thiamin mononitrate, riboflavin, folic acid), Lard and Hydrogenated Lard with BHA and BHT Added to Protect Flavor, Water, Wheat Starch, Corn Starch. Contains 2% or less of: Salt, Rice Flour, Xanthan Gum, Sodium Propionate and Potassium Sorbate (preservatives), Citric Acid, Annatto Extract (for color). CONTAINS WHEAT INGREDIENTS.",
+    "contains": [
+     "wheat"
+    ],
+    "source": "https://www.pillsbury.com/products/pie-crust/refrigerated-pie-crust"
+   },
+   {
+    "item": "Libby's 100% Pure Pumpkin, 15 oz",
+    "tag": "Pumpkin",
+    "brand": "Libby's",
+    "short": "pumpkin",
+    "label": "Pumpkin",
+    "contains": [],
+    "source": "https://world.openfoodfacts.org/product/0039000045124"
+   },
+   {
+    "item": "Carnation Evaporated Milk, 12 fl oz",
+    "tag": "Evap. milk",
+    "brand": "Carnation",
+    "short": "milk, dipotassium phosphate, carrageenan, dextrose, vitamin D3",
+    "label": "Milk, dipotassium phosphate, carrageenan, dextrose, vitamin D3. Contains: milk.",
+    "contains": [
+     "milk"
+    ],
+    "source": "https://www.verybestbaking.com/carnation/products/nestle-carnation-evaporated-milk/"
+   },
+   {
+    "item": "Vital Farms Pasture-Raised Large Eggs",
+    "tag": "Eggs",
+    "brand": "Vital Farms",
+    "short": "eggs",
+    "label": "Eggs",
+    "contains": [
+     "egg"
+    ],
+    "source": "https://world.openfoodfacts.org/product/0862315000249"
+   },
+   {
+    "item": "C&H Pure Cane Granulated Sugar",
+    "tag": "Sugar",
+    "brand": "C&H",
+    "short": "cane sugar",
+    "label": "Pure cane sugar",
+    "contains": [],
+    "source": "https://world.openfoodfacts.org/product/0015800030621"
+   },
+   {
+    "item": "McCormick Pumpkin Pie Spice",
+    "tag": "Pie spice",
+    "brand": "McCormick",
+    "short": "cinnamon, ginger, nutmeg, allspice, sulfites",
+    "label": "Cinnamon, ginger, nutmeg, allspice, sulfiting agents",
+    "contains": [
+     "sulfites"
+    ],
+    "source": "https://www.webstaurantstore.com/documents/nutrition/932310mccormickpumpkinpiespice.pdf",
+    "note": "nutmeg is a seed spice; McCormick spec sheet lists it free of peanuts, tree nuts, fish and sesame"
+   },
+   {
+    "item": "Morton Iodized Salt, 26 oz",
+    "tag": "Salt",
+    "brand": "Morton",
+    "short": "salt, calcium silicate, dextrose, potassium iodide",
+    "label": "Salt, calcium silicate, dextrose, potassium iodide",
+    "contains": [],
+    "source": "https://world.openfoodfacts.org/product/0024600010030"
+   }
+  ]
+ }
 }

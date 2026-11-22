@@ -181,7 +181,8 @@ def check_menu(client, cfg: dict) -> list[dict]:
     from .allergen_check import check_ingredient
     want: dict[str, list[str]] = {}
     labels: dict[str, dict | None] = {}
-    for dish in cfg["menu"] + [{"name": "Sauce", "products": cfg.get("sauces", [])}]:
+    dessert = [cfg["dessert"]] if cfg.get("dessert") else []
+    for dish in cfg["menu"] + dessert + [{"name": "Sauce", "products": cfg.get("sauces", [])}]:
         for p in dish["products"]:
             prod = prod_name(p)
             labels[prod] = prod_label(p)
@@ -195,7 +196,9 @@ def check_menu(client, cfg: dict) -> list[dict]:
                              "relevance": r.get("relevance")}
     menu = item_lines([(d["name"], p) for d in cfg["menu"] for p in d["products"]], results)
     sauces = item_lines([("Sauce", p) for p in cfg.get("sauces", [])], results)
-    return [{**ln, "part": "menu"} for ln in menu] + [{**ln, "part": "sauce"} for ln in sauces]
+    sweet = item_lines([(d["name"], p) for d in dessert for p in d["products"]], results)
+    return ([{**ln, "part": "menu"} for ln in menu] + [{**ln, "part": "dessert"} for ln in sweet]
+            + [{**ln, "part": "sauce"} for ln in sauces])
 
 
 # ---------------------------------------------------------------- layout (mm, card's front-left corner = 0,0)
@@ -281,6 +284,19 @@ def back_rows(cfg: dict) -> list[tuple]:
                 fresh.append(short)
     if fresh:
         rows += [(x, bh, "print", False, pitch) for x in wrap(f"Fresh: {', '.join(fresh)}", bh, W - 2 * m)]
+    if cfg.get("dessert") and card.get("back_dessert", False):
+        # pie: multi-ingredient labels get their own line, one-ingredient items share a line
+        rows[-1] = rows[-1][:4] + (pitch + 2,)
+        rows.append((cfg["dessert"]["name"], 4.5, "print", True, pitch + 1.5))
+        single = []
+        for p in cfg["dessert"]["products"]:
+            short = p.get("short") or p["item"]
+            if "," in short:
+                rows += [(x, bh, "print", False, pitch) for x in wrap(f"{p['tag']}: {short}", bh, W - 2 * m)]
+            else:
+                single.append(f"{p['tag']}: {short}")
+        if single:
+            rows += [(x, bh, "print", False, pitch) for x in wrap("; ".join(single), bh, W - 2 * m)]
     return rows
 
 
@@ -322,7 +338,9 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
     th = card.get("text_mm", 5.0)                             # letter height for menu lines (5 mm = readable in PLA)
     pitch = th * card.get("line_gap", 1.8)
     ev = cfg.get("event", {})
-    rows = [(ev.get("title", "Thanksgiving"), 11, "cursive", True, 17)]
+    rows = []
+    if card.get("show_title", True):
+        rows.append((ev.get("title", "Thanksgiving"), 11, "cursive", True, 17))
     if ev.get("when"):
         rows.append((ev["when"], 5, "print", True, 13))
     if guest:
@@ -330,8 +348,13 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
     rows.append(("Menu", 6, "print", True, pitch + 2))
     menu = guest_lines(cfg, [x for x in lines if x.get("part", "menu") == "menu"], guest)
     rows += [(ln["text"], th, "print", False, pitch) for ln in menu]
+    sweet = guest_lines(cfg, [x for x in lines if x.get("part") == "dessert"], guest)
+    if sweet:
+        rows[-1] = rows[-1][:4] + (pitch + 2,)
+        rows.append((f"Dessert: {cfg['dessert']['name'].lower()}", 6, "print", True, pitch + 2))
+        rows += [(ln["text"], th, "print", False, pitch) for ln in sweet]
     if cfg.get("steps"):
-        rows[-1] = rows[-1][:4] + (pitch + 5,)
+        rows[-1] = rows[-1][:4] + (pitch + 3,)
         rows.append(("How to hot pot", 6, "print", True, pitch + 2))
         rows += [(t, th, "print", False, pitch) for t in cfg["steps"]]
     if menu:
