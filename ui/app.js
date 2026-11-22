@@ -4,7 +4,6 @@
 
 const $ = (id) => document.getElementById(id);
 const READY_AT = 0.9;
-const EXAMPLES = ["A smiley face in chocolate for Michael", "A heart for Mom", "A star with Kathy's name", "Write Happy Thanksgiving"];
 
 const DEMO_GUESTS = [
   { name: "Michael", avoid: ["tree nuts"] },
@@ -24,7 +23,7 @@ function log(msg) {
 }
 const verdict = (p) => (p >= 0.7 ? "red" : p <= 0.1 ? "green" : "yellow");
 const toColor = { found: "red", unsure: "yellow", safe: "green" };
-const label = { red: "Found", yellow: "Check label", green: "Safe", wait: "Checking" };
+const label = { red: "Allergen", yellow: "Check label", green: "Safe", wait: "Checking" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -40,15 +39,12 @@ async function init() {
     const s = await api("/api/status");
     state.live = true;
     state.guests = s.guests;
-    $("eventName").textContent = s.event || "PumpkinPi";
-    $("modeBadge").textContent = s.printer ? "Live · printer connected" : "Live · printer offline";
+    $("modeBadge").textContent = s.printer ? "Printer connected" : "Printer offline";
     $("modeBadge").classList.add("live");
     log("Connected to PumpkinPi.");
   } catch {
     log("Demo mode: sample results only. No real search and no printer.");
   }
-  $("chips").innerHTML = EXAMPLES.map((p) => `<button type="button" class="chip">${esc(p)}</button>`).join("");
-  $("chips").onclick = (e) => { if (e.target.classList.contains("chip")) { $("prompt").value = e.target.textContent; hideKbd(); ask(); } };
   updateGate();
 }
 
@@ -58,7 +54,8 @@ async function ask() {
   if (!prompt || state.busy) return;
   state.busy = true; state.checks = {}; state.ready = 0; state.open = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Planning"></span>';
-  $("plan").innerHTML = `<div class="empty"><p>Perplexity is planning “${esc(prompt)}”…</p><p class="muted">Agent API · web search for a pipeable recipe</p></div>`;
+  $("result").hidden = false; state.strokes = []; drawPreview();
+  $("plan").innerHTML = `<p class="msg"><span class="spin"></span> Perplexity is planning…</p>`;
   updateGate();
   try {
     let res;
@@ -67,11 +64,11 @@ async function ask() {
     state.plan = res.plan; state.strokes = res.strokes;
     drawPreview();
     renderPlan();
-    log(`Plan: ${res.plan.caption}. Checking ${res.plan.ingredients.length} ingredients…`);
+    log(`Checking ${res.plan.ingredients.length} ingredients…`);
     for (const ing of res.plan.ingredients) await check(ing);
-    log(allSafe() ? "Every ingredient is green. Run the camera check next." : "Start locked: tap a red or yellow ingredient to see why, then swap it.");
+    log(allSafe() ? "All ingredients safe. Tap Camera next." : "Start is locked. Tap an ingredient to see why.");
   } catch (e) {
-    $("plan").innerHTML = `<div class="empty"><p>Couldn't plan that</p><p class="muted">${esc(e.message)}</p></div>`;
+    $("plan").innerHTML = `<p class="msg">Couldn't plan that: ${esc(e.message)}</p>`;
     state.plan = null; state.strokes = []; drawPreview();
   } finally {
     state.busy = false; $("askBtn").textContent = "Ask"; updateGate();
@@ -104,24 +101,16 @@ function renderPlan() {
   const rows = p.ingredients.map((ing) => {
     const c = state.checks[ing] || { status: "wait" };
     const open = state.open === ing;
-    const n = (c.sources || []).length;
-    const sub = c.status === "wait" ? "Searching labels…" : c.error ? `Check failed: ${esc(c.error)}` : `${n} source${n === 1 ? "" : "s"} · Decider`;
     let detail = "";
     if (open && c.results) {
-      detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)} · ${esc(r.allergen)}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div class="why">No guest avoids an allergen for this.</div>`}
-        ${(c.sources || []).slice(0, 4).map((s) => `<div class="src">${esc(host(s.url))} — ${esc(s.title)}</div>`).join("")}</div>`;
+      detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)} · ${esc(r.allergen)}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div>No guest avoids an allergen for this.</div>`}
+        ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}${(c.sources || []).slice(0, 4).map((s) => `<div class="src">${esc(host(s.url))} — ${esc(s.title)}</div>`).join("")}</div>`;
     }
     return `<button type="button" class="ing ${open ? "open" : ""}" data-ing="${esc(ing)}">
       <span class="pill ${c.status}">${c.status === "wait" ? '<span class="spin sm"></span>' : label[c.status]}</span>
-      <span><span class="who">${esc(ing)}</span><span class="why">${sub}</span></span></button>${detail}`;
+      <span class="who">${esc(ing)}</span></button>${detail}`;
   }).join("");
-  const srcs = (p.sources || []).slice(0, 3).map((s) => esc(host(s.url))).join(" · ");
-  $("plan").innerHTML = `<div class="plancard"><div class="cap">${esc(p.caption)}</div>
-      <div class="meta">${esc(p.shape)}${p.text ? ` + “${esc(p.text)}”` : ""} · ${esc(p.topping)}</div>
-      ${p.piping_notes ? `<div class="why">${esc(p.piping_notes)}</div>` : ""}
-      ${srcs ? `<div class="why">Recipe sources: ${srcs}</div>` : ""}
-      ${p.diet_notes ? `<div class="why">${esc(p.diet_notes)}</div>` : ""}</div>
-    <div class="label">Ingredients · tap for details</div>${rows}`;
+  $("plan").innerHTML = `<div class="cap">${esc(p.caption)}</div>${rows}`;
 }
 
 $("plan").onclick = (e) => {
@@ -148,18 +137,18 @@ function updateGate() {
   const bad = statuses.includes("red") || statuses.includes("yellow");
   $("gDesign").className = "dot " + (p ? "ok" : "");
   $("gSafe").className = "dot " + (safe ? "ok" : bad ? "bad" : statuses.includes("wait") ? "wait" : "");
-  $("safeText").textContent = bad ? "Blocked: an ingredient isn't green" : "Every ingredient green";
+  $("safeText").textContent = bad ? "Check ingredients" : "Ingredients";
   $("gReady").className = "dot " + (state.ready >= READY_AT ? "ok" : state.ready > 0 ? "wait" : "");
   $("dryBtn").disabled = !p;
   $("startBtn").disabled = !(p && safe && state.ready >= READY_AT);
 }
 
 $("readyBtn").onclick = async () => {
-  $("readyText").textContent = "Decider is looking at the pie…";
+  $("readyText").textContent = "Looking…";
   try {
     state.ready = state.live ? (await api("/api/ready", {})).probability : (await sleep(800), 0.97);
-    $("readyText").textContent = `Decider: ${state.ready >= READY_AT ? "ready" : "not ready"} ${Math.round(state.ready * 100)}%`;
-  } catch (e) { state.ready = 0; $("readyText").textContent = "Camera check unavailable"; log(e.message); }
+    $("readyText").textContent = state.ready >= READY_AT ? "Pie ready" : "Pie not ready";
+  } catch (e) { state.ready = 0; $("readyText").textContent = "Camera error"; log(e.message); }
   updateGate();
 };
 
@@ -194,6 +183,7 @@ function drawKbd() {
     `<button type="button" class="key ${k.length > 1 ? "wide " + (k === "space" ? "space" : "") : ""}" data-k="${esc(k)}">${esc(k === "space" ? "space" : shift && k.length === 1 ? k.toUpperCase() : k)}</button>`).join("")}</div>`).join("");
 }
 function showKbd() { drawKbd(); $("kbd").hidden = false; document.body.classList.add("typing"); }
+$("prompt").addEventListener("pointerdown", () => { if ($("kbd").hidden) showKbd(); });
 function hideKbd() { $("kbd").hidden = true; document.body.classList.remove("typing"); }
 $("prompt").addEventListener("focus", showKbd);
 $("kbd").addEventListener("pointerdown", (e) => e.preventDefault()); // keep focus in the input

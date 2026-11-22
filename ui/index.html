@@ -4,61 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PumpkinPi</title>
-<link rel="preconnect" href="https://api.fontshare.com">
-<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header class="top">
-  <div class="brand">
-    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 7c-1-3 1-5 3-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><ellipse cx="11" cy="18" rx="7" ry="10" fill="currentColor" opacity=".75"/><ellipse cx="21" cy="18" rx="7" ry="10" fill="currentColor" opacity=".75"/><ellipse cx="16" cy="18" rx="6" ry="11" fill="currentColor"/></svg>
-    <div>
-      <h1>PumpkinPi</h1>
-      <p class="sub" id="eventName">Thanksgiving with family</p>
-    </div>
-  </div>
-  <div class="mode" id="modeBadge" title="Connection">Demo mode</div>
+  <h1>PumpkinPi</h1>
+  <span class="mode" id="modeBadge">Demo</span>
+  <button class="stop" id="stopBtn" type="button" aria-label="Emergency stop">STOP</button>
 </header>
 
-<main class="grid">
-  <section class="panel ask" aria-labelledby="askTitle">
-    <h2 id="askTitle"><span class="step">1</span> What should we pipe?</h2>
-    <form id="askForm" class="checkform" autocomplete="off">
-      <input id="prompt" name="prompt" type="text" inputmode="none" placeholder="Tap to type, e.g. a smiley face in chocolate for Michael" aria-label="Design prompt" required>
-      <button type="submit" class="btn primary" id="askBtn">Ask</button>
-    </form>
-    <div class="chips" id="chips" aria-label="Example prompts"></div>
+<form id="askForm" class="ask" autocomplete="off">
+  <input id="prompt" name="prompt" type="text" inputmode="none" placeholder="What should we pipe on the pie?" aria-label="What should we pipe on the pie?" required>
+  <button type="submit" class="btn primary" id="askBtn">Ask</button>
+</form>
 
-    <div id="plan" class="results" aria-live="polite">
-      <div class="empty">
-        <p>Tell Perplexity what you'd like on the pie.</p>
-        <p class="muted">The Agent API plans the design, Search finds each ingredient's label, and Decider checks every guest's allergies before Start unlocks.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="panel print" aria-labelledby="printTitle">
-    <h2 id="printTitle"><span class="step">2</span> Preview and pipe</h2>
-    <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
-      <circle r="58" class="crust"/><circle r="50" class="filling"/><circle r="45" class="safe"/>
-      <g id="strokes"></g>
-    </svg>
-
-    <div class="gate" id="gate">
-      <div class="gate-row"><span class="dot" id="gDesign"></span><span>Design planned</span></div>
-      <div class="gate-row"><span class="dot" id="gSafe"></span><span id="safeText">Every ingredient green</span></div>
-      <div class="gate-row"><span class="dot" id="gReady"></span><span id="readyText">Pie centered and ready</span></div>
+<section class="result" id="result" hidden aria-live="polite">
+  <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
+    <circle r="58" class="crust"/><circle r="50" class="filling"/><circle r="45" class="safe"/>
+    <g id="strokes"></g>
+  </svg>
+  <div class="side">
+    <div id="plan" class="plan"></div>
+    <div class="gate">
+      <span class="g"><span class="dot" id="gDesign"></span>Design</span>
+      <span class="g"><span class="dot" id="gSafe"></span><span id="safeText">Ingredients</span></span>
+      <span class="g"><span class="dot" id="gReady"></span><span id="readyText">Pie ready</span></span>
     </div>
     <div class="row">
-      <button class="btn ghost" id="readyBtn" type="button">Camera</button>
-      <button class="btn ghost" id="dryBtn" type="button" disabled>Dry run</button>
+      <button class="btn" id="readyBtn" type="button">Camera</button>
+      <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
       <button class="btn go" id="startBtn" type="button" disabled>Start</button>
     </div>
     <div class="meter" aria-hidden="true"><div class="fill" id="jobFill"></div></div>
-
-    <button class="stop" id="stopBtn" type="button" aria-label="Emergency stop">STOP</button>
-  </section>
-</main>
+  </div>
+</section>
 
 <div class="kbd" id="kbd" hidden aria-label="On-screen keyboard"></div>
 <footer class="log" id="log" aria-live="polite"></footer>
