@@ -230,3 +230,4 @@ captures/
 machine.json
 gcode/
 camera_cal.json
+cards.json

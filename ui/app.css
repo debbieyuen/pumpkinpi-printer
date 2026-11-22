@@ -295,3 +295,30 @@ body[data-view="camera"] .ask{display:none}
 .dishcard b{font-size:1rem;font-weight:650;text-transform:capitalize}
 .dishcard .warn{flex-basis:100%;color:#ffd2a6;font-weight:600}
 .dishcard .btn{margin-left:auto;height:2rem;padding:0 .8rem;font-size:.82rem;color:#fff;border-color:#5c6b6b;border-radius:.6rem}
+
+/* cards: menu invitation in PLA */
+body[data-view="cards"] .ask,body[data-view="cards"] #sendBtn{display:none}
+.cards{align-items:stretch;padding-bottom:.4rem}
+.cardframe{flex:none;height:100%;aspect-ratio:127/178;display:grid;place-items:center}
+#cardSvg{height:100%;width:auto;filter:drop-shadow(0 6px 18px rgba(9,23,23,.14))}
+#cardSvg .paper{fill:#fbf8f1;stroke:var(--line);stroke-width:.4}
+#cardInk path{fill:none;stroke:#e07020;stroke-width:.6;stroke-linecap:round;stroke-linejoin:round}
+.cardside{justify-content:flex-start;gap:.5rem;overflow:hidden}
+.cardside .dishes{flex:1 1 auto;min-height:0;overflow-y:auto}
+.cardside .chips{flex-wrap:nowrap!important;overflow-x:auto;padding-bottom:.2rem}
+.cardside .chip{height:2.2rem;padding:0 .85rem}
+.cardside .lbl{font-size:.85rem;font-weight:600;color:var(--muted);margin-bottom:.35rem}
+.cardside .chips{display:flex;flex-wrap:wrap;gap:.35rem}
+.cardside .chip.on{background:var(--teal);border-color:var(--teal);color:var(--on-teal)}
+.menuhead{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
+.menuhead .lbl{margin:0}
+.btn.sm{height:2.6rem;padding:0 1rem;font-size:.95rem;border-radius:.7rem}
+.dishes{list-style:none;display:flex;flex-direction:column;gap:.3rem;margin:0;padding:0}
+.dishes li{display:flex;align-items:center;gap:.6rem;padding:.32rem .7rem;background:var(--surface);border:1px solid var(--line);border-radius:.7rem}
+.dishes li .sdot{flex:none;width:.7rem;height:.7rem;border-radius:50%;background:var(--teal-hi)}
+.dishes li.yellow .sdot{background:var(--peach)}
+.dishes li b{font-weight:600}.dishes li small{color:var(--muted);font-size:.8rem;margin-left:.5rem}
+.dishes li.empty{color:var(--muted);font-size:.95rem}
+.confirm{display:flex;gap:.6rem;align-items:flex-start;font-size:.95rem;line-height:1.3}
+.confirm input{width:1.4rem;height:1.4rem;flex:none;accent-color:var(--teal)}
+.cardbtns{display:flex;gap:.6rem}.cardbtns .btn{flex:1}

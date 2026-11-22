@@ -22,5 +22,13 @@
     "marshmallow": {
       "dwell": 1.5
     }
+  },
+  "pla": {
+    "nozzle": 205,
+    "card_x": 15,
+    "card_y": 20,
+    "paper_z": 0.45,
+    "layer": 0.25,
+    "layers": 1
   }
 }

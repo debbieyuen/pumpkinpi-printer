@@ -226,6 +226,8 @@ function show(view) {
   $("designView").hidden = view !== "design";
   $("recipeView").hidden = view !== "recipe";
   $("cameraView").hidden = view !== "camera";
+  $("cardsView").hidden = view !== "cards";
+  if (view === "cards") loadCards();
   if (view === "design") window.Pie3D?.resize();
   liveCamera(view === "camera");
   if (view === "camera") pollRec();
@@ -803,6 +805,69 @@ $("sendBtn").onclick = async () => {
   try { await api("/api/stop", {}); log("Stopped (M112). Power-cycle the printer before continuing."); }
   catch (e) { log(`Stop failed: ${e.message}. Switch the printer off now.`); }
 };
+
+// ---------- invitation cards (PLA on watercolor paper) ----------
+// The menu check runs the Search API + Decider on every product (cards.py); each dish prints as one short line.
+const cards = { guest: "", lines: [], guests: [], homed: false };
+async function loadCards() {
+  if (!state.live) { $("cardMsg").textContent = "Cards run on the Pi (Search + Decider + printer)."; return; }
+  try {
+    const c = await apiJson("/api/cards");
+    cards.guests = c.guests || []; cards.lines = c.lines || [];
+    if (!cards.guest && cards.guests.length) cards.guest = cards.guests[0];
+    renderCards(); drawCard();
+  } catch (e) { log(`Cards: ${e.message}`); }
+}
+function renderCards() {
+  $("cardGuests").innerHTML = cards.guests.map((g) =>
+    `<button type="button" class="chip${g === cards.guest ? " on" : ""}" data-g="${g}">${g}</button>`).join("");
+  $("dishList").innerHTML = cards.lines.length ? cards.lines.map((l) => {
+    const cls = l.unsure.length ? "yellow" : "green";
+    const why = l.unsure.length ? `check the label: ${l.unsure.join(", ")}` : `${l.sources.length} sources`;
+    return `<li class="${cls}"><span class="sdot"></span><span><b>${l.text}</b><small>${why}</small></span></li>`;
+  }).join("") : `<li class="empty">Tap Check menu: Search finds each product's label, the Decider lists its allergens.</li>`;
+  $("cardBtn").disabled = !cards.lines.length || !!state.job;
+  $("homeBtn").disabled = !!state.job;
+}
+$("cardGuests").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; cards.guest = b.dataset.g; renderCards(); drawCard(); };
+async function drawCard() {
+  const g = $("cardInk");
+  if (!cards.lines.length) { g.innerHTML = ""; return; }
+  try {
+    const r = await apiJson("/api/cards/preview", { guest: cards.guest });
+    g.innerHTML = `<path d="${r.strokes.map((s) => "M" + s.map(([x, y]) => `${x},${178 - y}`).join("L")).join("")}"/>`;
+  } catch (e) { g.innerHTML = ""; log(`Card: ${e.message}`); }
+}
+$("menuBtn").onclick = async () => {
+  if (!state.live) return log("Menu check runs on the Pi.");
+  $("menuBtn").disabled = true; $("menuBtn").textContent = "Checking…";
+  log("Search API is finding each product's label; the Decider is reading it…");
+  try { cards.lines = (await apiJson("/api/cards/check", {})).lines; renderCards(); drawCard(); log("Menu checked."); }
+  catch (e) { log(`Menu check failed: ${e.message}`); }
+  $("menuBtn").disabled = false; $("menuBtn").textContent = "Check menu";
+};
+async function plaJob(path, body, what) {
+  if (!$("plaOk").checked) return log("Tick the box first: no food on the bed, syringe tip above the nozzle.");
+  try {
+    await apiJson(path, { ...body, confirm: true });
+    state.job = true; renderCards(); $("jobMeter").classList.add("on");
+    for (let i = 0; i < 7200; i++) {
+      await sleep(700);
+      const j = await apiJson("/api/job");
+      $("jobFill").style.width = `${j.pct || 0}%`;
+      $("cardMsg").textContent = `${what}… ${j.pct || 0}%. Stay next to the printer.`;
+      if (!j.running) {
+        $("cardMsg").textContent = j.error ? `Stopped: ${j.error}` :
+          path.endsWith("prep") ? "Homed and hot. Tape the card to the corner guide, then Print card." : "Card done. Let it cool a minute before lifting.";
+        break;
+      }
+    }
+  } catch (e) { log(`${what} refused: ${e.message}`); }
+  state.job = false; renderCards();
+  setTimeout(() => { if (!state.job) $("jobMeter").classList.remove("on"); }, 2000);
+}
+$("homeBtn").onclick = () => plaJob("/api/cards/prep", {}, "Heating and homing");
+$("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest }, `Drawing ${cards.guest}'s card`);
 
 // ---------- on-screen keyboard (kiosk Chromium has no OS keyboard) ----------
 const KEYS = ["qwertyuiop", "asdfghjkl'", "zxcvbnm,.", ["shift", "space", "back", "Done"]];

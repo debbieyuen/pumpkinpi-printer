@@ -1,0 +1,17 @@
+{
+  "event": {
+    "title": "Family Hot Pot",
+    "when": "Thu Nov 26  3 PM",
+    "unsure_note": "? = ask Debbie"
+  },
+  "card": {"w": 127, "h": 178, "margin": 10, "text_mm": 5, "line_gap": 1.8},
+  "guests": ["Dad", "Mom", "Kathy", "Michael", "Debbie", "Lily", "Omar", "Grace", "Ben", "Mia", "Leo"],
+  "menu": [
+    {"name": "Mild broth", "products": ["Little Sheep Hot Pot Soup Base, Plain"]},
+    {"name": "Beef slices", "products": ["thin-sliced beef for hot pot (check the butcher's label)"]},
+    {"name": "Tofu", "products": ["House Foods Organic Firm Tofu, 14 oz"]},
+    {"name": "Vegetables", "products": ["napa cabbage, bok choy, enoki mushrooms (fresh produce)"]},
+    {"name": "Dip", "products": ["Kikkoman Gluten-Free Tamari Soy Sauce, 10 oz", "Kadoya Pure Sesame Oil, 5.5 oz"]},
+    {"name": "Pumpkin pie", "products": ["Libby's 100% Pure Pumpkin, 15 oz"]}
+  ]
+}

@@ -20,6 +20,11 @@ Endpoints
     GET  /api/label/photo  the last label photo
     GET  /api/record   timelapse status + saved clips;  POST /api/record {"on": true|false}
     GET  /api/clips/{name}  a saved timelapse MP4
+    GET  /api/cards    invitation cards: event, guests, menu, last menu check, card size
+    POST /api/cards/check   Search API + Decider on every menu product -> one line per dish
+    POST /api/cards/preview {"guest": "Lily"} -> the card's strokes (mm)
+    POST /api/cards/prep    {"confirm": true} PLA: heat + home with the bed EMPTY, park at the back
+    POST /api/cards/print   {"guest": "Lily", "confirm": true} PLA: draw the card (streamed over USB)
     GET  /api/job      piping progress
     POST /api/stop     sends M112 immediately
 """
@@ -39,7 +44,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
-from . import allergy_guide, detail, label_scan, vision
+from . import allergy_guide, cards, detail, label_scan, vision
 from .allergens import scan_blocks, scan_recipe
 from .camera import camera
 from .design import plan_design, revise_design
@@ -165,6 +170,11 @@ class LabelReq(BaseModel):
 
 class RecordReq(BaseModel):
     on: bool
+
+
+class CardReq(BaseModel):
+    guest: str = ""
+    confirm: bool = False   # "bed has no food, syringe tip is above the nozzle"
 
 
 class StartReq(BaseModel):
@@ -588,6 +598,7 @@ def run_job(lines: list[str], dry_run: bool = False) -> None:
 @app.post("/api/start")
 def start(req: StartReq):
     gate(req.dry_run)
+    state["pla_homed"] = False
     lines = to_gcode(state["strokes"], Machine.load(topping=state["plan"].get("topping_type") or "chocolate"),
                      dry_run=req.dry_run)
     _stop.clear()
@@ -674,9 +685,103 @@ def drip_result(req: DripReq):
     return {"topping_type": name, "seconds": round(req.seconds, 1), "suggest": suggest(name, req.seconds)}
 
 
+# ---------- invitation cards (PLA on watercolor paper) ----------
+MENU_CHECK = Path("captures/menu_check.json")
+
+
+def card_lines() -> list[dict]:
+    if state.get("cards") is None and MENU_CHECK.exists():
+        state["cards"] = json.loads(MENU_CHECK.read_text())
+    return state.get("cards") or []
+
+
+@app.get("/api/cards")
+def cards_info():
+    cfg = cards.load()
+    return {"event": cfg.get("event", {}), "guests": cfg.get("guests", []), "card": cfg.get("card", {}),
+            "menu": [{"name": d["name"], "products": d["products"]} for d in cfg["menu"]], "lines": card_lines(),
+            "pla": asdict(cards.Pla.load())}
+
+
+@app.post("/api/cards/check")
+def cards_check():
+    with make_client() as c:
+        lines = cards.check_menu(c, cards.load())
+    MENU_CHECK.parent.mkdir(exist_ok=True)
+    MENU_CHECK.write_text(json.dumps(lines, indent=2))
+    state["cards"] = lines
+    return {"lines": lines}
+
+
+def card_strokes(guest: str) -> list:
+    lines = card_lines()
+    if not lines:
+        raise HTTPException(409, "Check the menu first")
+    try:
+        return cards.layout(cards.load(), lines, guest.strip()[:16])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/cards/preview")
+def cards_preview(req: CardReq):
+    st = card_strokes(req.guest)
+    return {"strokes": [[(round(x, 2), round(y, 2)) for x, y in s] for s in st]}
+
+
+def run_stream(lines: list[str], phase: str) -> None:
+    """PLA jobs: streamed line by line (waits on M109 heat-up), never saved to the card as a food file."""
+    job = state["job"]
+    try:
+        p = printer()
+        p.pla_mode()
+        for i, ln in enumerate(lines, 1):
+            if _stop.is_set():
+                break
+            p.send(ln, wait_s=300)
+            job["done"] = i
+            job["pct"] = round(100 * i / len(lines))
+        else:
+            state["pla_homed"] = phase == "card-prep" or state.get("pla_homed", False)
+    except Exception as e:  # noqa: BLE001
+        job["error"] = str(e)
+        state["pla_homed"] = False
+    finally:
+        job["running"] = False
+
+
+def pla_job(req: CardReq, lines: list[str], phase: str) -> dict:
+    if not req.confirm:
+        raise HTTPException(409, "Confirm first: no food on the bed, syringe tip above the nozzle")
+    if state["job"]["running"]:
+        raise HTTPException(409, "Printer is busy")
+    if phase == "card" and not state.get("pla_homed"):
+        raise HTTPException(409, "Heat & home first (bed empty), then tape the card down")
+    _stop.clear()
+    state["ready"] = 0.0          # food checks must be redone after PLA printing
+    state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": phase, "file": None, "error": None}
+    threading.Thread(target=run_stream, args=(lines, phase), daemon=True).start()
+    return {"started": True, "lines": len(lines)}
+
+
+@app.post("/api/cards/prep")
+def cards_prep(req: CardReq):
+    return pla_job(req, cards.prep_gcode(cards.Pla.load()), "card-prep")
+
+
+@app.post("/api/cards/print")
+def cards_print(req: CardReq):
+    try:
+        lines = cards.card_gcode(card_strokes(req.guest), cards.Pla.load())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return pla_job(req, lines, "card")
+
+
 @app.post("/api/stop")
 def stop():
     _stop.set()
+    state["pla_homed"] = False
     state["ready"] = 0.0
     printer().emergency_stop()
     return {"stopped": True}

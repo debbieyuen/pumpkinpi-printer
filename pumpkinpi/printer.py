@@ -114,6 +114,14 @@ class Printer:
             self.send(cmd)
         self.food_mode = True
 
+    def pla_mode(self) -> None:
+        """Plain PLA printing (invitation cards): heaters and homing allowed again, cold-extrusion guard back on.
+
+        Only after the person at the printer confirms the bed has no food and the syringe tip sits above the
+        nozzle tip (server.py asks). M302 P0 turns Marlin's cold-extrusion protection back on."""
+        self.food_mode = False
+        self.send("M302 P0")
+
     # ---- microSD: upload over USB (M28/M29), then print from the card (M23/M24) ----
     def sd_list(self) -> dict[str, int]:
         """{8.3 NAME: size in bytes} from M20."""
