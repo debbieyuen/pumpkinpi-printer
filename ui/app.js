@@ -632,7 +632,7 @@ function updateGate() {
   b.classList.toggle("stop", step === "stop");
   if (step === "stop") { b.disabled = false; b.textContent = "Stop"; return; }
   $("sendBtn").title = reason();
-  if (step === "cards") { b.textContent = "Make Cards"; b.disabled = !cards.lines.length || state.busy; }
+  if (step === "cards") { b.textContent = "Make Cards"; b.disabled = !cards.lines.length || state.busy || state.menuBusy; }
   else if (step === "design") { b.textContent = "Start Designing"; b.disabled = !p || state.busy; }
   else if (step === "camera") { b.textContent = `Check the ${noun()}`; b.disabled = !p || state.busy; }
   else { b.textContent = "Send to Printer"; b.disabled = !ok || state.busy; }
