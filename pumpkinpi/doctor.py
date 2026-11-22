@@ -35,7 +35,10 @@ def main():
     report((ROOT / "machine.json").exists(), "machine.json exists (pie position + z_surface measured)")
 
     from .printer import find_port
-    port = find_port()
+    try:
+        port = find_port()
+    except FileNotFoundError:
+        port = None
     report(port, f"printer serial port: {port or 'none found - is USB plugged in?'}")
     if port:
         try:
