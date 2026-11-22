@@ -11,7 +11,8 @@ from pathlib import Path
 import cadquery as cq
 from params import (BARREL_OD, BARREL_FRONT_TO_FLANGE, TIP_TO_FLANGE, FLANGE_WIDTH, FLANGE_THICK,
                     FLANGE_DEPTH, PLUNGER_STEM_WIDTH, MOTOR_W, MOTOR_HOLE_SPACING, CLEAR,
-                    SYR_X, SYR_Y, LUER_Z, SCREW_DY)
+                    SYR_X, SYR_Y, LUER_Z, SCREW_DY,
+                    MOTOR_SCREW_HEAD_D, MOTOR_SCREW_WALL_GAP)
 from head_geometry import right_plate
 
 PLATE_X, HOLES = right_plate()
@@ -77,9 +78,12 @@ def build():
                           SHELF_Z0, TOP_Z))
 
     # Motor plate + web up to the cradle
-    h = MOTOR_W / 2 + 2.0
+    # v1.1: plate margin sized so each motor screw head is >= MOTOR_SCREW_WALL_GAP from the 3 mm front rib
+    s = MOTOR_HOLE_SPACING / 2
+    h = max(MOTOR_W / 2 + 2.0, s + MOTOR_SCREW_HEAD_D / 2 + MOTOR_SCREW_WALL_GAP + 3.0)
+    web_y0 = SY - FL_HALF_Y - 3.0 - 4.0
     # (starts at X0 so it sits on the print bed: no floating overhang when printed lying down)
-    body = body.union(box(X0, MX + h, MY - h, MY + h,
+    body = body.union(box(X0, MX + h, MY - h, max(MY + h, SY - FL_HALF_Y - 1.0),
                           MOTOR_PLATE_TOP - MOTOR_PLATE_T, MOTOR_PLATE_TOP))
     body = body.union(box(X0, MX + h, SY - FL_HALF_Y - 3.0 - 4.0, SY - FL_HALF_Y - 1.0,
                           MOTOR_PLATE_TOP - MOTOR_PLATE_T, TOP_Z))
@@ -92,6 +96,13 @@ def build():
                           MOTOR_PLATE_TOP, MOTOR_PLATE_TOP + 10.0))       # rib along the head side
     body = body.union(box(X0, MX + h, MY - h, MY - h + 3.0,
                           MOTOR_PLATE_TOP, MOTOR_PLATE_TOP + 10.0))       # rib along the front edge
+
+    # v1.1 guard: every motor screw head clears every wall by the required gap
+    for a in (-1, 1):
+        for b in (-1, 1):
+            hx, hy = MX + a * s, MY + b * s
+            gaps = [hx - (X0 + 3.0), hy - (MY - h + 3.0), web_y0 - hy]
+            assert min(gaps) - MOTOR_SCREW_HEAD_D / 2 >= MOTOR_SCREW_WALL_GAP - 1e-6, (hx, hy, gaps)
 
     # --- cuts ---
     body = body.cut(c_slot(R_BORE, SNAP_W, CLIP_Z[0] - 1, CLIP_Z[1] + 1))

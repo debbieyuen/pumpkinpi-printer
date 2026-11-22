@@ -50,4 +50,7 @@ SYR_X = 54.0        # syringe axis, right of the nozzle
 SYR_Y = -6.0        # syringe axis, slightly toward the front
 LUER_Z = 5.0        # end of the syringe's Luer tip, above the nozzle tip.
                     # Any dispensing tip longer than ~8 mm then hangs below the hot-end nozzle.
-SCREW_DY = -42.0    # lead screw axis offset from the syringe axis (toward the front)
+SCREW_DY = -47.0    # lead screw axis offset from the syringe axis (toward the front).
+                    # v1.1: was -42; moved 5 mm forward so the back motor screw heads clear the web.
+MOTOR_SCREW_HEAD_D = 5.5   # M3 socket head
+MOTOR_SCREW_WALL_GAP = 3.0 # v1.1: min gap from a motor screw head to any wall (Debbie, 2026-11-21)

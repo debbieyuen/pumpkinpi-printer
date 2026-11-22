@@ -11,20 +11,27 @@ the 30° default) and needed **zero** supports. Horizontal holes are teardrop-sh
 | SD-card file | What | Time / PETG |
 |---|---|---|
 | `fittest.gcode` (`out/fit_test_PETG.gcode`) | Screw-hole fit test. Print first. | 13 min / 4 g |
-| `plateA.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage + plunger pusher | 3 h 52 min / 67 g |
+| `plateA2.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage + plunger pusher v0.4 (v1.1 fixes) | 4 h 5 min / 71 g |
 | `plateB.gcode` (`out/plate_B_accessories_PETG.gcode`) | Camera post + holder, 2 display feet, pie locator | 3 h 56 min / 75 g |
-| `plate.gcode` (`out/plate_all_PETG.gcode`) | Everything on one bed (optional) | 7 h 46 min / 142 g |
 
 The printer only reads files in the card's top folder with names of 20 characters or fewer, using only letters and numbers.
 Slicer: OrcaSlicer 2.5.1 with the stock Ender-3 V3 SE 0.4 profile. Generic PETG at 240 °C, bed at 70 °C, 0.20 mm layers,
 4 walls, 5 top/bottom layers, 40% gyroid infill, 3 mm brim. The `.3mf` files open in a slicer.
+
+## v1.1 fixes (2026-11-21, from the first print)
+
+- **Motor screws hit the walls.** The two back motor screws sat 0.9 mm from the web, so the heads could not go in.
+  The lead screw axis moved 5 mm forward (`SCREW_DY` -42 -> -47) and the front rib moved out, so every
+  M3 head now has at least 3 mm to the nearest wall. `carriage.py` asserts this.
+- **Pusher nut holes were too small.** The 2.8 mm self-tap pilots printed undersize. They are now 3.4 mm M3
+  clearance holes with hex nut traps on the bottom. Use 4x M3x16 + 4x M3 nuts. The nut lobe is 3 mm thicker underneath.
 
 ## Parts
 
 | Part | Notes |
 |---|---|
 | `carriage` | A one-piece bracket. It bolts to the head's right side plate with the 2 stock screws. It has a lower snap clip for the barrel, a cradle for the flange and a plate for the motor. It prints lying on the face that goes against the head. |
-| `plunger_pusher` (v0.3) | A brass T8 nut goes on top. The thumb pad sits in a 3.6 mm recess that is open toward +X. It only pushes: there's no lip under the pad, so it prints without support. Keep retracts to 1 mm or less so the pad stays in the recess. It prints upside down. |
+| `plunger_pusher` (v0.4) | A brass T8 nut goes on top, held by 4x M3x16 through the part into M3 nuts in the traps underneath. The thumb pad sits in a 3.6 mm recess that is open toward +X. It only pushes: there's no lip under the pad, so it prints without support. Keep retracts to 1 mm or less so the pad stays in the recess. It prints upside down. |
 | `pie_locator` | A 90° V for 6-inch pans. Tape it to the bed. |
 | `camera_post` + `camera_holder` | Holds the Camera Module 3 in grooves. The pivot uses an M3x20 bolt and nut. |
 | `display_foot` x2 | 18 mm slots with a 15° lean, for the 5" Touch Display 2. |
@@ -33,7 +40,7 @@ Slicer: OrcaSlicer 2.5.1 with the stock Ender-3 V3 SE 0.4 profile. Generic PETG 
 
 - 2x M3 screws, each 4 mm longer than the stock side-plate screws. The spine is 6 mm thick with a 2 mm counterbore.
 - 4x M3x8 to mount the motor. The motor drawing says the threads are at least 3 mm deep.
-- 4x M3x12 to fix the brass T8 nut flange into the pusher.
+- 4x M3x16 + 4x M3 nuts to fix the brass T8 nut flange to the pusher (v1.1).
 - 1x M3x20 + nut for the camera pivot.
 
 ## Use it safely
