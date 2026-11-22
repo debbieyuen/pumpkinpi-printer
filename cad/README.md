@@ -9,6 +9,7 @@ plus the camera, display and pie-locator parts. All of them fit on one 220 x 220
 
 - **Carriage v1.2:** the head-mount holes are M2 (2.5 mm, with 4.6 mm head pockets). They are short slots, so they fit a hole spacing from 12.5 mm to 14.2 mm. The motor plate moved 5 mm forward, so the motor screw heads clear every wall by at least 3 mm.
 - **Pusher v0.5:** 3.4 mm M3 clearance holes and M3 hex nut traps underneath. v0.4 had an invalid solid (edges filleted after the holes were cut), so the slicer filled the bore, holes and traps in. v0.5 fillets first and asserts the solid is valid.
+- **Pusher v0.6:** the thumb-pad pocket opens toward the print head (-X). The Tr8x2 screw is right-hand, so driving the nut down drags the pusher counterclockwise (seen from above). In v0.5 that swung the open side onto the pad and it slipped out. Now the closed wall catches the pad. To load: raise the pusher, slide the syringe in, swing the pusher over the pad, then lower it.
 - **plateA3.gcode** prints both parts in one run: about 4 h 3 min (slicer estimate), 71 g PETG, no supports.
 
 ## Print it tonight (no supports needed)
@@ -18,8 +19,8 @@ the 30° default) and needed **zero** supports. Horizontal holes are teardrop-sh
 
 | SD-card file | What | Time / PETG |
 |---|---|---|
-| `plateA3.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage v1.2 (M2 head holes) + plunger pusher v0.5 | 4 h 3 min / 71 g |
-| `pusher5.gcode` | Plunger pusher v0.5 only (reprint if your pusher's holes came out filled in) | 56 min / 18 g |
+| `plateA3.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage v1.2 (M2 head holes) + plunger pusher v0.6 | 4 h 3 min / 71 g |
+| `pusher6.gcode` | Plunger pusher v0.6 only | 56 min / 18 g |
 | `fitM2.gcode` (`out/fit_test.stl`) | Fit test for the M2 head-mount holes. Optional, print first. | 13 min / 4 g |
 | `plateB.gcode` (`out/plate_B_accessories_PETG.gcode`) | Camera post + holder, 2 display feet, pie locator | 3 h 56 min / 75 g |
 

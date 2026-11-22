@@ -3,8 +3,8 @@
 Copy these files to the top level of the printer SD card (not in a folder):
 
 1. fitM2.gcode: 13 min fit test with the M2 head-mount holes (v1.2). Print first.
-2. plateA3.gcode: carriage v1.2 + plunger pusher v0.5, about 4 h 3 min / 71 g
+2. plateA3.gcode: carriage v1.2 + plunger pusher v0.6, about 4 h 3 min / 71 g
 3. plateB.gcode: camera, display feet, pie locator, about 3 h 56 min
 
 Delete the old fittest.gcode, plateA.gcode and plateA2.gcode from the card so you don't print them by mistake.
-4. pusher5.gcode: plunger pusher v0.5 only, about 56 min / 18 g. Reprint this if your pusher's holes came out filled in.
+4. pusher6.gcode: plunger pusher v0.6 only (pocket opens toward the print head), about 56 min / 18 g.
