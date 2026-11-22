@@ -16,7 +16,8 @@
   "sauce_mm": 3.4,
   "show_title": false,
   "detail_mm": 3.2,
-  "detail_gap": 1.35
+  "detail_gap": 1.35,
+  "style": "short"
  },
  "guests": [
   "Debbie",
@@ -429,5 +430,14 @@
     "source": "https://world.openfoodfacts.org/product/0024600010030"
    }
   ]
- }
+ },
+ "overview": [
+  "Chicken bone broth",
+  "Beef + shrimp",
+  "Tofu + noodles",
+  "Vegetables",
+  "Soy + chili dips",
+  "Sauce bar",
+  "Pumpkin pie"
+ ]
 }

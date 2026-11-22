@@ -174,7 +174,7 @@ class RecordReq(BaseModel):
 
 class CardReq(BaseModel):
     guest: str = ""
-    side: str = "front"     # front: menu YES/NO + how to hot pot; back: ingredients + sauces YES/NO
+    side: str = "front"     # front: menu overview; back: this guest's "don't eat" list (card.style "full" = old detail)
     confirm: bool = False   # "bed has no food, syringe tip is above the nozzle"
 
 

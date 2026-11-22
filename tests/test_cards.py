@@ -37,7 +37,9 @@ def test_card_fits_and_gcode_stays_on_card():
 
 def test_too_many_dishes_refused():
     with pytest.raises(ValueError):
-        cards.layout(cards.load(), [{"text": "x: y", "unsure": []}] * 40)
+        cfg = cards.load()
+        cfg["card"]["style"] = "full"
+        cards.layout(cfg, [{"text": "x: y", "unsure": []}] * 40)
 
 
 def test_prep_homes_then_parks_high():
@@ -147,3 +149,45 @@ def test_each_item_printed_once_with_its_ingredients():
     assert len(heads) == len(set(heads))
     i = front.index("Tofu (House Foods): YES")
     assert "calcium sulfate" in front[i + 1]
+
+
+def _lines(cfg):
+    import pumpkinpi.allergen_check as ac
+    orig = ac.check_ingredient
+    ac.check_ingredient = lambda c, p, a, label=None: {"checks": {}, "relevance": None}
+    try:
+        return cards.check_menu(None, cfg)
+    finally:
+        ac.check_ingredient = orig
+
+
+def test_short_card_back_lists_only_nos_for_debbie():
+    cfg = cards.load()
+    bad = cards.avoid_lines(cfg, _lines(cfg), "Debbie")
+    assert "Satay (Lee Kum Kee): peanut, sesame" in bad
+    assert "Ponzu (Kikkoman): fish" in bad
+    assert not any("YES" in b or "Tofu" in b or "Crust" in b for b in bad)
+    texts = [r[0] for r in cards.short_back_rows(cfg, _lines(cfg), "Debbie")]
+    assert texts[0] == "Debbie: don't eat" and "Not on the card? Check the label." in texts
+
+
+def test_unsure_counts_as_dont_eat():
+    cfg = cards.load()
+    ln = {"name": "Mystery (Brand)", "terms": {t: "unsure" for t in cards.WATCH}, "unsure": ["peanut"]}
+    assert cards.avoid_lines(cfg, [ln], "Debbie") == ["Mystery (Brand): check label"]
+
+
+def test_no_allergy_guest_gets_no_avoid_list():
+    cfg = cards.load()
+    assert cards.avoid_lines(cfg, _lines(cfg), "Dad") == []
+    texts = [r[0] for r in cards.short_back_rows(cfg, [], "Dad")]
+    assert "No food allergies on file" in texts
+
+
+def test_short_card_both_sides_fit_for_every_guest():
+    cfg = cards.load()
+    L = _lines(cfg)
+    for g in cfg["guests"]:
+        g = g if isinstance(g, str) else g.get("name", "")
+        for side in ("front", "back"):
+            assert cards.layout(cfg, L, g, side)

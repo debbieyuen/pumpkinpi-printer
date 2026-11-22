@@ -362,10 +362,78 @@ def section(title: str, h: float = 5.5, step: float = 8.0) -> tuple:
     return (title, h, "print", True, step)
 
 
+def avoid_lines(cfg: dict, lines: list[dict], guest: str) -> list[str]:
+    """Everything this guest should NOT eat: each NO (with what's in it) and each "check label".
+
+    Unsure always counts as NO here, so nothing unchecked hides under "Everything else: YES".
+    A guest with no allergy list gets nothing here (their back says so instead)."""
+    if not (cfg.get("allergies") or {}).get(guest):
+        return []
+    out = []
+    for ln in guest_lines(cfg, lines, guest):
+        t = ln.get("text", "")
+        name, _, verdict = t.rpartition(": ")
+        if verdict.startswith("NO"):
+            out.append(f"{name}: {verdict[2:].strip() or 'no'}")
+        elif verdict == "check label" or (ln.get("unsure") and not verdict.startswith("YES")):
+            out.append(f"{name}: check label")
+    return out
+
+
+def short_back_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
+    card = cfg.get("card", {})
+    W, m = card.get("w", 127.0), card.get("margin", 10.0)
+    h = card.get("avoid_mm", 5.0)
+    pitch = h * card.get("avoid_gap", 1.5)
+    who = guest or "Guest"
+    bad = avoid_lines(cfg, lines, guest)
+    rows = [(f"{who}: don't eat", 7, "cursive" if guest else "print", True, pitch + 5)]
+    if not (cfg.get("allergies") or {}).get(guest):
+        rows = [(f"{who}", 7, "cursive" if guest else "print", True, pitch + 5),
+                ("No food allergies on file", h, "print", True, pitch + 5)]
+        rows += [(x, h * 0.85, "print", True, h * 0.85 * 1.5)
+                 for x in wrap("Not sure? Check the label.", h * 0.85, W - 2 * m)]
+        return rows
+    if bad:
+        for b in bad:
+            rows += [(x, h, "print", False, pitch) for x in wrap(b, h, W - 2 * m)]
+    else:
+        rows.append(("Nothing on the menu", h, "print", True, pitch))
+    rows[-1] = rows[-1][:4] + (pitch + 5,)
+    rows += [(x, h * 0.85, "print", True, h * 0.85 * 1.5)
+             for x in wrap("Everything else on the menu: YES.", h * 0.85, W - 2 * m)]
+    rows += [(x, h * 0.85, "print", True, h * 0.85 * 1.5)
+             for x in wrap("Not on the card? Check the label.", h * 0.85, W - 2 * m)]
+    return rows
+
+
+def short_front_rows(cfg: dict, guest: str) -> list[tuple]:
+    card = cfg.get("card", {})
+    W, m = card.get("w", 127.0), card.get("margin", 10.0)
+    h = card.get("overview_mm", 5.5)
+    pitch = h * card.get("overview_gap", 1.55)
+    ev = cfg.get("event", {})
+    rows = []
+    if card.get("show_title", True):
+        rows.append((ev.get("title", "Thanksgiving"), 11, "cursive", True, 17))
+    if ev.get("when"):
+        rows.append((ev["when"], 5, "print", True, 12))
+    if guest:
+        rows.append((guest, 9, "cursive", True, 16))
+    rows.append(section("Menu", 6.5, pitch + 3))
+    for t in cfg.get("overview", []):
+        rows += [(x, h, "print", True, pitch) for x in wrap(t, h, W - 2 * m)]
+    return rows
+
+
 def layout_back(cfg: dict, lines: list[dict] | None = None, guest: str = "", side: str = "back") -> list[Stroke]:
-    """Back: the pie (YES/NO + label ingredients), then every sauce YES/NO, then the legend."""
+    """Back: short style = this guest's "don't eat" list; full style = pie + sauces YES/NO."""
     card = cfg.get("card", {})
     lines = lines or []
+    if card.get("style", "short") == "short":
+        st, _ = draw_rows(short_back_rows(cfg, lines, guest), card.get("w", 127.0), card.get("h", 178.0),
+                          card.get("margin", 10.0))
+        return st
     rows = []
     if cfg.get("dessert"):
         rows.append(section(f"Dessert: {cfg['dessert']['name'].lower()}"))
@@ -392,9 +460,13 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
         rows.append((ev["when"], 5, "print", True, 11))
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
-    menu = [x for x in lines if x.get("part", "menu") == "menu"]
-    rows.append(section("Menu", 6))
-    rows += entry_rows(cfg, cfg["menu"], menu, guest)
+    if card.get("style", "short") == "short":
+        rows = short_front_rows(cfg, guest)
+        menu = []
+    else:
+        menu = [x for x in lines if x.get("part", "menu") == "menu"]
+        rows.append(section("Menu", 6))
+        rows += entry_rows(cfg, cfg["menu"], menu, guest)
     if menu:
         rows[-1] = rows[-1][:4] + (rows[-1][4] + 2,)
         rows.append((legend(cfg, guest), 3.4, "print", True, 10))
