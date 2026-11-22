@@ -1,0 +1,12 @@
+{
+  "pie_x": 90.0,
+  "pie_y": 110.0,
+  "z_surface": 30.0,
+  "gap": 1.5,
+  "lift": 8.0,
+  "feed": 600.0,
+  "travel": 1500.0,
+  "e_per_mm": 0.02,
+  "prime": 0.3,
+  "retract": 0.6
+}
