@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import threading
 import time
 from dataclasses import asdict
@@ -39,15 +40,19 @@ from .design import plan_design, revise_design
 from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
 from .products import enrich
-from .shapes import FONTS, MAX_TEXT, SHAPES, strokes_for
+from .shapes import FONTS, SHAPES, split_lines, strokes_for
 from .toolpath import Machine, piped_path, to_gcode
 
 ROOT = Path(__file__).resolve().parent.parent
 GUESTS_FILE = Path(os.environ.get("PUMPKINPI_GUESTS", ROOT / "guests.json"))
 SHOW_HEALTH = os.environ.get("PUMPKINPI_SHOW_HEALTH") == "1"   # only with the guests' consent
 READY_AT = 0.9
+PREVIEW = os.environ.get("PUMPKINPI_PREVIEW") == "1"   # hosted web preview: no printer or camera
 
 app = FastAPI(title="PumpkinPi")
+if PREVIEW:   # the hosted preview loads the screen from another origin
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 state: dict = {"checks": {}, "ready": 0.0, "plan": None, "strokes": None,
                "job": {"running": False, "done": 0, "total": 0, "error": None}}
 _printer = None
@@ -136,6 +141,7 @@ def status():
     connected = printer_connected()
     # Only names and allergens go to the screen; health notes stay off camera.
     return {"event": g.get("event"), "printer": connected, "diets": DIETS,
+            "camera": shutil.which("rpicam-vid") is not None, "preview": PREVIEW,
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}
 
 
@@ -167,8 +173,21 @@ def label_for(product: str) -> dict | None:
     return None
 
 
+def sources_of(plan: dict) -> list[dict]:
+    return plan.get("sources", [])
+
+
+def answer_only(plan: dict) -> dict:
+    """A question ("what does free-range mean?"): show the cited answer, keep the current design."""
+    keys = ("kind", "answer", "makes", "ingredients", "products", "recipe", "caption", "sources")
+    return {"question": {k: plan.get(k) for k in keys}}
+
+
 def publish(plan: dict, keep_checks: bool) -> dict:
-    strokes, path = exact(plan)
+    if plan.get("base") == "none":   # e.g. a roast turkey: recipe + checks, nothing to pipe
+        strokes, path = [], {"strokes": [], "mm": 0, "seconds": 0}
+    else:
+        strokes, path = exact(plan)
     if not SHOW_HEALTH:
         plan["diet_notes"] = ""
     checks = state["checks"] if keep_checks else {}
@@ -189,6 +208,9 @@ def design(req: DesignReq):
     diets = clean_diets(req.diets)
     with make_client() as client:
         plan = plan_design(client, req.prompt, guests()["guests"], diets=diets)
+    if plan.get("kind") == "question":
+        add_labels(plan)
+        return answer_only(plan)
     plan["diets"] = diets
     add_labels(plan)
     return publish(plan, keep_checks=False)
@@ -209,6 +231,8 @@ def revise(req: ReviseReq):
     old = state["plan"]
     with make_client() as client:
         plan = revise_design(client, old, req.change, guests()["guests"], diets=diets)
+    if plan.get("kind") == "question":
+        return answer_only(plan)
     plan["diets"] = diets
     plan["diet_notes"] = plan.get("diet_notes") or old.get("diet_notes", "")
     add_labels(plan, old)
@@ -226,7 +250,7 @@ def edit(req: EditReq):
             raise HTTPException(400, f"Shape must be one of {', '.join(SHAPES)}")
         plan["shape"] = req.shape
     if req.text is not None:
-        plan["text"] = req.text.strip()[:MAX_TEXT]
+        plan["text"] = " ".join(split_lines(req.text))
     if req.font is not None:
         if req.font not in FONTS:
             raise HTTPException(400, f"Font must be one of {', '.join(FONTS)}")

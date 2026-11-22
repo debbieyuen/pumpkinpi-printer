@@ -34,7 +34,7 @@ def font(name: str) -> dict:
 
 
 data = {"shapes": {k: [r2(s) for s in getattr(shapes, k)()] for k in shapes.SHAPES if k != "text"},
-        "fonts": {k: font(v) for k, v in shapes.FONTS.items()}, "max_text": shapes.MAX_TEXT, "max_r": shapes.MAX_R}
+        "fonts": {k: font(v) for k, v in shapes.FONTS.items()}, "max_text": shapes.MAX_TEXT, "max_line": shapes.MAX_LINE, "max_r": shapes.MAX_R, "bases": shapes.BASES}
 out = Path(__file__).resolve().parent.parent / "ui" / "shapes.json"
 out.write_text(json.dumps(data, separators=(",", ":")))
 print(f"wrote {out} ({out.stat().st_size // 1024} KB)")

@@ -20,14 +20,19 @@ import json
 import httpx
 
 from . import pplx
-from .shapes import FONTS, MAX_TEXT, SHAPES
+from .shapes import BASES, FONTS, MAX_LINE, MAX_TEXT, SHAPES, split_lines
 
 SCHEMA = {
     "type": "object",
     "properties": {
+        "kind": {"type": "string", "enum": ["make", "question"],
+                 "description": "make = they want to cook/bake/decorate something; question = they only want information"},
+        "answer": {"type": "string", "description": "For questions (and any question inside a make request): 3-6 short plain sentences, no URLs"},
+        "makes": {"type": "string", "description": "What the recipe makes, e.g. 'M&M's cookies with a heart', 'Roast turkey'"},
+        "base": {"type": "string", "enum": list(BASES), "description": "What the design is piped on; none if nothing gets piped"},
         "guest": {"type": "string", "description": "Guest name from the list, or empty"},
         "shape": {"type": "string", "enum": list(SHAPES)},
-        "text": {"type": "string", "description": f"Words to pipe, at most {MAX_TEXT} letters, or empty"},
+        "text": {"type": "string", "description": f"Words to pipe: at most 2 short lines of {MAX_LINE} letters, or empty"},
         "font": {"type": "string", "enum": list(FONTS), "description": "cursive if they ask for cursive/script/handwriting"},
         "topping": {"type": "string", "description": "The pipeable topping, e.g. chocolate ganache"},
         "ingredients": {"type": "array", "items": {"type": "string"},
@@ -40,24 +45,43 @@ SCHEMA = {
                 "brand": {"type": "string"}, "product": {"type": "string"}, "size": {"type": "string"},
                 "store": {"type": "string", "description": "A San Francisco Bay Area store that sells it, e.g. Safeway, Whole Foods, Target"},
                 "upc": {"type": "string", "description": "UPC barcode digits if you found them, else empty"}}}},
-        "recipe": {"type": "array", "items": {"type": "string"}, "description": "3-5 short steps; 7-10 if the guest asks to bake the pie too (prefix 'Pie:' and 'Topping:')"},
+        "recipe": {"type": "array", "items": {"type": "string"}, "description": "3-5 short steps for a topping; 7-10 if they bake/cook the food too (prefix e.g. 'Cookies:' and 'Topping:')"},
         "piping_notes": {"type": "string", "description": "Consistency and temperature for a cold syringe"},
         "diet_notes": {"type": "string", "description": "Sugar or other diet notes for guests who limit something"},
         "allergy_notes": {"type": "string", "description": "How the recipe avoids each guest allergen, one short line"},
+        "design_note": {"type": "string", "description": "One short line if you simplified the design (one picture, shorter words), else empty"},
         "caption": {"type": "string", "description": "One short on-screen line, under 60 characters"},
     },
-    "required": ["guest", "shape", "text", "font", "topping", "ingredients", "products", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption"],
+    "required": ["kind", "answer", "makes", "base", "guest", "shape", "text", "font", "topping", "ingredients", "products", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption"],
     "additionalProperties": False,
 }
 
-INSTRUCTIONS = f"""You plan decorations for PumpkinPi, a printer that pipes toppings onto a 6-inch pumpkin pie
-from an unheated 60 mL syringe with a narrow tip.
+INSTRUCTIONS = f"""You are PumpkinPi, a Thanksgiving kitchen helper on a touchscreen. Guests type anything about food. It
+also has a printer that pipes a topping from an unheated 60 mL syringe onto a pie, cake, cookie or cupcake.
 
-Rules:
-- shape must be one of {list(SHAPES)}. "kitty"/"kitten" is cat. If the request is a different picture, pick the
-  closest one and say so in caption.
+Answer what they actually asked, never a preset:
+- kind "question" when they only want information (e.g. "what does free-range mean on a turkey", "is organic
+  worth it", "how long to thaw a turkey", "is this safe for Debbie"). Put the answer in answer: short, plain,
+  practical, grounded in your web search. For labels, safety and nutrition use regulators and research first
+  (fsis.usda.gov, ams.usda.gov, fda.gov, foodsafety.gov, fdc.nal.usda.gov, certifiedhumane.org, university
+  extension, pubmed) and say what the label legally means vs what it does not guarantee. For health questions
+  give general guidance only. If it is not about food or cooking, say kindly that you help with food. For a
+  question, base is "none", shape "text", text "", and ingredients/products/recipe may be empty unless a recipe helps.
+- kind "make" when they want to cook, bake or decorate something. makes says what it is. The recipe is for
+  THAT food (cookies give a cookie recipe, a turkey gives a turkey recipe), never a pumpkin pie unless asked.
+  base is what the design is piped on: "cookie" for cookies, "cupcake", "cake", "pie" (also the default when they
+  only ask for a design), or "none" when nothing gets piped (e.g. a roast turkey or a side dish). Decorated
+  cookies/cakes must be fully cool before piping, so say so in the recipe. If they also ask a question (e.g.
+  "pasture-raised or organic?"), answer it in answer, else leave answer empty.
+
+Design rules (when base is not none):
+- Keep it simple: the syringe pipes one thick bead, so a pie gets ONE picture plus at most two short lines of
+  words. shape must be one of {list(SHAPES)}. "kitty"/"kitten" is cat, "puppy" is dog. If they ask for two
+  pictures (e.g. a cat and a dog), use the last one named. If the picture isn't in the list, pick the closest
+  and say so in design_note.
 - text: the name or words they asked for (spell guest names as in the guest list, e.g. "Debbie"), or the guest's
-  name if the design is for a named guest, else empty. Max {MAX_TEXT} letters.
+  name if the design is for a named guest, else empty. Whole words only, at most two lines of {MAX_LINE} letters (e.g.
+  "Happy Thanksgiving" pipes as "Happy" / "Thanksgiving"). If the words are longer, shorten them and say so in design_note.
 - font: "cursive" if they ask for cursive, script or handwriting, else "print".
 - The syringe is NOT heated, so melted chocolate will set in the tip. Turn "chocolate" into a pipeable
   chocolate ganache or chocolate frosting that stays soft at room temperature.
@@ -77,11 +101,13 @@ Rules:
   may-contain or shared-equipment warning for one (e.g. brands made in a dedicated nut-free facility). If a
   requested brand carries a warning for a guest allergen, still list it and explain in allergy_notes, and name a
   safer brand there.
-- If the guest asks to bake or make the pie itself (e.g. "bake a pumpkin pie with a cat on it"), the
-  ingredients cover the whole pie first, each as an exact store product (crust, canned pumpkin, evaporated
-  milk or cream, eggs, sweetener, spice, salt), then the pipeable topping. The recipe bakes the pie, cools it
-  fully (about 2 hours), then makes and pipes the topping. Topping says e.g. "Pumpkin pie + dark chocolate
-  ganache". For low-sugar guests, give a reduced-sugar option in diet_notes.
+- If they ask to bake or make the food itself (e.g. "bake cookies with M&M's and a heart on top", "bake a
+  pumpkin pie with a cat"), the ingredients cover that whole food first, each as an exact store product (for
+  cookies: flour, butter, sugars, eggs, baking soda, vanilla, salt, plus the mix-ins they named), then the
+  pipeable topping. The recipe steps start with the food name (e.g. "Cookies:" / "Pie:") and then "Topping:".
+  Topping says e.g. "M&M's cookies + chocolate frosting". For low-sugar guests, give a reduced-sugar option in
+  diet_notes. For a dish with nothing piped (turkey), topping is empty and recipe covers the dish (7-10 steps,
+  with the safe internal temperature from fsis.usda.gov for meat).
 - Fill products[] in the same order, with a Bay Area store that sells it and the UPC if a store page shows it.
 - Never say an ingredient is safe; PumpkinPi checks each one separately. Do not put URLs in the JSON.
 - If diet options are given (vegan, dairy-free, gluten-free, egg-free, low sugar), every ingredient must fit them,
@@ -93,11 +119,24 @@ Return only a JSON object matching the schema."""
 
 def tidy(plan: dict, old: dict | None = None) -> dict:
     """Keep the model inside what shapes.py can draw, and products[] in step with ingredients[]."""
+    if plan.get("kind") not in ("make", "question"):
+        plan["kind"] = "make"
+    if plan.get("base") not in BASES:
+        plan["base"] = (old or {}).get("base", "pie")
+    if plan["kind"] == "question":
+        plan["base"] = "none"
+    plan["answer"] = (plan.get("answer") or "").strip()
+    plan["makes"] = (plan.get("makes") or plan.get("topping") or "").strip()
     if plan.get("shape") not in SHAPES:
         plan["shape"] = (old or {}).get("shape", "text")
     if plan.get("font") not in FONTS:
         plan["font"] = "print"
-    plan["text"] = (plan.get("text") or "")[:MAX_TEXT]
+    words = " ".join((plan.get("text") or "").split())
+    plan["text"] = " ".join(split_lines(words))
+    note = plan.get("design_note") or ""
+    if plan["text"] != words and "short" not in note.lower():
+        note = (note + f' Kept the words short enough to pipe: "{plan["text"]}".').strip()
+    plan["design_note"] = note
     by_name = {p.get("ingredient", "").lower(): p for p in plan.get("products") or []}
     plan["products"] = [{"ingredient": i, "brand": "", "product": i, "size": "", "store": "", "upc": "",
                          **by_name.get(i.lower(), {}), "ingredient": i} for i in plan.get("ingredients", [])]
@@ -121,7 +160,9 @@ You are changing an existing design. Apply only the requested change and keep ev
 (topping, ingredients, recipe) the same unless the change asks for it. "No name" or "without
 Michael's name" means text is empty. "Only a heart" means shape heart; drop the text unless the
 change asks for words. "A cat with the name 'debbie' in cursive" means shape cat, text "Debbie",
-font cursive. Words in quotes are the text to pipe."""
+font cursive. Words in quotes are the text to pipe. If they now ask a question instead of a change
+(e.g. "is organic turkey worth it?"), return kind "question" with the answer. If they ask for a different
+food ("make cookies instead"), plan that food from scratch."""
 
 
 def revise_design(client: httpx.Client, plan: dict, change: str, guests: list[dict],
@@ -136,7 +177,7 @@ def revise_design(client: httpx.Client, plan: dict, change: str, guests: list[di
     )
     new = tidy(json.loads(text), plan)
     new["sources"] = plan.get("sources", [])
-    if new["ingredients"] != plan.get("ingredients"):   # new topping: keep only the new research
+    if new.get("kind") == "question" or new["ingredients"] != plan.get("ingredients"):   # new research: keep only the new research
         new["sources"] = [{"title": r.get("title"), "url": r.get("url")} for r in results if r.get("url")][:8]
     return new
 

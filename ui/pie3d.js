@@ -127,6 +127,50 @@ if (renderer) {
   rimMesh.position.y = H - 1.2; rimMesh.castShadow = rimMesh.receiveShadow = true;
   pie.add(rimMesh);
 
+  // ---- other bases: cookie / cake / cupcake (the Pi sends plan.base; strokes are already scaled) ----
+  const cookieTex = canvasTex(512, (g, n) => {
+    const grd = g.createRadialGradient(n / 2, n / 2, n * 0.1, n / 2, n / 2, n / 2);
+    grd.addColorStop(0, "#d9a45f"); grd.addColorStop(0.85, "#c98d47"); grd.addColorStop(1, "#a96d33");
+    g.fillStyle = grd; g.fillRect(0, 0, n, n);
+    for (let i = 0; i < 1600; i++) {
+      const x = rand() * n, y = rand() * n, r = rand() * 3 + 0.6;
+      g.fillStyle = rand() < 0.6 ? "rgba(120,70,25,.18)" : "rgba(255,225,170,.14)";
+      g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+  });
+  const cookieMat = new THREE.MeshStandardMaterial({ map: cookieTex, roughness: 0.9 });
+  const cakeSideMat = new THREE.MeshStandardMaterial({ color: 0xf3e6cf, roughness: 0.7 });
+  const cakeTopMat = new THREE.MeshStandardMaterial({ color: 0xfbf4e6, roughness: 0.6 });
+  const BASES = {   // radius, height, side material, top material, dome
+    cookie: { r: 40, h: 8, side: cookieMat, top: cookieMat, dome: 1.4 },
+    cake: { r: 56, h: 34, side: cakeSideMat, top: cakeTopMat, dome: 0.2 },
+    cupcake: { r: 30, h: 26, side: cakeSideMat, top: cakeTopMat, dome: 2.2 },
+  };
+  const other = new THREE.Group(); other.visible = false; pie.add(other);
+  let base = "pie", topY = FILL_Y, topR = R_FILL, dome = 0.9;
+  function buildBase(name, candy) {
+    for (const m of [...other.children]) { m.geometry.dispose(); other.remove(m); }
+    const b = BASES[name];
+    if (!b) { base = "pie"; other.visible = false; shell.visible = filling.visible = rimMesh.visible = true; topY = FILL_Y; topR = R_FILL; dome = 0.9; return; }
+    base = name; other.visible = true; shell.visible = filling.visible = rimMesh.visible = false;
+    const side = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r * (name === "cupcake" ? 0.8 : 0.97), b.h, 120), b.side);
+    side.position.y = b.h / 2; side.castShadow = side.receiveShadow = true; other.add(side);
+    const topGeo = new THREE.CircleGeometry(b.r - 0.3, 120); topGeo.rotateX(-Math.PI / 2);
+    const tp = topGeo.attributes.position;
+    for (let i = 0; i < tp.count; i++) { const r = Math.hypot(tp.getX(i), tp.getZ(i)); tp.setY(i, b.dome * (1 - (r / b.r) ** 2)); }
+    topGeo.computeVertexNormals();
+    const top = new THREE.Mesh(topGeo, b.top); top.position.y = b.h + 0.02; top.receiveShadow = true; other.add(top);
+    if (name === "cookie" && candy) {   // M&M's pressed in near the edge, clear of the piping
+      const cols = [0xc8102e, 0x0067a5, 0x2e8b57, 0xf2c200, 0xe36f1e, 0x5b3a29];
+      for (let i = 0; i < 11; i++) {
+        const a = i / 11 * Math.PI * 2 + rand() * 0.3, r = b.r - 5 - rand() * 3;
+        const m = new THREE.Mesh(new THREE.SphereGeometry(3.2, 16, 10), new THREE.MeshStandardMaterial({ color: cols[i % cols.length], roughness: 0.35 }));
+        m.scale.set(1, 0.45, 1); m.position.set(Math.cos(a) * r, b.h + b.dome * 0.2 + 0.6, Math.sin(a) * r); m.castShadow = true; other.add(m);
+      }
+    }
+    topY = b.h; topR = b.r; dome = b.dome;
+  }
+
   // ---- soft contact shadow on the "table" ----
   const shadowTex = canvasTex(256, (g, n) => {
     // light page: keep the shadow tight and soft so the canvas edge never shows
@@ -146,7 +190,7 @@ if (renderer) {
   // A piped line is not a perfect tube: it settles (wider than tall), its width wobbles with hand/
   // plunger pressure, and each line starts and ends in a soft blob.
   const RAD = 1.55, RADIAL = 14, FLAT = 0.58;
-  function surfaceY(x, y) { const r = Math.hypot(x, y); return FILL_Y + 0.9 * (1 - (r / R_FILL) ** 2); }
+  function surfaceY(x, y) { const r = Math.hypot(x, y); return topY + dome * (1 - (r / topR) ** 2); }
   function ganacheGeo(curve, len, seed) {
     const segs = Math.max(10, Math.ceil(len * 3));
     const geo = new THREE.TubeGeometry(curve, segs, RAD, RADIAL, false);
@@ -259,6 +303,11 @@ if (renderer) {
       azTarget = Math.ceil((az + 2.4) / (2 * Math.PI)) * 2 * Math.PI;
       mode = "show"; t0 = performance.now();
     },
+    setBase(name, candy) {
+      const want = BASES[name] ? name : "pie", c = !!candy;
+      if (want === base && c === (this._candy || false)) return;
+      this._candy = c; buildBase(want, c); dirty = true;
+    },
     thinking(on) { if (on) setStrokes([]); mode = on ? "thinking" : "idle"; },
     replay() { el = SIDE; this.show(window.pieStrokes); },
     resize,
@@ -269,6 +318,7 @@ if (renderer) {
   };
   resize();
   requestAnimationFrame(frame);
+  if (window.pieBase) window.Pie3D.setBase(window.pieBase, window.pieCandy);
   if (window.pieStrokes && window.pieStrokes.length) window.Pie3D.show(window.pieStrokes);
   canvas.addEventListener("click", () => window.Pie3D.replay());   // tap the pie to replay
 }

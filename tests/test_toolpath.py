@@ -45,3 +45,20 @@ def test_food_mode_blocks_homing():
         assert FOOD_MODE_BLOCKED.match(cmd)
     for cmd in ["G1 X10 E0.1", "M302 P1", "M112", "M114"]:
         assert not FOOD_MODE_BLOCKED.match(cmd)
+
+
+def test_long_words_wrap_to_two_lines_whole_words_only():
+    from pumpkinpi.shapes import split_lines
+    assert split_lines("happy thanksgiving") == ["happy", "thanksgiving"]
+    assert split_lines("Happy Thanksgiving Debbie") == ["Happy", "Thanksgiving"]   # drops a word, never cuts one
+    assert split_lines("Debbie") == ["Debbie"]
+    assert split_lines("") == []
+
+
+def test_every_shape_and_text_fits_the_pie():
+    from pumpkinpi.shapes import MAX_R, SHAPES, strokes_for
+    for shape in SHAPES:
+        for words in ("", "Debbie", "Happy Thanksgiving"):
+            for font in ("print", "cursive"):
+                pts = [p for st in strokes_for({"shape": shape, "text": words, "font": font}) for p in st]
+                assert pts and max((x * x + y * y) ** 0.5 for x, y in pts) <= MAX_R + 0.01

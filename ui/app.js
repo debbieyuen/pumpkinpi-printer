@@ -34,43 +34,76 @@ function textStrokes(words, width, height, font) {
   return st.map((s) => s.map(([px, py]) => [(px - cx) * k, (py - cy) * k]));
 }
 const moveSt = (st, dy, k) => st.map((s) => s.map(([x, y]) => [x * k, y * k + dy]));
-function strokesFor(plan) {   // mirrors shapes.strokes_for
-  const words = (plan.text || "").trim(), font = plan.font === "cursive" ? "cursive" : "print";
-  if (plan.shape === "text" || !SHAPES.shapes[plan.shape]) return textStrokes(words || "Happy", 80, font === "print" ? 24 : 30, font);
+function splitLines(s) {   // mirrors shapes.split_lines: two short lines max, whole words only
+  const words = s.split(/\s+/).filter(Boolean), M = SHAPES.max_line;
+  for (let n = words.length; n > 0; n--) {
+    const w = words.slice(0, n);
+    if (w.join(" ").length <= M) return [w.join(" ")];
+    const sp = [];
+    for (let j = 1; j < n; j++) { const x = [w.slice(0, j).join(" "), w.slice(j).join(" ")]; if (Math.max(x[0].length, x[1].length) <= M) sp.push(x); }
+    if (sp.length) return sp.reduce((a, b) => (Math.max(b[0].length, b[1].length) < Math.max(a[0].length, a[1].length) ? b : a));
+  }
+  return words.length ? [words[0].slice(0, M)] : [];
+}
+function strokesFor(plan) {   // mirrors shapes.strokes_for (incl. the cookie / cupcake shrink)
+  const k = (SHAPES.bases || {})[plan.base || "pie"] ?? 1;
+  return k === 1 ? strokesForPie(plan) : moveSt(strokesForPie(plan), 0, k);
+}
+function strokesForPie(plan) {
+  const font = plan.font === "cursive" ? "cursive" : "print", cur = font === "cursive";
+  let lines = splitLines((plan.text || "").trim());
+  const T = (s, w, h, dy) => moveSt(textStrokes(s, w, h, font), dy, 1);
+  if (plan.shape === "text" || !SHAPES.shapes[plan.shape]) {
+    if (!lines.length) lines = ["Happy"];
+    if (lines.length === 1) return textStrokes(lines[0], 80, cur ? 30 : 24, font);
+    const h = cur ? 18 : 15; return T(lines[0], 72, h, 13).concat(T(lines[1], 72, h, -13));
+  }
   const art = SHAPES.shapes[plan.shape];
-  return words ? moveSt(art, 12, 0.65).concat(moveSt(textStrokes(words, 50, font === "print" ? 10 : 13, font), -28, 1)) : art;
+  if (lines.length === 1) return moveSt(art, 12, 0.65).concat(T(lines[0], 50, cur ? 13 : 10, -28));
+  if (lines.length === 2) { const h = cur ? 11 : 9; return moveSt(art, 18, 0.5).concat(T(lines[0], 60, h, -12), T(lines[1], 52, h, -29)); }
+  return art;
 }
 // Understand the common requests locally: shape, name (quoted or a guest's), cursive, brands.
 function readWords(said, cur) {
   const c = said.toLowerCase();
-  const shape = /\b(cat|kitty|kitten)/.test(c) ? "cat" : /heart/.test(c) ? "heart" : /\bstar/.test(c) ? "star" : /smil/.test(c) ? "smiley"
-    : /pumpkin/.test(c) && !/pumpkin pie/.test(c) ? "pumpkin" : /\bleaf|\bleaves/.test(c) ? "leaf"
-    : /(only|just) (the )?(name|word|text)/.test(c) ? "text" : cur ? cur.shape : null;
+  // One picture per pie (simple pipes cleanly): if several are asked for, the last one named wins.
+  const PICS = [["cat", /\b(cat|kitty|kitten)s?\b/g], ["dog", /\b(dog|puppy|pup|doggy)s?\b/g], ["heart", /\bhearts?\b/g], ["star", /\bstars?\b/g],
+    ["smiley", /\bsmil(ey|e|ing)/g], ["pumpkin", /\bpumpkins?\b(?! pie)/g], ["leaf", /\b(leaf|leaves)\b/g]];
+  const hits = PICS.flatMap(([k, re]) => [...c.matchAll(re)].map((m) => [m.index, k])).sort((a, b) => a[0] - b[0]);
+  const picks = [...new Set(hits.map((h) => h[1]))];
+  const shape0 = hits.length ? hits[hits.length - 1][1] : null;
+  const shape = shape0 || (/(only|just) (the )?(name|word|text)/.test(c) ? "text" : cur ? cur.shape : null);
   const font = /cursive|script|handwrit/.test(c) ? "cursive" : /\b(print|block letters)\b/.test(c) ? "print" : cur ? cur.font || "print" : "print";
   const guest = (n) => state.guests.find((g) => g.name.toLowerCase() === n.toLowerCase());
-  const quoted = said.match(/["“”'‘’]([^"“”'‘’]{1,24})["“”'‘’]/);
+  const quoted = said.match(/["“”]([^"“”]{1,40})["“”]/) || said.match(/(?:^|\s)['‘]([^'‘’]{1,40})['’](?:\s|$|[.,!])/)
+    || said.match(/\b(happy thanksgiving|happy turkey day|gobble gobble|happy birthday|thank you|thankful|give thanks|love you)\b/i);
   let text = cur ? cur.text || "" : "";
   if (quoted) text = guest(quoted[1].trim())?.name || quoted[1].trim();
   else { const g = state.guests.find((g) => new RegExp(`\\b${g.name}\\b`, "i").test(said)); if (g) text = g.name; }
   if (/(no|without|drop|remove)\b.*(name|text|word)/.test(c)) text = "";
   const named = state.guests.find((g) => g.name === text);
-  return { shape: shape || (text ? "text" : "smiley"), font, text: text.slice(0, SHAPES.max_text), guest: named ? named.name : "" };
+  const lines = splitLines(text), kept = lines.join(" ");
+  const notes = [];
+  if (picks.length > 1) notes.push(`One picture per pie keeps the piping clean, so it's the ${shape}.`);
+  if (text && kept !== text.split(/\s+/).filter(Boolean).join(" ")) notes.push(`Kept the words short enough to pipe: "${kept}".`);
+  return { shape: shape || (text ? "text" : "smiley"), font, text: kept, guest: named ? named.name : "", design_note: notes.join(" ") };
 }
 function samplePlan(said, cur) {
   const d = readWords(said, cur), c = said.toLowerCase();
   const keys = [/hershey/.test(c) ? "hersheys" : cur && cur.ingredients.includes(SAMPLE.products.hersheys.ingredient) && !/enjoy life/.test(c) ? "hersheys" : "enjoy", "clover"];
   if (/m\s*&\s*m|\bm and m|\bmms\b|m&amp;m/.test(c) || (cur && cur.ingredients.includes(SAMPLE.products.mms.ingredient) && !/(no|without) m/.test(c))) keys.push("mms");
   // "bake a pumpkin pie ..." -> the whole pie (crust, filling) as store products, then the topping.
-  const pie = /\bpie\b|\bbake\b/.test(c) || !!(cur && cur.pie);
+  const base = /cookie/.test(c) ? "cookie" : /cupcake/.test(c) ? "cupcake" : /\bcake\b/.test(c) ? "cake" : cur ? cur.base || "pie" : "pie";
+  const pie = base === "pie" && (/\bpie\b/.test(c) || !!(cur && cur.pie));
   if (pie) keys.unshift(...SAMPLE.pie.keys);
   const prods = keys.map((k) => SAMPLE.products[k]);
   const notes = [SAMPLE.plan.allergy_notes];
   if (pie) notes.push("Low sugar for Dad and Mom: the Libby's recipe uses 3/4 cup sugar; many bakers cut it to 1/2 cup. Pillsbury crusts are made with lard (not vegan).");
   if (keys.includes("hersheys")) notes.unshift("Hershey's chips list natural flavor, so PumpkinPi asks you to check the label; Enjoy Life is the nut-free-facility swap.");
   if (keys.includes("mms")) notes.unshift("M&M's Milk Chocolate says \"May contain peanuts\": not for Debbie.");
-  const shapeName = { cat: "cat", heart: "heart", star: "star", smiley: "smiley", pumpkin: "pumpkin", leaf: "leaf", text: "name" }[d.shape];
+  const shapeName = { cat: "cat", dog: "dog", heart: "heart", star: "star", smiley: "smiley", pumpkin: "pumpkin", leaf: "leaf", text: "name" }[d.shape];
   return { ...SAMPLE.plan, ...d, ingredients: prods.map((p) => p.ingredient), products: prods,
-    pie, topping: pie ? `Pumpkin pie + ${SAMPLE.plan.topping.toLowerCase()}` : SAMPLE.plan.topping, sources: pie ? [...SAMPLE.pie.sources, ...(SAMPLE.plan.sources || [])] : SAMPLE.plan.sources,
+    pie, base, makes: base !== "pie" ? `${base[0].toUpperCase()}${base.slice(1)} topping` : "", topping: pie ? `Pumpkin pie + ${SAMPLE.plan.topping.toLowerCase()}` : SAMPLE.plan.topping, sources: pie ? [...SAMPLE.pie.sources, ...(SAMPLE.plan.sources || [])] : SAMPLE.plan.sources,
     recipe: [...(pie ? SAMPLE.pie.recipe : []), ...SAMPLE.plan.recipe, ...(keys.includes("mms") ? ["Topping: press M&M's around the edge after piping."] : [])],
     allergy_notes: notes.join(" "), caption: `${pie ? "A pumpkin pie with a" : "A"} chocolate ${shapeName}${d.text ? ` for ${d.text}` : ""}${d.font === "cursive" ? " in cursive" : ""}` };
 }
@@ -84,11 +117,16 @@ const label = { red: "Allergen", yellow: "Check label", green: "Safe", wait: "Ch
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let note = "";  // last event message; shown in the bottom bar
-function log(msg) { note = msg; $("why").textContent = msg; }
+// Printer/stop messages pop up briefly above the Send button (no permanent status line).
+let note = "", toastTimer = null;
+function log(msg) {
+  note = msg; const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+}
 
+const API = (window.API_BASE && !/^__PORT/.test(window.API_BASE)) ? window.API_BASE.replace(/\/$/, "") : "";
 async function api(path, body) {
-  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const r = await fetch(API + path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(m); }
   return r;
 }
@@ -100,7 +138,7 @@ async function refreshStatus() {
   let printer = false;
   try {
     const s = await apiJson("/api/status");
-    state.live = state.everLive = true; state.guests = s.guests; printer = !!s.printer;
+    state.live = state.everLive = true; state.guests = s.guests; printer = !!s.printer; state.noCamera = s.camera === false;
   } catch {
     // Never fall back to sample "Safe" results once the real Pi server has been seen.
     if (!state.everLive) state.live = false;
@@ -117,7 +155,7 @@ $("skipPrinter").onclick = () => { state.skipPrinter = true; $("noPrinter").hidd
 
 // ---------- screens ----------
 // The top box asks for a new idea on Recipe/Camera ("Make"), and for a change on Design ("Update").
-const PH = { make: "What should we pipe on the pie?", change: "Change the design, e.g. just a heart, no name" };
+const PH = { make: "Ask anything about food, or what to make", change: "Change the design, e.g. just a heart, no name" };
 let boxMode = "make";
 function setBox(mode) {
   if (mode === boxMode) return;
@@ -144,7 +182,7 @@ function show(view) {
 // Live Pi camera preview (MJPEG). Closing the <img> stream lets the Pi stop the camera.
 function liveCamera(on) {
   const img = $("camImg");
-  if (on && !state.live) {   // no Pi server: show a drawn sample frame so the screen can be tried anywhere
+  if (on && (!state.live || state.noCamera)) {   // no Pi server: show a drawn sample frame so the screen can be tried anywhere
     img.src = "sample-camera.jpg"; img.hidden = false; $("liveTag").hidden = false; $("liveTag").textContent = "Sample"; $("camEmpty").hidden = true;
     return;
   }
@@ -157,7 +195,7 @@ function liveCamera(on) {
   $("camEmpty").textContent = "Starting camera…";
   img.onload = () => { img.hidden = false; $("liveTag").hidden = false; $("camEmpty").hidden = true; };
   img.onerror = () => { delete img.dataset.live; img.hidden = true; $("liveTag").hidden = true; $("camEmpty").hidden = false; $("camEmpty").textContent = "Camera not available. Check the ribbon cable."; };
-  img.src = `/api/camera.mjpg?t=${Date.now()}`;
+  img.src = `${API}/api/camera.mjpg?t=${Date.now()}`;
 }
 document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".tab"); if (t) show(t.dataset.v); };
 
@@ -166,7 +204,8 @@ async function ask() {
   const prompt = (boxMode === "make" ? $("prompt").value : state.prompt || "").trim();
   if (!prompt || state.busy) return;
   state.prompt = prompt; state.change = "";
-  state.busy = true; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
+  const prev = { plan: state.plan, strokes: state.strokes, path: state.path, checks: state.checks, ready: state.ready };
+  state.busy = true; state.answer = null; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
   show("recipe"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
   renderRecipe(); updateGate();
@@ -174,6 +213,7 @@ async function ask() {
     let res;
     if (state.live) res = await apiJson("/api/design", { prompt, diets: state.diets });
     else { await sleep(1200); await loadSample(); const plan = samplePlan(prompt, null); res = { plan, strokes: strokesFor(plan) }; }
+    if (res.question) { Object.assign(state, prev); showAnswer(res.question); return; }
     applyDesign(res);
     await checkMissing();
   } catch (e) {
@@ -185,9 +225,14 @@ async function ask() {
   }
 }
 
+// A question ("what does free-range mean?"): cited answer card on the Recipe screen; the design stays.
+function showAnswer(q) {
+  state.answer = q; window.Pie3D?.thinking(false); drawPreview(); renderRecipe();
+}
 // Show a design. res.strokes is the path read back from the real G-code (exact), res.path its length/time.
 function applyDesign(res) {
   const sameTopping = state.plan && JSON.stringify(state.plan.ingredients) === JSON.stringify(res.plan.ingredients);
+  state.answer = res.plan.answer ? { answer: res.plan.answer, sources: res.plan.sources } : null;
   state.plan = res.plan; state.strokes = res.strokes; state.path = res.path || null;
   state.scan = res.scan || (state.demo ? state.demo.scan || [] : []);
   if (!sameTopping) { state.guide = null; loadGuide(); }
@@ -196,12 +241,10 @@ function applyDesign(res) {
 }
 async function checkMissing() {
   const todo = state.plan.ingredients.filter((i) => !state.checks[i]);
-  if (todo.length) log(`Checking ${todo.length} ingredient${todo.length > 1 ? "s" : ""}…`);
   for (const ing of todo) await check(ing);
-  log(allSafe() ? "All ingredients safe. Tap Start Designing." : "An ingredient needs a check.");
 }
 
-// Allergy watch: cited hidden-name lists + where THESE ingredients hide nuts (Agent API, allergy sites only).
+// Allergies and Dietary Restrictions: cited hidden-name lists + where THESE ingredients hide nuts (Agent API, allergy sites only).
 async function loadGuide() {
   const plan = state.plan;
   try {
@@ -224,6 +267,7 @@ async function revise() {
       const plan = samplePlan(change, state.plan);
       res = { plan, strokes: strokesFor(plan) };
     }
+    if (res.question) { window.Pie3D?.thinking(false); drawPreview(); $("prompt").value = ""; state.change = ""; syncClear(); showAnswer(res.question); show("recipe"); return; }
     applyDesign(res);
     $("prompt").value = ""; state.change = ""; syncClear();
     await checkMissing();   // only new ingredients need a new check
@@ -313,12 +357,26 @@ const favicon = (u) => `<img class="fav" alt="" src="https://www.google.com/s2/f
 // Topping colour for the hero swatch
 const swatch = (t) => /white/.test(t) ? "#f4ead6" : /milk choc/.test(t) ? "#8a5a3c" : /choc|cocoa|ganache/.test(t) ? "#4a2a18" : /cream cheese|whipped|cream/.test(t) ? "#fbf6ea" : /caramel/.test(t) ? "#c27a32" : "#e08c3e";
 
+// Cited answer for a food question (labels, safety, how-to). Sources are the Agent API's own search results.
+function answerCard(q) {
+  if (!q || !q.answer) return "";
+  const src = (q.sources || []).slice(0, 5).map((x, i) =>
+    `<a class="src" href="${esc(x.url)}" target="_blank" rel="noopener">${favicon(x.url)}<span class="num">${i + 1}</span>${esc(host(x.url))}</a>`).join("");
+  return `<div class="answer"><p>${esc(q.answer)}</p>${src ? `<div class="asrc">${src}</div>` : ""}</div>`;
+}
+
 function renderRecipe() {
   renderDiets();
   const p = state.plan;
+  if (!p && state.answer && !state.busy) {   // just a question, no design yet
+    const q = state.answer;
+    $("ingCol").innerHTML = `<h3>Answer</h3>${answerCard(q)}`;
+    $("stepCol").innerHTML = (q.recipe || []).length ? `<h3>Steps</h3><ol class="steps">${q.recipe.map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("")}</ol>` : "";
+    $("srcCol").innerHTML = ""; return;
+  }
   if (!p) {
     $("ingCol").innerHTML = state.busy ? `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity is writing the recipe…</p>`
-      : `<p class="muted big">Type what you'd like, then tap Make.</p>`;
+      : "";
     $("stepCol").innerHTML = ""; $("srcCol").innerHTML = ""; return;
   }
   const rows = p.ingredients.map((ing) => {
@@ -344,8 +402,9 @@ function renderRecipe() {
       <span class="who">${esc(title)}${sub ? `<span class="psub">${esc(sub)}</span>` : ""}<span class="tag ${c.status}">${c.status === "wait" ? "Checking" : esc(c.tag || label[c.status])}</span></span>
       <span class="sicon ${c.status}">${st}</span></button>${detail}`;
   }).join("");
-  $("ingCol").innerHTML = `<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>
-      <span><b>${esc(p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${rows}`;
+  const dnote = p.design_note ? `<p class="dnote2">${esc(p.design_note)}</p>` : "";
+  $("ingCol").innerHTML = `${state.answer ? answerCard(state.answer) : ""}<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>
+      <span><b>${esc(p.makes || p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${dnote}${rows}`;
   const steps = (p.recipe || []).map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("");
   $("stepCol").innerHTML = `<h3>Steps</h3><ol class="steps">${steps}</ol>
     ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}
@@ -368,7 +427,7 @@ function renderWatch() {
   const blocks = scan.filter((h) => h.kind === "contains"), checks = scan.filter((h) => h.kind === "check");
   const banner = blocks.length ? `<div class="scan red">${STATUS_ICON.red}<span>The recipe names <b>${esc(blocks[0].term)}</b> (${esc(blocks[0].allergen)}) in ${esc(blocks[0].where)}. Change the design.</span></div>`
     : checks.length ? `<div class="scan yellow">${STATUS_ICON.yellow}<span><b>${esc(checks[0].term)}</b> in ${esc(checks[0].where)}: check the label for ${esc(checks[0].allergen)}.</span></div>` : "";
-  if (!g) return `<h3>Allergy watch</h3>${banner}<p class="muted small by"><span class="spin sm"></span> Researching where nuts hide in this recipe…</p>`;
+  if (!g) return `<h3>Allergies and Dietary Restrictions</h3>${banner}<p class="muted small by"><span class="spin sm"></span> Researching where nuts hide in this recipe…</p>`;
   const cards = (g.allergens || []).map((c) => {
     const k = keyFor(c.allergen), open = state.openWatch === c.allergen;
     // Closed: one line + a few hidden names. Open: every risk for this recipe, the cited facts, all names.
@@ -382,7 +441,7 @@ function renderWatch() {
         <ul class="wlines">${lines}</ul>${facts}
         <span class="names">${names.map((n) => `<i>${esc(n)}</i>`).join("")}${more ? `<i class="more">+${more} more</i>` : ""}</span></span></button>`;
   }).join("");
-  return `<h3>Allergy watch</h3>${banner}<div class="watch">${cards}</div>`;
+  return `<h3>Allergies and Dietary Restrictions</h3>${banner}<div class="watch">${cards}</div>`;
 }
 $("srcCol").onclick = (e) => {
   const b = e.target.closest(".wcard"); if (!b) return;
@@ -416,7 +475,10 @@ function renderAll() { renderRecipe(); renderDesign(); }
 // ---------- preview ----------
 function drawPreview() {
   window.pieStrokes = state.strokes || [];
-  if (window.Pie3D) window.Pie3D.show(window.pieStrokes);
+  window.pieBase = state.plan?.base || "pie";
+  $("noPipe").hidden = window.pieBase !== "none";
+  window.pieCandy = /m\s*&\s*m/i.test((state.plan?.ingredients || []).join(" "));
+  if (window.Pie3D) { window.Pie3D.setBase?.(window.pieBase, window.pieCandy); window.Pie3D.show(window.pieStrokes); }
   // 2D fallback (only visible if WebGL is unavailable). SVG y is down; strokes use +Y away from you.
   $("strokes").innerHTML = (state.strokes || []).map((s) =>
     `<polyline points="${s.map(([x, y]) => `${x.toFixed(1)},${(-y).toFixed(1)}`).join(" ")}"/>`).join("");
@@ -438,6 +500,7 @@ function reason() {
   if (state.ready < READY_AT) return document.body.dataset.view === "recipe" ? "All ingredients checked" : "Next: check the pie on Camera";
   return "Ready. Stay next to the printer.";
 }
+const noun = () => ({ cookie: "Cookie", cake: "Cake", cupcake: "Cupcake" })[state.plan?.base] || "Pie";
 // Bottom button follows the flow: Recipe -> Start Designing, Design -> Check the Pie / Send to Printer.
 function nextStep() {
   const view = document.body.dataset.view;
@@ -447,15 +510,15 @@ function nextStep() {
   return "send";
 }
 function updateGate() {
-  const p = !!state.plan;
+  const p = !!state.plan && state.plan.base !== "none";
   $("dryBtn").disabled = !p || state.job;
   const ok = p && allSafe() && state.ready >= READY_AT;
   const b = $("sendBtn"), step = nextStep();
   b.classList.toggle("stop", step === "stop");
   if (step === "stop") { b.disabled = false; b.textContent = "Stop"; return; }
-  $("why").textContent = reason();
+  $("sendBtn").title = reason();
   if (step === "design") { b.textContent = "Start Designing"; b.disabled = !p || state.busy; }
-  else if (step === "camera") { b.textContent = "Check the Pie"; b.disabled = !p || state.busy; }
+  else if (step === "camera") { b.textContent = `Check the ${noun()}`; b.disabled = !p || state.busy; }
   else { b.textContent = "Send to Printer"; b.disabled = !ok || state.busy; }
 }
 
@@ -482,13 +545,13 @@ async function start(dry_run) {
       await sleep(500);
       const j = await apiJson("/api/job");
       $("jobFill").style.width = `${j.pct ?? Math.round((100 * j.done) / Math.max(1, j.total))}%`;
-      if (j.phase === "upload") $("why").textContent = `Saving ${j.file} to the printer's SD card…`;
-      else if (j.phase === "printing") $("why").textContent = `${what} ${j.file} from the SD card. Stay next to the printer.`;
-      else if (j.phase === "streaming") $("why").textContent = `${what} over USB (no SD card). Stay next to the printer.`;
+      if (j.phase === "upload") log(`Saving ${j.file} to the printer's SD card…`);
+      else if (j.phase === "printing") log(`${what} ${j.file} from the SD card. Stay next to the printer.`);
+      else if (j.phase === "streaming") log(`${what} over USB (no SD card). Stay next to the printer.`);
       if (!j.running) { log(j.error ? `Stopped: ${j.error}` : `${what} done${j.file ? ` (${j.file})` : ""}.`); break; }
     }
   } catch (e) { log(`Send refused: ${e.message}`); }
-  state.job = false; updateGate(); if (note) $("why").textContent = note;
+  state.job = false; updateGate();
 }
 $("dryBtn").onclick = () => start(true);
 

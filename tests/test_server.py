@@ -174,3 +174,25 @@ def test_edit_to_cat_in_cursive(tmp_path, monkeypatch):
     r = c.post("/api/edit", json={"shape": "cat", "text": "Debbie", "font": "cursive"}).json()
     assert r["plan"]["shape"] == "cat" and r["plan"]["font"] == "cursive" and len(r["strokes"]) > 8
     assert c.post("/api/edit", json={"font": "gothic"}).status_code == 400
+
+
+def test_question_returns_answer_and_keeps_design(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    first = c.post("/api/design", json={"prompt": "x"}).json()
+    q = {**PLAN, "kind": "question", "answer": "Free range means outdoor access.", "base": "none",
+         "sources": [{"title": "FSIS", "url": "https://www.fsis.usda.gov/"}]}
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None: dict(q))
+    r = c.post("/api/design", json={"prompt": "what does free range mean on a turkey?"}).json()
+    assert r["question"]["answer"].startswith("Free range") and "strokes" not in r
+    assert srv.state["plan"]["ingredients"] == first["plan"]["ingredients"]   # design kept
+
+
+def test_cookie_base_shrinks_design_and_none_has_no_path(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None: {**PLAN, "kind": "make", "base": "cookie", "shape": "heart", "text": ""})
+    r = c.post("/api/design", json={"prompt": "M&M cookies with a heart"}).json()
+    assert max(abs(v) for s in r["strokes"] for pt in s for v in pt[:2]) <= 45 * 0.75 + 0.5
+    monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None: {**PLAN, "kind": "make", "base": "none"})
+    r = c.post("/api/design", json={"prompt": "roast turkey"}).json()
+    assert r["strokes"] == []
+    assert c.post("/api/start", json={"dry_run": True}).status_code == 409
