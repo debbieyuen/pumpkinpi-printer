@@ -249,21 +249,15 @@ def legend(cfg: dict, guest: str) -> str:
 
 
 def sauce_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
-    """Back of the card: every sauce by exact brand, YES/NO for this guest, then how to hot pot."""
+    """Every sauce by exact brand, YES/NO for this guest."""
     card = cfg.get("card", {})
-    bh = card.get("back_mm", 3.8)
-    th = card.get("text_mm", 4.5)
-    pitch = th * card.get("line_gap", 1.6)
-    rows = [("Sauces: can I eat it?", 6, "print", True, pitch + 3)]
-    sh = card.get("sauce_mm", 4.0)                            # brand names are long: one size for every sauce line
+    sh = card.get("sauce_mm", 3.6)
+    pitch = sh * card.get("back_gap", 1.5)
+    rows = [("Sauces: can I eat it?", 5.5, "print", True, pitch + 3)]
     rows += [(ln["text"], sh, "print", False, pitch) for ln in
              guest_lines(cfg, [x for x in lines if x.get("part") == "sauce"], guest)]
-    if cfg.get("steps"):
-        rows[-1] = rows[-1][:4] + (pitch + 5,)
-        rows.append(("How to hot pot", 6, "print", True, pitch + 2))
-        rows += [(t, th, "print", False, pitch) for t in cfg["steps"]]
     rows[-1] = rows[-1][:4] + (pitch + 1,)
-    rows.append((legend(cfg, guest), bh, "print", True, pitch))
+    rows.append((legend(cfg, guest), 3.2, "print", True, pitch))
     return rows
 
 
@@ -273,23 +267,20 @@ def back_rows(cfg: dict) -> list[tuple]:
     W, m = card.get("w", 127.0), card.get("margin", 10.0)
     bh = card.get("back_mm", 3.6)
     pitch = bh * card.get("back_gap", 1.6)
-    rows = [("Ingredients", 6, "print", True, pitch + 4)]
+    rows = [("Ingredients", 5.5, "print", True, pitch + 3)]
+    fresh = []
     for d in cfg["menu"]:
-        # one line per labeled product ("Tofu: water, soybeans, calcium sulfate"); whole foods share the dish line
-        whole, own = [], []
+        # one line per labeled product ("Tofu (House Foods): water, soybeans, calcium sulfate");
+        # unbranded fresh foods (water, ginger, napa...) share one "Fresh" line at the end
         for p in d["products"]:
             short = (p.get("short") or p["item"]) if isinstance(p, dict) else p
             if isinstance(p, dict) and p.get("tag"):
                 brand = f" ({p['brand']})" if p.get("brand") else ""
-                own.append(f"{p['tag']}{brand}: {short}")
-            else:
-                whole.append(short)
-        if whole and own:
-            own.append(f"Plus: {', '.join(whole)}")
-        elif whole:
-            own = [f"{d['name']}: {', '.join(whole)}"]
-        for t in own:
-            rows += [(x, bh, "print", False, pitch) for x in wrap(t, bh, W - 2 * m)]
+                rows += [(x, bh, "print", False, pitch) for x in wrap(f"{p['tag']}{brand}: {short}", bh, W - 2 * m)]
+            elif short not in fresh:
+                fresh.append(short)
+    if fresh:
+        rows += [(x, bh, "print", False, pitch) for x in wrap(f"Fresh: {', '.join(fresh)}", bh, W - 2 * m)]
     return rows
 
 
@@ -311,7 +302,9 @@ def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.
 
 def layout_back(cfg: dict, lines: list[dict] | None = None, guest: str = "", side: str = "back") -> list[Stroke]:
     card = cfg.get("card", {})
-    rows = back_rows(cfg) if side == "ingredients" else sauce_rows(cfg, lines or [], guest)
+    rows = back_rows(cfg)
+    rows[-1] = rows[-1][:4] + (rows[-1][4] + 3,)
+    rows += sauce_rows(cfg, lines or [], guest)
     st, _ = draw_rows(rows, card.get("w", 127.0), card.get("h", 178.0), card.get("margin", 10.0))
     return st
 
@@ -321,7 +314,7 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
 
     Fixed line pitch (baselines), block centered top to bottom, a small pumpkin under the menu."""
     from .shapes import pumpkin
-    if side in ("back", "ingredients"):
+    if side == "back":
         return layout_back(cfg, lines, guest, side)
     card = cfg.get("card", {})
     W, H = card.get("w", 127.0), card.get("h", 178.0)       # 5 x 7 inch
@@ -329,16 +322,21 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
     th = card.get("text_mm", 5.0)                             # letter height for menu lines (5 mm = readable in PLA)
     pitch = th * card.get("line_gap", 1.8)
     ev = cfg.get("event", {})
-    rows = [(ev.get("title", "Thanksgiving"), 12, "cursive", True, 22)]
+    rows = [(ev.get("title", "Thanksgiving"), 11, "cursive", True, 17)]
     if ev.get("when"):
-        rows.append((ev["when"], 5, "print", True, 17))
+        rows.append((ev["when"], 5, "print", True, 13))
     if guest:
-        rows.append((guest, 9, "cursive", True, 18))
+        rows.append((guest, 8, "cursive", True, 14))
     rows.append(("Menu", 6, "print", True, pitch + 2))
     menu = guest_lines(cfg, [x for x in lines if x.get("part", "menu") == "menu"], guest)
     rows += [(ln["text"], th, "print", False, pitch) for ln in menu]
+    if cfg.get("steps"):
+        rows[-1] = rows[-1][:4] + (pitch + 5,)
+        rows.append(("How to hot pot", 6, "print", True, pitch + 2))
+        rows += [(t, th, "print", False, pitch) for t in cfg["steps"]]
     if menu:
-        rows.append((legend(cfg, guest), 4, "print", True, 10))
+        rows[-1] = rows[-1][:4] + (pitch + 2,)
+        rows.append((legend(cfg, guest), 3.6, "print", True, 10))
     art = 16.0                                                # pumpkin height
     try:
         out, y = draw_rows(rows, W, H, m, extra=10 + art)
@@ -430,8 +428,8 @@ def main() -> None:
     ap.add_argument("--check", action="store_true", help="run Search + Decider on every product (needs the API key)")
     ap.add_argument("--guest", default="", help="name printed on the card")
     ap.add_argument("--gcode", action="store_true", help="print the card's G-code")
-    ap.add_argument("--side", default="front", choices=["front", "back", "ingredients"],
-                    help="front: menu YES/NO; back: sauces YES/NO + how to hot pot; ingredients: exact labels")
+    ap.add_argument("--side", default="front", choices=["front", "back"],
+                    help="front: menu YES/NO + how to hot pot; back: exact ingredients + sauces YES/NO")
     args = ap.parse_args()
     cfg = load()
     if args.check:

@@ -51,7 +51,7 @@ def test_back_lists_exact_label_ingredients_and_fits():
     texts = [r[0] for r in cards.back_rows(cfg)]
     assert any(t.startswith("Tofu (House Foods): water") for t in texts)
     assert any(t.startswith("Soy sauce (Kikkoman): water,") for t in texts)
-    st = cards.layout(cfg, [], side="ingredients")
+    st = cards.layout(cfg, [], side="back")
     W, H = cfg["card"]["w"], cfg["card"]["h"]
     assert all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
 
@@ -93,7 +93,22 @@ def test_back_has_sauces_and_steps():
     import pumpkinpi.allergen_check as ac
     cfg = cards.load()
     texts = [r[0] for r in cards.sauce_rows(cfg, [], "Debbie")]
-    assert "How to hot pot" in texts and texts[-1].startswith("YES = no peanut, tree nut or fish")
+    assert texts[0] == "Sauces: can I eat it?" and texts[-1].startswith("YES = no peanut, tree nut or fish")
+
+
+def test_two_sides_only_and_both_fit():
+    import pumpkinpi.allergen_check as ac
+    cfg = cards.load()
+    orig = ac.check_ingredient
+    ac.check_ingredient = lambda c, p, a, label=None: {"checks": {}, "relevance": None}
+    try:
+        lines = cards.check_menu(None, cfg)
+    finally:
+        ac.check_ingredient = orig
+    W, H = cfg["card"]["w"], cfg["card"]["h"]
+    for side in ("front", "back"):
+        st = cards.layout(cfg, lines, "Debbie", side)
+        assert st and all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
 
 
 def test_recipe_label_is_evidence():

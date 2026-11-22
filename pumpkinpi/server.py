@@ -174,7 +174,7 @@ class RecordReq(BaseModel):
 
 class CardReq(BaseModel):
     guest: str = ""
-    side: str = "front"     # front: menu YES/NO; back: sauces YES/NO + how to; ingredients: exact labels
+    side: str = "front"     # front: menu YES/NO + how to hot pot; back: ingredients + sauces YES/NO
     confirm: bool = False   # "bed has no food, syringe tip is above the nozzle"
 
 
@@ -721,7 +721,7 @@ def card_strokes(guest: str, side: str = "front") -> list:
     if not lines:
         raise HTTPException(409, "Check the menu first")
     try:
-        return cards.layout(cards.load(), lines, guest.strip()[:16], side if side in ("back", "ingredients") else "front")
+        return cards.layout(cards.load(), lines, guest.strip()[:16], "back" if side == "back" else "front")
     except ValueError as e:
         raise HTTPException(400, str(e))
 

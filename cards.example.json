@@ -8,11 +8,12 @@
  "card": {
   "w": 127,
   "h": 178,
-  "margin": 10,
-  "text_mm": 4.5,
-  "line_gap": 1.6,
-  "back_mm": 3.8,
-  "back_gap": 1.5
+  "margin": 8,
+  "text_mm": 4.2,
+  "line_gap": 1.5,
+  "back_mm": 3.4,
+  "back_gap": 1.45,
+  "sauce_mm": 3.4
  },
  "guests": [
   "Debbie",
@@ -36,7 +37,7 @@
      "item": "Kettle & Fire Classic Chicken Bone Broth, 16.9 oz",
      "brand": "Kettle & Fire",
      "tag": "Broth",
-     "short": "water, chicken bones, onions, carrots, fennel, leeks, apple cider vinegar, thyme, shiitake, tamarind paste, bay leaves, sea salt",
+     "short": "water, chicken bones, onion, carrot, fennel, leek, cider vinegar, thyme, shiitake, tamarind, bay leaf, sea salt",
      "label": "Chicken Bone Broth (Water, Chicken Bones, Onions, Carrots, Fennel, Leeks, Apple Cider Vinegar, Thyme, Shiitake Mushrooms, Tamarind Paste, Bay Leaves), Sea Salt. Certified organic ingredients.",
      "contains": [],
      "source": "https://www.kettleandfire.com/products/chicken-bone-broth",
@@ -74,7 +75,7 @@
    "products": [
     {
      "item": "Sky Ranch Thin-Sliced Beef Short Plate Roll, 12 oz",
-     "short": "beef (no salt, no marinade)",
+     "short": "beef",
      "label": "USDA Choice beef short plate. No added salt, no marinades, no preservatives.",
      "contains": [],
      "source": "https://www.weee.com/en/product/Thin-Sliced-Beef-Short-Plate-Roll-USDA-Choice/114295",
