@@ -26,11 +26,14 @@ button,input{font:inherit;color:inherit}
 .top{display:flex;align-items:center;gap:.7rem;padding:.7rem var(--pad) .3rem}
 .sym{height:1.7rem;width:auto}
 h1{font-size:1.6rem;font-weight:600;letter-spacing:-.03em}
-.mode{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:.12rem .65rem;margin-left:.3rem}
-.mode.live{color:var(--teal-hi);border-color:var(--teal)}
+.mode{display:flex;align-items:center;gap:.45rem;font-size:.85rem;font-weight:500;color:var(--muted);margin-left:.6rem}
+.mdot{width:.7rem;height:.7rem;border-radius:50%;background:var(--line)}
+.mode.on{color:var(--teal-hi)}.mode.on .mdot{background:var(--teal-hi);box-shadow:0 0 0 4px rgba(32,184,205,.18)}
+.mode.warn{color:var(--peach)}.mode.warn .mdot{background:var(--peach)}
+.mode.off .mdot{background:var(--muted)}
 .powered{margin-left:auto;display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted)}
 .powered img{height:1.05rem;width:auto;opacity:.9}
-.stop{margin-left:1.2rem;height:3rem;padding:0 1.8rem;border:0;border-radius:999px;background:var(--terra);color:#fff;
+.stop{margin-left:auto;height:3rem;padding:0 1.8rem;border:0;border-radius:999px;background:var(--terra);color:#fff;
   font-size:1.25rem;font-weight:800;letter-spacing:.1em;cursor:pointer}
 .stop:active{transform:scale(.97)}
 

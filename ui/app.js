@@ -34,17 +34,25 @@ async function api(path, body) {
   return r.json();
 }
 
-async function init() {
+// Status pill: Online (Pi + printer), No printer (Pi only), Offline (no Pi server; sample data).
+function setMode(cls, text) {
+  $("modeBadge").className = "mode " + cls; $("modeText").textContent = text;
+}
+async function refreshStatus() {
   try {
     const s = await api("/api/status");
-    state.live = true;
-    state.guests = s.guests;
-    $("modeBadge").textContent = s.printer ? "Printer connected" : "Printer offline";
-    $("modeBadge").classList.add("live");
-    log("Connected to PumpkinPi.");
+    state.live = state.everLive = true; state.guests = s.guests;
+    s.printer ? setMode("on", "Online") : setMode("warn", "No printer");
   } catch {
-    log("Demo mode: sample results only. No real search and no printer.");
+    // Never fall back to sample "Safe" results once the real Pi server has been seen.
+    if (!state.everLive) state.live = false;
+    setMode("off", "Offline");
   }
+}
+async function init() {
+  await refreshStatus();
+  log(state.live ? "Connected to PumpkinPi." : "Offline: sample results only, no printer.");
+  setInterval(refreshStatus, 10000);
   updateGate();
 }
 
@@ -153,7 +161,7 @@ $("readyBtn").onclick = async () => {
 };
 
 async function start(dry_run) {
-  if (!state.live) { log(dry_run ? "Demo: dry run would trace the path 15 mm above the pie." : "Demo: would pipe now."); return; }
+  if (!state.live) { log(dry_run ? "Offline: dry run would trace the path 15 mm above the pie." : "Offline: would pipe now."); return; }
   try {
     const r = await api("/api/start", { dry_run });
     log(`${dry_run ? "Dry run" : "Piping"} started (${r.lines} moves). Stay next to the printer.`);
@@ -170,7 +178,7 @@ $("startBtn").onclick = () => start(false);
 
 $("stopBtn").onclick = async () => {
   state.ready = 0; updateGate();
-  if (!state.live) { log("Demo: STOP pressed (M112 would be sent)."); return; }
+  if (!state.live) { log("Offline: STOP pressed (M112 would be sent)."); return; }
   try { await api("/api/stop", {}); log("STOP sent (M112). Power-cycle the printer before continuing."); }
   catch (e) { log(`STOP failed: ${e.message}. Switch the printer off now.`); }
 };
