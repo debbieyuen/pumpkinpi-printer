@@ -1,4 +1,4 @@
-// PumpkinPi touchscreen UI.
+// Perplexity Make (PumpkinPi) touchscreen UI.
 // Online: served by pumpkinpi/server.py on the Pi (Agent API, Search API, Decider, printer).
 // No server (not on the Pi): sample results only, behind the "Printer Not Connected" screen.
 
@@ -63,14 +63,29 @@ async function refreshStatus() {
 $("skipPrinter").onclick = () => { state.skipPrinter = true; $("noPrinter").hidden = true; document.body.classList.remove("nop"); };
 
 // ---------- screens ----------
+// The top box asks for a new idea on Recipe/Camera ("Make"), and for a change on Design ("Update").
+const PH = { make: "What should we pipe on the pie?", change: "Change the design, e.g. just a heart, no name" };
+let boxMode = "make";
+function setBox(mode) {
+  if (mode === boxMode) return;
+  const el = $("prompt");
+  if (boxMode === "make") state.prompt = el.value; else state.change = el.value;
+  boxMode = mode;
+  el.value = (mode === "make" ? state.prompt : state.change) || "";
+  el.placeholder = PH[mode]; el.setAttribute("aria-label", PH[mode]);
+  if (!state.busy) $("askBtn").textContent = mode === "make" ? "Make" : "Update";
+  syncClear();
+}
 function show(view) {
   document.body.dataset.view = view;
+  setBox(view === "design" && state.plan ? "change" : "make");
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t.dataset.v === view);
   $("designView").hidden = view !== "design";
   $("recipeView").hidden = view !== "recipe";
   $("cameraView").hidden = view !== "camera";
   if (view === "design") window.Pie3D?.resize();
   liveCamera(view === "camera");
+  updateGate();
 }
 
 // Live Pi camera preview (MJPEG). Closing the <img> stream lets the Pi stop the camera.
@@ -92,9 +107,9 @@ document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".
 
 // ---------- 1. Agent API: prompt -> plan ----------
 async function ask() {
-  const prompt = $("prompt").value.trim();
+  const prompt = (boxMode === "make" ? $("prompt").value : state.prompt || "").trim();
   if (!prompt || state.busy) return;
-  remember(prompt);
+  state.prompt = prompt; state.change = "";
   state.busy = true; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
   show("recipe"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
@@ -102,39 +117,87 @@ async function ask() {
   try {
     const res = state.live ? await apiJson("/api/design", { prompt, diets: state.diets })
       : (await sleep(1400), await (await fetch("demo.json")).json());
-    state.plan = res.plan; state.strokes = res.strokes;
-    window.Pie3D?.thinking(false); drawPreview();
-    renderAll();
-    log(`Checking ${res.plan.ingredients.length} ingredients…`);
-    for (const ing of res.plan.ingredients) await check(ing);
-    log(allSafe() ? "All ingredients safe. See Design, then check the pie on Camera." : "An ingredient needs a check.");
+    state.demo = state.live ? null : res;
+    applyDesign(res);
+    await checkMissing();
   } catch (e) {
     window.Pie3D?.thinking(false);
     state.plan = null; state.strokes = []; drawPreview(); renderRecipe();
     $("ingCol").innerHTML = `<p class="msg">Couldn't make that: ${esc(e.message)}</p>`;
   } finally {
-    state.busy = false; $("askBtn").textContent = "Make"; updateGate();
+    state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate();
   }
 }
 
-// ---------- recent prompts (kept on this Pi's browser, newest first) ----------
-const RECENT_KEY = "pumpkinpi.recent";
-const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } };
-function remember(p) {
-  const list = [p, ...recent().filter((x) => x.toLowerCase() !== p.toLowerCase())].slice(0, 6);
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch {}
+// Show a design. res.strokes is the path read back from the real G-code (exact), res.path its length/time.
+function applyDesign(res) {
+  state.plan = res.plan; state.strokes = res.strokes; state.path = res.path || null;
+  if (res.plan.text) state.name = res.plan.text;
+  window.Pie3D?.thinking(false); drawPreview(); renderAll(); renderDesign();
 }
-function renderRecent() {
-  const list = recent();
-  $("recent").innerHTML = list.length ? `<span class="lbl">Recent</span>` +
-    list.map((p, i) => `<button type="button" class="chip" data-i="${i}">${esc(p)}</button>`).join("") : "";
-  $("recent").hidden = !list.length || $("kbd").hidden;
+async function checkMissing() {
+  const todo = state.plan.ingredients.filter((i) => !state.checks[i]);
+  if (todo.length) log(`Checking ${todo.length} ingredient${todo.length > 1 ? "s" : ""}…`);
+  for (const ing of todo) await check(ing);
+  log(allSafe() ? "All ingredients safe. Tap Start Designing." : "An ingredient needs a check.");
 }
-$("recent").addEventListener("pointerdown", (e) => e.preventDefault());  // keep the keyboard open
-$("recent").onclick = (e) => {
-  const b = e.target.closest("[data-i]"); if (!b) return;
-  $("prompt").value = recent()[+b.dataset.i]; syncClear();   // edit it, or tap Make / Done
+
+// ---------- Design changes: quick buttons (instant) or words ("just a heart, no name", Agent API) ----------
+function demoVariant(shape, text) {   // sample mode: paths precomputed from the real G-code pipeline
+  const v = state.demo?.variants || {};
+  const t = v[`${shape}|${text}`] ? text : v[`${shape}|`] ? "" : null;
+  if (t === null) throw new Error("not in the sample");
+  const x = v[`${shape}|${t}`];
+  return { plan: { ...state.plan, shape, text: t }, strokes: x.strokes, path: { mm: x.mm, seconds: x.seconds } };
+}
+async function edit(shape, text) {
+  if (!state.plan || state.busy || state.job) return;
+  state.busy = true; renderDesign();
+  try {
+    const res = state.live ? await apiJson("/api/edit", { shape, text }) : (await sleep(250), demoVariant(shape, text));
+    applyDesign(res);
+  } catch (e) { log(`Couldn't change it: ${e.message}`); }
+  state.busy = false; renderDesign(); updateGate();
+}
+async function revise() {
+  const change = $("prompt").value.trim();
+  if (!change || !state.plan || state.busy || state.job) return;
+  state.change = change; state.busy = true;
+  $("askBtn").innerHTML = '<span class="spin" aria-label="Updating"></span>'; window.Pie3D?.thinking(true); renderDesign();
+  try {
+    let res;
+    if (state.live) res = await apiJson("/api/revise", { change, diets: state.diets });
+    else {  // sample only: understand the common changes locally
+      await sleep(900);
+      const c = change.toLowerCase();
+      const shape = /heart/.test(c) ? "heart" : /star/.test(c) ? "star" : /smil/.test(c) ? "smiley" : /(only|just) (the )?(name|word|text)/.test(c) ? "text" : state.plan.shape;
+      const noName = /(no|without|drop|remove)\b.*(name|text|word)|only a|just a/.test(c) && shape !== "text";
+      res = demoVariant(shape, noName ? "" : state.plan.text || state.name || "");
+    }
+    applyDesign(res);
+    $("prompt").value = ""; state.change = ""; syncClear();
+    await checkMissing();   // only new ingredients need a new check
+  } catch (e) { window.Pie3D?.thinking(false); drawPreview(); log(`Couldn't change it: ${e.message}`); }
+  state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate();
+}
+function renderDesign() {
+  const p = state.plan;
+  $("shapeRail").hidden = !p;
+  if (!p) { $("exact").hidden = true; return; }
+  for (const b of document.querySelectorAll(".shape[data-shape]")) { b.classList.toggle("on", b.dataset.shape === p.shape); b.disabled = state.busy; }
+  const nb = $("nameBtn"), has = !!p.text;
+  nb.classList.toggle("on", has); nb.setAttribute("aria-pressed", has); nb.disabled = state.busy || p.shape === "text" || !(p.text || state.name);
+  $("nameLbl").textContent = (p.text || state.name || "Name").slice(0, 10);
+  const t = state.path;
+  $("exact").hidden = !t;
+  if (t) $("exact").innerHTML = `<b>Exactly what will pipe</b> · ${(t.mm / 10).toFixed(0)} cm of topping · about ${Math.max(1, Math.round(t.seconds / 60))} min`;
+}
+$("shapeRail").onclick = (e) => {
+  const b = e.target.closest(".shape"); if (!b || b.disabled || !state.plan) return;
+  if (b.id === "nameBtn") edit(state.plan.shape, state.plan.text ? "" : state.name || "");
+  else if (b.dataset.shape !== state.plan.shape) edit(b.dataset.shape, b.dataset.shape === "text" ? state.plan.text || state.name || "Happy" : state.plan.text);
 };
+
 function syncClear() { $("clearBtn").hidden = !$("prompt").value; }
 $("clearBtn").addEventListener("pointerdown", (e) => e.preventDefault());
 $("clearBtn").onclick = () => { $("prompt").value = ""; syncClear(); if ($("kbd").hidden) showKbd(); };
@@ -171,8 +234,6 @@ function counts() {
     yellow: st.filter((s) => s === "yellow").length, wait: st.filter((s) => s === "wait").length };
 }
 
-const srcItem = (src, n, tag) => `<li class="srcitem"><span class="num">${n}</span><span class="st"><b>${esc(src.title || host(src.url))}</b>
-  <span class="url">${esc(host(src.url))}${tag ? ` · ${esc(tag)}` : ""}</span></span></li>`;
 
 function renderDiets() {
   const avoid = [...new Set(state.guests.flatMap((g) => g.avoid))];
@@ -186,6 +247,34 @@ $("diets").onclick = (e) => {
   renderDiets();
   if (state.plan && $("prompt").value.trim()) ask();  // remake the recipe for the new diet
 };
+
+// ---------- recipe visuals ----------
+// Ingredient pictures (simple flat drawings, matched by keyword) and step icons (by verb).
+const ING_ART = [
+  [/chocolate|cocoa|cacao/, `<svg viewBox="0 0 48 48"><path d="M24 9c5 8 13 13 13 21a13 13 0 0 1-26 0c0-8 8-13 13-21z" fill="#5a3420"/><path d="M19 27c0 4 2 6 5 7" stroke="#8a5a3c" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`],
+  [/coconut/, `<svg viewBox="0 0 48 48"><circle cx="24" cy="25" r="15" fill="#7a5233"/><circle cx="24" cy="25" r="10" fill="#fbf6ea"/><circle cx="20" cy="15" r="1.6" fill="#3d2816"/><circle cx="27" cy="15" r="1.6" fill="#3d2816"/></svg>`],
+  [/cream|milk|half-and-half|half and half/, `<svg viewBox="0 0 48 48"><path d="M15 17l4-7h10l4 7v24H15z" fill="#fff" stroke="#20808d" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 17h18" stroke="#20808d" stroke-width="2.2"/><rect x="19" y="24" width="10" height="9" rx="2" fill="#badfde"/></svg>`],
+  [/butter/, `<svg viewBox="0 0 48 48"><path d="M8 29l10-9h22v10l-10 9H8z" fill="#f6d77b"/><path d="M8 29h22l10-9M30 29v10" stroke="#d4a93a" stroke-width="2" fill="none"/></svg>`],
+  [/sugar|sweetener|stevia|monk|allulose|erythritol/, `<svg viewBox="0 0 48 48"><path d="M12 19l12-7 12 7v14l-12 7-12-7z" fill="#fff" stroke="#c9c3b5" stroke-width="2"/><path d="M12 19l12 7 12-7M24 26v14" stroke="#c9c3b5" stroke-width="2" fill="none"/></svg>`],
+  [/vanilla|extract/, `<svg viewBox="0 0 48 48"><rect x="18" y="8" width="12" height="7" rx="1.5" fill="#20808d"/><path d="M16 17h16v22a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3z" fill="#9a5b2a"/><rect x="18" y="24" width="12" height="8" rx="1" fill="#fbf6ea"/></svg>`],
+  [/pumpkin/, `<svg viewBox="0 0 48 48"><ellipse cx="24" cy="28" rx="16" ry="12" fill="#e08c3e"/><path d="M24 16v24M15 19c-3 6-3 12 0 18M33 19c3 6 3 12 0 18" stroke="#c06a24" stroke-width="2" fill="none"/><path d="M24 16c0-4 2-6 5-7" stroke="#2f8a57" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`],
+];
+const JAR = `<svg viewBox="0 0 48 48"><rect x="15" y="9" width="18" height="6" rx="2" fill="#20808d"/><path d="M14 16h20v22a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z" fill="#f3f1ec" stroke="#5c6b6b" stroke-width="2"/></svg>`;
+const ingArt = (name) => (ING_ART.find(([re]) => re.test(name.toLowerCase())) || [0, JAR])[1];
+const I = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const STEP_ICON = [
+  [/heat|simmer|warm|boil|microwave|melt/, I('<path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-8z"/>')],
+  [/pour|add/, I('<path d="M5 8h10v4a5 5 0 0 1-10 0z"/><path d="M15 9h2a2 2 0 0 1 0 4h-2"/><path d="M8 3v2M11 2v3"/>')],
+  [/stir|whisk|mix|beat|blend/, I('<path d="M12 21V12"/><path d="M12 12c-3 0-5-3-5-6s2-3 5-3 5 0 5 3-2 6-5 6z"/><path d="M12 3v9"/>')],
+  [/cool|chill|refrigerat|fridge|set/, I('<path d="M12 2v20M4.9 6.5l14.2 11M19.1 6.5 4.9 17.5"/>')],
+  [/rest|wait|minute/, I('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M10 2h4"/>')],
+  [/syringe|spoon|fill|load|pipe/, I('<path d="m18 2 4 4M16 4l4 4M19 5l-9 9M14 6l4 4-8 8H6v-4z"/><path d="M3 21l3-3"/>')],
+];
+const stepIcon = (t) => (STEP_ICON.find(([re]) => re.test(t.toLowerCase())) || [0, I('<circle cx="12" cy="12" r="3"/>')])[1];
+const STATUS_ICON = { green: I('<path d="m5 12 5 5 9-10"/>'), yellow: I('<path d="M12 7v6M12 17h.01"/>'), red: I('<path d="M6 6l12 12M18 6 6 18"/>') };
+const favicon = (u) => `<img class="fav" alt="" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(host(u))}&sz=64" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'fav letter',textContent:'${esc(host(u)[0] || "?").toUpperCase()}'}))">`;
+// Topping colour for the hero swatch
+const swatch = (t) => /white/.test(t) ? "#f4ead6" : /milk choc/.test(t) ? "#8a5a3c" : /choc|cocoa|ganache/.test(t) ? "#4a2a18" : /cream cheese|whipped|cream/.test(t) ? "#fbf6ea" : /caramel/.test(t) ? "#c27a32" : "#e08c3e";
 
 function renderRecipe() {
   renderDiets();
@@ -201,33 +290,34 @@ function renderRecipe() {
     let detail = "";
     if (open && c.results) {
       detail = `<div class="detail">${c.results.map((r) => `<div class="drow"><span class="pill sm ${r.color}">${label[r.color]}</span>${esc(r.name)}${r.diet ? "" : ` · ${esc(r.allergen)}`}<span class="prob">${Math.round(r.probability * 100)}%</span></div>`).join("") || `<div>No guest avoids an allergen for this.</div>`}
+        ${p.allergy_notes ? `<div class="dnote">${esc(p.allergy_notes)}</div>` : ""}
         ${c.error ? `<div>Check failed: ${esc(c.error)}</div>` : ""}</div>`;
     }
+    const st = c.status === "wait" ? '<span class="spin sm"></span>' : STATUS_ICON[c.status];
     return `<button type="button" class="ing ${open ? "open" : ""}" data-ing="${esc(ing)}">
-      <span class="pill ${c.status}">${c.status === "wait" ? '<span class="spin sm"></span>' : esc(c.tag || label[c.status])}</span>
-      <span class="who">${esc(ing)}</span></button>${detail}`;
+      <span class="art">${ingArt(ing)}</span>
+      <span class="who">${esc(ing)}<span class="tag ${c.status}">${c.status === "wait" ? "Checking" : esc(c.tag || label[c.status])}</span></span>
+      <span class="sicon ${c.status}">${st}</span></button>${detail}`;
   }).join("");
-  $("ingCol").innerHTML = `<h3>Ingredients</h3>${rows}
-    ${p.allergy_notes ? `<p class="tip"><b>Allergies</b> ${esc(p.allergy_notes)}</p>` : ""}
-    <p class="muted small">Tap an ingredient to see each guest's check.</p>`;
-  const steps = (p.recipe || []).map((s) => `<li>${esc(s)}</li>`).join("");
+  $("ingCol").innerHTML = `<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>
+      <span><b>${esc(p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${rows}`;
+  const steps = (p.recipe || []).map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("");
   $("stepCol").innerHTML = `<h3>Steps</h3><ol class="steps">${steps}</ol>
-    ${p.piping_notes ? `<p class="tip"><b>Piping</b> ${esc(p.piping_notes)}</p>` : ""}
     ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}`;
   // Sources: recipe research (Agent API web search) + label pages per ingredient (Search API, judged by Decider).
-  let n = 0;
-  const recipe = (p.sources || []).slice(0, 4).map((s) => srcItem(s, ++n, "")).join("");
   const seen = new Set();
-  const labels = p.ingredients.flatMap((ing) => ((state.checks[ing] || {}).sources || []).slice(0, 2).map((s) => [s, ing]))
-    .filter(([s]) => !seen.has(s.url) && seen.add(s.url)).slice(0, 4).map(([s, ing]) => srcItem(s, ++n, ing)).join("");
-  $("srcCol").innerHTML = `<h3>Sources</h3><ol class="srcs">${recipe}${labels}</ol>
-    <p class="muted small">Found with Perplexity search. Allergen and diet checks by Decider.${state.live ? "" : " Sample results."}</p>`;
+  const all = [...(p.sources || []).slice(0, 4).map((s) => [s, ""]),
+    ...p.ingredients.flatMap((ing) => ((state.checks[ing] || {}).sources || []).slice(0, 2).map((s) => [s, ing]))]
+    .filter(([s]) => s.url && !seen.has(s.url) && seen.add(s.url)).slice(0, 6);
+  $("srcCol").innerHTML = `<h3>Sources</h3><ol class="srcs">${all.map(([s, tag]) => `<li class="srcitem">${favicon(s.url)}<span class="st"><b>${esc(s.title || host(s.url))}</b>
+    <span class="url">${esc(host(s.url))}${tag ? ` · ${esc(tag)}` : ""}</span></span></li>`).join("")}</ol>
+    <p class="muted small by"><img src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity search + Decider${state.live ? "" : " · sample"}</p>`;
 }
 $("ingCol").onclick = (e) => {
   const b = e.target.closest(".ing"); if (!b) return;
   state.open = state.open === b.dataset.ing ? null : b.dataset.ing; renderRecipe();
 };
-function renderAll() { renderRecipe(); }
+function renderAll() { renderRecipe(); renderDesign(); }
 
 // ---------- preview ----------
 function drawPreview() {
@@ -247,17 +337,29 @@ function reason() {
   if (!state.plan) return state.busy ? "Perplexity is designing…" : "Make a design to start.";
   const c = counts();
   if (c.wait) return "Checking ingredients…";
-  if (c.red || c.yellow) return "Locked: an ingredient needs a check";
-  if (state.ready < READY_AT) return "Locked: check the pie on Camera";
+  if (c.red || c.yellow) return "An ingredient needs a check";
+  if (state.ready < READY_AT) return document.body.dataset.view === "recipe" ? "All ingredients checked" : "Next: check the pie on Camera";
   return "Ready. Stay next to the printer.";
+}
+// Bottom button follows the flow: Recipe -> Start Designing, Design -> Check the Pie / Send to Printer.
+function nextStep() {
+  const view = document.body.dataset.view;
+  if (state.job) return "stop";
+  if (view === "recipe") return "design";
+  if (view === "design" && state.ready < READY_AT) return "camera";
+  return "send";
 }
 function updateGate() {
   const p = !!state.plan;
   $("dryBtn").disabled = !p || state.job;
   const ok = p && allSafe() && state.ready >= READY_AT;
-  const b = $("sendBtn");
-  if (state.job) { b.disabled = false; b.textContent = "Stop"; b.classList.add("stop"); }
-  else { b.disabled = !ok; b.textContent = "Send to Printer"; b.classList.remove("stop"); $("why").textContent = reason(); }
+  const b = $("sendBtn"), step = nextStep();
+  b.classList.toggle("stop", step === "stop");
+  if (step === "stop") { b.disabled = false; b.textContent = "Stop"; return; }
+  $("why").textContent = reason();
+  if (step === "design") { b.textContent = "Start Designing"; b.disabled = !p || state.busy; }
+  else if (step === "camera") { b.textContent = "Check the Pie"; b.disabled = !p || state.busy; }
+  else { b.textContent = "Send to Printer"; b.disabled = !ok || state.busy; }
 }
 
 $("readyBtn").onclick = async () => {
@@ -295,6 +397,9 @@ $("dryBtn").onclick = () => start(true);
 
 // Send turns into Stop while the printer is moving (sends M112).
 $("sendBtn").onclick = async () => {
+  const step = nextStep();
+  if (step === "design") return show("design");
+  if (step === "camera") return show("camera");
   if (!state.job) return start(false);
   state.ready = 0;
   try { await api("/api/stop", {}); log("Stopped (M112). Power-cycle the printer before continuing."); }
@@ -302,32 +407,40 @@ $("sendBtn").onclick = async () => {
 };
 
 // ---------- on-screen keyboard (kiosk Chromium has no OS keyboard) ----------
-const KEYS = ["qwertyuiop", "asdfghjkl'", "zxcvbnm,.", ["⇧", "space", "⌫", "Done"]];
+const KEYS = ["qwertyuiop", "asdfghjkl'", "zxcvbnm,.", ["shift", "space", "back", "Done"]];
+// Drawn icons, not Unicode arrows: the kiosk fonts render those thin and off-center.
+const KEY_ICON = {
+  shift: (on) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 4 12.5h4.5V20h7v-7.5H20z" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  back: () => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-7-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m11.5 9.5 5 5m0-5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+};
+const KEY_LABEL = { shift: "Shift", back: "Delete", space: "Space", Done: "Done" };
 let shift = false;
 function drawKbd() {
-  $("kbd").innerHTML = KEYS.map((row) => `<div class="krow">${(typeof row === "string" ? [...row] : row).map((k) =>
-    `<button type="button" class="key ${k.length > 1 ? "wide " + (k === "space" ? "space" : "") : ""}" data-k="${esc(k)}">${esc(k === "space" ? "space" : shift && k.length === 1 ? k.toUpperCase() : k)}</button>`).join("")}</div>`).join("");
+  $("kbd").innerHTML = KEYS.map((row) => `<div class="krow">${(typeof row === "string" ? [...row] : row).map((k) => {
+    const wide = k.length > 1, face = KEY_ICON[k] ? KEY_ICON[k](shift) : k === "space" ? "space" : shift && !wide ? k.toUpperCase() : k;
+    return `<button type="button" class="key ${wide ? `wide k-${k}` : ""} ${k === "shift" && shift ? "on" : ""}" data-k="${esc(k)}" aria-label="${esc(KEY_LABEL[k] || k)}">${face}</button>`;
+  }).join("")}</div>`).join("");
 }
-function showKbd() { drawKbd(); $("kbd").hidden = false; document.body.classList.add("typing"); renderRecent(); syncClear(); }
-function hideKbd() { $("kbd").hidden = true; $("recent").hidden = true; document.body.classList.remove("typing"); syncClear(); window.Pie3D?.resize(); }
+function showKbd() { drawKbd(); $("kbd").hidden = false; document.body.classList.add("typing"); syncClear(); }
+function hideKbd() { $("kbd").hidden = true; document.body.classList.remove("typing"); syncClear(); window.Pie3D?.resize(); }
 $("prompt").addEventListener("pointerdown", () => { if ($("kbd").hidden) showKbd(); });
 $("prompt").addEventListener("focus", showKbd);
 $("kbd").addEventListener("pointerdown", (e) => e.preventDefault()); // keep focus in the input
 $("kbd").onclick = (e) => {
   const k = e.target.closest(".key")?.dataset.k; if (!k) return;
   const el = $("prompt");
-  if (k === "⌫") el.value = el.value.slice(0, -1);
+  if (k === "back") el.value = el.value.slice(0, -1);
   else if (k === "space") el.value += " ";
-  else if (k === "⇧") { shift = !shift; drawKbd(); return; }
-  else if (k === "Done") { hideKbd(); el.blur(); ask(); return; }
+  else if (k === "shift") { shift = !shift; drawKbd(); return; }
+  else if (k === "Done") { hideKbd(); el.blur(); boxMode === "change" ? revise() : ask(); return; }
   else { el.value += shift ? k.toUpperCase() : k; if (shift) { shift = false; drawKbd(); } }
   syncClear();
 };
-$("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); ask(); };
+$("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); boxMode === "change" ? revise() : ask(); };
 
 async function init() {
   await refreshStatus();
-  renderRecipe();
+  renderRecipe(); renderDesign();
   updateGate();
 }
 init();

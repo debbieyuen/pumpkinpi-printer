@@ -72,6 +72,39 @@ def to_gcode(strokes, m: Machine, dry_run: bool = False) -> list[str]:
     return out
 
 
+def piped_path(lines: list[str], m: Machine) -> dict:
+    """Read G-code back into what actually gets piped, so the screen shows the exact design.
+
+    Returns {"strokes": pie-centered polylines of every move that pushes the plunger (E > 0 with X/Y),
+    "mm": piped length, "seconds": rough time from feed rates}.
+    """
+    x = y = 0.0
+    strokes: list[list[tuple[float, float]]] = []
+    cur: list[tuple[float, float]] = []
+    mm = secs = 0.0
+    for ln in lines:
+        w = ln.split()
+        if not w or w[0] not in ("G0", "G1"):
+            continue
+        a = {t[0]: float(t[1:]) for t in w[1:] if t[0] in "XYZEF"}
+        nx, ny = a.get("X", x), a.get("Y", y)
+        d = math.hypot(nx - x, ny - y)
+        if "F" in a and d:
+            secs += d / a["F"] * 60
+        if w[0] == "G1" and a.get("E", 0) > 0 and ("X" in a or "Y" in a):
+            if not cur:
+                cur = [(round(x - m.pie_x, 2), round(y - m.pie_y, 2))]
+            cur.append((round(nx - m.pie_x, 2), round(ny - m.pie_y, 2)))
+            mm += d
+        elif cur and ("X" in a or "Y" in a or "Z" in a or a.get("E", 0) < 0):
+            strokes.append(cur)
+            cur = []
+        x, y = nx, ny
+    if cur:
+        strokes.append(cur)
+    return {"strokes": strokes, "mm": round(mm), "seconds": round(secs)}
+
+
 def check_bounds(lines: list[str], m: Machine) -> None:
     for ln in lines:
         for word in ln.split()[1:]:

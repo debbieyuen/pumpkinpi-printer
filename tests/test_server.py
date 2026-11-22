@@ -94,3 +94,34 @@ def test_vegan_diet_adds_a_gating_row(tmp_path, monkeypatch):
 def test_unknown_diet_rejected(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     assert c.post("/api/design", json={"prompt": "x", "diets": ["keto"]}).status_code == 400
+
+
+def test_design_preview_is_the_gcode_path(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    r = c.post("/api/design", json={"prompt": "x"}).json()
+    assert len(r["strokes"]) == len(srv.state["strokes"]) and r["path"]["mm"] > 0
+    for a, b in zip(r["strokes"], srv.state["strokes"]):
+        assert len(a) == len(b) and all(abs(p[0] - q[0]) < 0.01 and abs(p[1] - q[1]) < 0.01 for p, q in zip(a, b))
+
+
+def test_edit_keeps_checks_and_drops_name(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    c.post("/api/design", json={"prompt": "x"})
+    c.post("/api/check", json={"product": "chocolate chips"})
+    srv.state["ready"] = 0.95
+    r = c.post("/api/edit", json={"shape": "heart", "text": ""}).json()
+    assert r["plan"]["shape"] == "heart" and r["plan"]["text"] == "" and len(r["strokes"]) == 1
+    assert "chocolate chips" in srv.state["checks"] and srv.state["ready"] == 0.95
+    assert c.post("/api/edit", json={"shape": "dragon"}).status_code == 400
+
+
+def test_revise_rechecks_only_when_ingredients_change(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    c.post("/api/design", json={"prompt": "x"})
+    c.post("/api/check", json={"product": "chocolate chips"})
+    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None: {**plan, "shape": "heart", "text": ""})
+    c.post("/api/revise", json={"change": "just a heart, no name"})
+    assert srv.state["plan"]["shape"] == "heart" and srv.state["checks"]
+    monkeypatch.setattr(srv, "revise_design", lambda cl, plan, ch, g, diets=None: {**plan, "ingredients": ["white chocolate chips", "heavy cream"]})
+    c.post("/api/revise", json={"change": "white chocolate"})
+    assert srv.state["checks"] == {}

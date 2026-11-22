@@ -148,14 +148,14 @@ if (renderer) {
   const RAD = 1.55, RADIAL = 14, FLAT = 0.58;
   function surfaceY(x, y) { const r = Math.hypot(x, y); return FILL_Y + 0.9 * (1 - (r / R_FILL) ** 2); }
   function ganacheGeo(curve, len, seed) {
-    const segs = Math.max(10, Math.ceil(len * 2));
+    const segs = Math.max(10, Math.ceil(len * 3));
     const geo = new THREE.TubeGeometry(curve, segs, RAD, RADIAL, false);
     const p = geo.attributes.position, c = new THREE.Vector3(), d = new THREE.Vector3();
     const ph1 = seed * 1.7, ph2 = seed * 3.1;
     for (let i = 0; i <= segs; i++) {
       const u = i / segs, s = u * len;
       curve.getPointAt(u, c);
-      const wobble = 1 + 0.09 * Math.sin(s * 0.55 + ph1) + 0.05 * Math.sin(s * 1.9 + ph2);
+      const wobble = 1;   // even bead: the plunger pushes a fixed E per mm
       const endSwell = 1 + 0.22 * Math.exp(-((s / 2.2) ** 2)) + 0.14 * Math.exp(-(((len - s) / 2.2) ** 2));
       const k = wobble * endSwell;
       for (let j = 0; j <= RADIAL; j++) {
@@ -182,7 +182,10 @@ if (renderer) {
     (strokes || []).forEach((s, n) => {
       if (s.length < 2) return;
       const pts = s.map(([x, y]) => new THREE.Vector3(x, surfaceY(x, y) + RAD * FLAT * 0.35, -y));
-      const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal", 0.5);
+      // Straight segments between the exact G-code points (no smoothing), so corners match the print.
+      const curve = new THREE.CurvePath();
+      for (let i = 1; i < pts.length; i++) if (pts[i].distanceTo(pts[i - 1]) > 1e-3) curve.add(new THREE.LineCurve3(pts[i - 1], pts[i]));
+      if (!curve.curves.length) return;
       const len = curve.getLength();
       const closed = pts[0].distanceTo(pts[pts.length - 1]) < 0.5;
       const { geo } = ganacheGeo(curve, len, n + 1);

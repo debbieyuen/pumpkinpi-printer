@@ -68,6 +68,34 @@ def plan_design(client: httpx.Client, prompt: str, guests: list[dict], diets: li
     return plan
 
 
+REVISE = INSTRUCTIONS + """
+
+You are changing an existing design. Apply only the requested change and keep everything else
+(topping, ingredients, recipe) the same unless the change asks for it. "No name" or "without
+Michael's name" means text is empty. "Only a heart" means shape heart; drop the text unless the
+change asks for words."""
+
+
+def revise_design(client: httpx.Client, plan: dict, change: str, guests: list[dict],
+                  diets: list[str] | None = None) -> dict:
+    """Edit the current plan ("just a heart, no name") instead of starting over."""
+    roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
+    current = {k: plan.get(k) for k in SCHEMA["properties"]}
+    text, results = pplx.agent(
+        client, instructions=REVISE, name="pumpkinpi_revise", schema=SCHEMA,
+        input=f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\n"
+              f"Current design: {json.dumps(current)}\n\nChange: {change}",
+    )
+    new = json.loads(text)
+    if new.get("shape") not in SHAPES:
+        new["shape"] = plan.get("shape", "text")
+    new["text"] = (new.get("text") or "")[:MAX_TEXT]
+    new["sources"] = plan.get("sources", [])
+    if new["ingredients"] != plan.get("ingredients"):   # new topping: keep only the new research
+        new["sources"] = [{"title": r.get("title"), "url": r.get("url")} for r in results if r.get("url")][:8]
+    return new
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Turn a prompt into a PumpkinPi design plan.")
     ap.add_argument("prompt", help='e.g. "a smiley face in chocolate for Michael"')

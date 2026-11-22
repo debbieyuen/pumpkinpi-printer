@@ -33,11 +33,11 @@ from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
 from .camera import camera
-from .design import plan_design
+from .design import plan_design, revise_design
 from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
-from .shapes import strokes_for
-from .toolpath import Machine, to_gcode
+from .shapes import MAX_TEXT, SHAPES, strokes_for
+from .toolpath import Machine, piped_path, to_gcode
 
 ROOT = Path(__file__).resolve().parent.parent
 GUESTS_FILE = Path(os.environ.get("PUMPKINPI_GUESTS", ROOT / "guests.json"))
@@ -91,6 +91,16 @@ class DesignReq(BaseModel):
     diets: list[str] = []
 
 
+class ReviseReq(BaseModel):
+    change: str
+    diets: list[str] = []
+
+
+class EditReq(BaseModel):
+    shape: str | None = None
+    text: str | None = None
+
+
 class CheckReq(BaseModel):
     product: str
     diets: list[str] = []
@@ -125,6 +135,28 @@ def status():
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}
 
 
+def exact(plan: dict) -> tuple[list, dict]:
+    """Strokes plus the path read back from the real G-code, so Design shows exactly what will pipe."""
+    try:
+        strokes = strokes_for(plan)
+        m = Machine.load()
+        path = piped_path(to_gcode(strokes, m), m)
+    except ValueError as e:   # off the pie or outside the printer's safe box
+        raise HTTPException(422, str(e))
+    return strokes, path
+
+
+def publish(plan: dict, keep_checks: bool) -> dict:
+    strokes, path = exact(plan)
+    if not SHOW_HEALTH:
+        plan["diet_notes"] = ""
+    checks = state["checks"] if keep_checks else {}
+    state.update(plan=plan, strokes=strokes, checks=checks)
+    if not keep_checks:
+        state["ready"] = 0.0
+    return {"plan": plan, "strokes": path["strokes"], "path": {k: path[k] for k in ("mm", "seconds")}}
+
+
 @app.post("/api/design")
 def design(req: DesignReq):
     if not req.prompt.strip():
@@ -133,14 +165,42 @@ def design(req: DesignReq):
     with make_client() as client:
         plan = plan_design(client, req.prompt, guests()["guests"], diets=diets)
     plan["diets"] = diets
-    try:
-        strokes = strokes_for(plan)
-    except ValueError as e:
-        raise HTTPException(422, str(e))
-    if not SHOW_HEALTH:
-        plan["diet_notes"] = ""
-    state.update(plan=plan, strokes=strokes, checks={}, ready=0.0)
-    return {"plan": plan, "strokes": strokes}
+    return publish(plan, keep_checks=False)
+
+
+def same_ingredients(a: dict, b: dict) -> bool:
+    return [i.lower() for i in a.get("ingredients", [])] == [i.lower() for i in b.get("ingredients", [])]
+
+
+@app.post("/api/revise")
+def revise(req: ReviseReq):
+    """Change the current design in words ("just a heart, no name"). Keeps checks if the topping is the same."""
+    if not state["plan"]:
+        raise HTTPException(409, "Make a design first")
+    if not req.change.strip():
+        raise HTTPException(400, "Say what to change")
+    diets = clean_diets(req.diets)
+    old = state["plan"]
+    with make_client() as client:
+        plan = revise_design(client, old, req.change, guests()["guests"], diets=diets)
+    plan["diets"] = diets
+    plan["diet_notes"] = plan.get("diet_notes") or old.get("diet_notes", "")
+    return publish(plan, keep_checks=same_ingredients(old, plan))
+
+
+@app.post("/api/edit")
+def edit(req: EditReq):
+    """Instant shape / name change from the Design screen. Same topping, so checks stay."""
+    if not state["plan"]:
+        raise HTTPException(409, "Make a design first")
+    plan = dict(state["plan"])
+    if req.shape is not None:
+        if req.shape not in SHAPES:
+            raise HTTPException(400, f"Shape must be one of {', '.join(SHAPES)}")
+        plan["shape"] = req.shape
+    if req.text is not None:
+        plan["text"] = req.text.strip()[:MAX_TEXT]
+    return publish(plan, keep_checks=True)
 
 
 @app.post("/api/check")
