@@ -29,15 +29,7 @@ PLATES = {
         ("display_foot_2", "display_foot.stl",   90, (140, 140)),
     ],
 }
-PLATES["all"] = PLATES["A_syringe"][:0] + [
-    ("pie_locator",    "pie_locator.stl",    0,  (30, 5)),
-    ("plunger_pusher", "plunger_pusher.stl", 90, (71, 56)),
-    ("carriage",       "carriage.stl",       0,  (5, 103)),
-    ("camera_post",    "camera_post.stl",    0,  (110, 103)),
-    ("display_foot_1", "display_foot.stl",   90, (140, 162)),
-    ("display_foot_2", "display_foot.stl",   90, (140, 189)),
-    ("camera_holder",  "camera_holder.stl",  0,  (104, 162)),
-]
+# v1.1: the optional all-in-one plate was dropped; print plates A and B separately.
 
 
 def footprint(m):
