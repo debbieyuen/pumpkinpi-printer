@@ -1,6 +1,6 @@
 """Syringe carriage v1: head bracket + syringe clamp + flange cradle + motor mount in ONE part.
 
-Bolts to the two M3 screws on the right side plate of the Ender-3 V3 SE print head
+Bolts to the two M2 screws on the right side plate of the Ender-3 V3 SE print head
 (positions from head_geometry.py). The syringe slides out toward +X with no tools, so you can
 take it off before homing/levelling.
 
@@ -8,6 +8,7 @@ Coordinates: nozzle tip = origin, +X right, +Y back, +Z up (see head_geometry.py
 Print orientation: lying on the flat face that touches the print head (exported that way).
 """
 from pathlib import Path
+import math
 import cadquery as cq
 from params import (BARREL_OD, BARREL_FRONT_TO_FLANGE, TIP_TO_FLANGE, FLANGE_WIDTH, FLANGE_THICK,
                     FLANGE_DEPTH, PLUNGER_STEM_WIDTH, MOTOR_W, MOTOR_HOLE_SPACING, CLEAR,
@@ -17,8 +18,11 @@ from head_geometry import right_plate
 
 PLATE_X, HOLES = right_plate()
 SPINE_T = 6.0
-CBORE_D, CBORE_DEPTH = 6.6, 2.0      # screw head pocket -> new screw = stock screw + 4 mm
-HOLE_D = 3.8                          # loose, to absorb model error
+# v1.2: the stock head screws are M2 (Debbie, 2026-11-21), so the head-mount holes are M2.
+HOLE_D = 2.5                          # M2 clearance (ISO 273 medium = 2.4) + 0.1 for print shrink
+CBORE_D, CBORE_DEPTH = 4.6, 2.0       # M2 socket head is 3.8 mm -> new screw = stock screw + 4 mm
+HOLE_SLOT = 1.7                       # each hole is a short slot along the line between the two holes,
+                                      # so the spacing can be anywhere from 12.5 mm (caliper) to 14.2 mm (model)
 SPINE_Y = (-15.0, 11.0)
 FLANGE_Z = LUER_Z + TIP_TO_FLANGE     # finger-side face of the flange
 BARREL_Z0 = FLANGE_Z - BARREL_FRONT_TO_FLANGE
@@ -121,12 +125,22 @@ def build():
         for b in (-1, 1):
             body = body.cut(teardrop(MX + a * s, MY + b * s, 1.75, zc, MOTOR_PLATE_T + 2))
 
-    # Head screws: through holes along X + head pockets on the outer (+X) face
-    for (y, z) in HOLES:
-        body = body.cut(cq.Workplane("YZ").workplane(offset=X0 - 1).center(y, z)
-                        .circle(HOLE_D / 2).extrude(SPINE_T + 2))
-        body = body.cut(cq.Workplane("YZ").workplane(offset=X1 - CBORE_DEPTH).center(y, z)
-                        .circle(CBORE_D / 2).extrude(40))   # long, so a hex key reaches in
+    # Head screws: M2 through slots along X + head pockets on the outer (+X) face
+    return cut_head_holes(body, 40)   # long pocket, so a hex key reaches in
+
+
+def cut_head_holes(body, cbore_len):
+    """M2 slots + head pockets. Each slot reaches HOLE_SLOT/2 toward the other hole."""
+    (y1, z1), (y2, z2) = HOLES
+    L = math.hypot(y2 - y1, z2 - z1)
+    ang = math.degrees(math.atan2(z2 - z1, y2 - y1))
+    uy, uz = (y2 - y1) / L, (z2 - z1) / L
+    for (y, z), sgn in ((HOLES[0], 1), (HOLES[1], -1)):
+        cy, cz = y + sgn * uy * HOLE_SLOT / 4, z + sgn * uz * HOLE_SLOT / 4
+        body = body.cut(cq.Workplane("YZ").workplane(offset=X0 - 1).center(cy, cz)
+                        .slot2D(HOLE_D + HOLE_SLOT / 2, HOLE_D, ang).extrude(SPINE_T + 2))
+        body = body.cut(cq.Workplane("YZ").workplane(offset=X1 - CBORE_DEPTH).center(cy, cz)
+                        .slot2D(CBORE_D + HOLE_SLOT / 2, CBORE_D, ang).extrude(cbore_len))
     return body
 
 

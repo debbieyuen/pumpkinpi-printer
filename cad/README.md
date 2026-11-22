@@ -11,7 +11,8 @@ the 30° default) and needed **zero** supports. Horizontal holes are teardrop-sh
 | SD-card file | What | Time / PETG |
 |---|---|---|
 | `fittest.gcode` (`out/fit_test_PETG.gcode`) | Screw-hole fit test. Print first. | 13 min / 4 g |
-| `plateA2.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage + plunger pusher v0.4 (v1.1 fixes) | 4 h 5 min / 71 g |
+| `plateA3.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage v1.2 (M2 head holes) + plunger pusher v0.4 | 4 h 5 min / 71 g |
+| `fitM2.gcode` | Fit test for the M2 head-mount holes | 13 min / 4 g |
 | `plateB.gcode` (`out/plate_B_accessories_PETG.gcode`) | Camera post + holder, 2 display feet, pie locator | 3 h 56 min / 75 g |
 
 The printer only reads files in the card's top folder with names of 20 characters or fewer, using only letters and numbers.
@@ -38,7 +39,7 @@ Slicer: OrcaSlicer 2.5.1 with the stock Ender-3 V3 SE 0.4 profile. Generic PETG 
 
 ## Hardware
 
-- 2x M3 screws, each 4 mm longer than the stock side-plate screws. The spine is 6 mm thick with a 2 mm counterbore.
+- 2x M2 socket-head screws, each 4 mm longer than the stock side-plate screws (the stock screws are M2). The spine is 6 mm thick with a 2 mm, 4.6 mm wide counterbore. The 2.5 mm holes are short slots, so they fit a hole spacing anywhere from 12.5 mm to 14.2 mm.
 - 4x M3x8 to mount the motor. The motor drawing says the threads are at least 3 mm deep.
 - 4x M3x16 + 4x M3 nuts to fix the brass T8 nut flange to the pusher (v1.1).
 - 1x M3x20 + nut for the camera pivot.

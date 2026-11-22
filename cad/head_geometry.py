@@ -36,7 +36,7 @@ def toolhead_solid():
 
 
 def right_plate():
-    """Outer face X of the right-hand side plate and its two M3 screw centres (y, z)."""
+    """Outer face X of the right-hand side plate and its two M2 screw centres (y, z)."""
     _, frame, _, off = _frame_and_offset()
     holes = []
     for f in frame.faces().vals():

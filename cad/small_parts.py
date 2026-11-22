@@ -18,11 +18,7 @@ def fit_test():
     """Just the bracket's head-mounting area. Print first (~10 min) and bolt it on."""
     zs = [z for _, z in C.HOLES]
     p = box(C.X0, C.X1, *C.SPINE_Y, min(zs) - 9, max(zs) + 9)
-    for (y, z) in C.HOLES:
-        p = p.cut(cq.Workplane("YZ").workplane(offset=C.X0 - 1).center(y, z)
-                  .circle(C.HOLE_D / 2).extrude(C.SPINE_T + 2))
-        p = p.cut(cq.Workplane("YZ").workplane(offset=C.X1 - C.CBORE_DEPTH).center(y, z)
-                  .circle(C.CBORE_D / 2).extrude(5))
+    p = C.cut_head_holes(p, 5)
     return C.for_printing(p)
 
 
