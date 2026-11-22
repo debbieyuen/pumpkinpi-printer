@@ -54,7 +54,7 @@ h1 span{color:var(--teal)}
 
 /* design: just the pie (exact G-code path) */
 .design{justify-content:center;align-items:center}
-.stage{flex:none;height:100%;aspect-ratio:1;max-width:100%;display:grid;place-items:center;position:relative}
+.stage{flex:1;min-width:0;height:100%;display:grid;place-items:center;position:relative}  /* full width: the transparent 3D view blends into the page */
 #pie3d{display:block;cursor:pointer}
 .preview{display:none;width:100%;height:100%}
 body:not(.webgl) .preview{display:block} body:not(.webgl) #pie3d{display:none}

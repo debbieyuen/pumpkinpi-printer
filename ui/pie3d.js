@@ -16,7 +16,7 @@ if (renderer) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  renderer.setClearColor(0xfcfaf6, 1);  // match the page background exactly
+  renderer.setClearColor(0x000000, 0);  // transparent: the page shows through, so there is no square edge
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -183,10 +183,10 @@ if (renderer) {
   const shadowTex = canvasTex(256, (g, n) => {
     // light page: keep the shadow tight and soft so the canvas edge never shows
     const grd = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
-    grd.addColorStop(0, "rgba(40,30,20,.34)"); grd.addColorStop(0.66, "rgba(40,30,20,.26)"); grd.addColorStop(1, "rgba(40,30,20,0)");
+    grd.addColorStop(0, "rgba(40,30,20,.30)"); grd.addColorStop(0.55, "rgba(40,30,20,.16)"); grd.addColorStop(1, "rgba(40,30,20,0)");
     g.fillStyle = grd; g.fillRect(0, 0, n, n);
   });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 140),
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(104, 104),
     new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
   floor.rotation.x = -Math.PI / 2; floor.position.y = -0.2;
   scene.add(floor);
@@ -299,6 +299,11 @@ if (renderer) {
     if (mode === "idle" || mode === "thinking") {
       az += (mode === "thinking" ? 0.012 : 0.004);
       el += (SIDE - el) * 0.05;
+      // gentle float while waiting: the pie bobs and its shadow softens as it rises
+      const lift = 2.2 * (0.5 + 0.5 * Math.sin(now / 900));
+      pie.position.y = lift; floor.scale.setScalar(1 - lift * 0.035); floor.material.opacity = 1 - lift * 0.12;
+    } else if (pie.position.y > 0.01) {
+      pie.position.y *= 0.9; floor.scale.setScalar(1 - pie.position.y * 0.035); floor.material.opacity = 1 - pie.position.y * 0.12; dirty = true;
     } else if (mode === "show") {
       const k = ease(Math.min(1, dt / ORBIT_MS));
       az = azFrom + (azTarget - azFrom) * k;
@@ -316,9 +321,12 @@ if (renderer) {
 
   function resize() {
     const box = canvas.parentElement.getBoundingClientRect();
-    const s = Math.max(10, Math.min(box.width, box.height));
-    renderer.setSize(s, s, true); dirty = true;
-    camera.aspect = 1; camera.updateProjectionMatrix();
+    const w = Math.max(10, box.width), h = Math.max(10, box.height);
+    renderer.setSize(w, h, true); dirty = true;
+    camera.aspect = w / h;
+    // keep the whole pie in view on tall screens too (widen the vertical angle when narrower than square)
+    camera.fov = w >= h ? 30 : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(15)) * h / w));
+    camera.updateProjectionMatrix();
   }
   new ResizeObserver(resize).observe(canvas.parentElement);
 

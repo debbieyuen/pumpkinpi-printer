@@ -204,7 +204,7 @@ $("skipPrinter").onclick = () => { state.skipPrinter = true; $("noPrinter").hidd
 
 // ---------- screens ----------
 // The top box asks for a new idea on Recipe/Camera ("Make"), and for a change on Design ("Update").
-const PH = { make: "Ask anything about food, or what to make", change: "Change the design, e.g. just a heart, no name" };
+const PH = { make: "Ask for a recipe for any diet, then a design to pipe on top", change: "Change the design, e.g. just a heart, no name" };
 let boxMode = "make";
 function setBox(mode) {
   if (mode === boxMode) return;
