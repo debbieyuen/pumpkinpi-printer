@@ -1,3 +1,8 @@
 cadquery>=2.4
 cairosvg
 pillow
+shapely
+networkx
+lxml
+trimesh
+matplotlib
