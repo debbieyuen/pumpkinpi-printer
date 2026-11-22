@@ -51,8 +51,11 @@ def main():
             report(False, f"serial open failed: {e} (did you reboot after setup for dialout?)")
 
     if shutil.which("rpicam-hello"):
-        out = subprocess.run(["rpicam-hello", "--list-cameras"], capture_output=True, text=True).stdout
-        report("imx708" in out.lower() or ":" in out, "camera detected")
+        r = subprocess.run(["rpicam-hello", "--list-cameras"], capture_output=True, text=True)
+        out = (r.stdout + r.stderr).lower()
+        found = "imx708" in out or ("available cameras" in out and "no cameras" not in out)
+        report(found, "camera detected (Camera Module 3)" if found else
+               "no camera found - check the ribbon cable (power off first)")
     else:
         report(False, "rpicam-hello not installed (sudo apt install rpicam-apps)")
     print("\nAll good." if ok else "\nFix the lines marked FIX, then run again.")
