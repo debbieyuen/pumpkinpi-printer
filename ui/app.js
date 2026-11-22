@@ -91,9 +91,12 @@ function show(view) {
 // Live Pi camera preview (MJPEG). Closing the <img> stream lets the Pi stop the camera.
 function liveCamera(on) {
   const img = $("camImg");
+  if (on && !state.live) {   // no Pi server: show a drawn sample frame so the screen can be tried anywhere
+    img.src = "sample-camera.jpg"; img.hidden = false; $("liveTag").hidden = false; $("liveTag").textContent = "Sample"; $("camEmpty").hidden = true;
+    return;
+  }
   if (!on || !state.live) {
     if (img.dataset.live) { img.removeAttribute("src"); delete img.dataset.live; img.hidden = true; $("liveTag").hidden = true; $("camEmpty").hidden = false; }
-    if (on) $("camEmpty").textContent = "The live camera runs on the Pi.";
     return;
   }
   if (img.dataset.live) return;
