@@ -849,7 +849,6 @@ $("menuBtn").onclick = async () => {
   $("menuBtn").disabled = false; $("menuBtn").textContent = "Check menu";
 };
 async function plaJob(path, body, what) {
-  if (!$("plaOk").checked) return log("Tick the box first: no food on the bed, syringe tip above the nozzle.");
   try {
     await apiJson(path, { ...body, confirm: true });
     state.job = true; renderCards(); $("jobMeter").classList.add("on");
