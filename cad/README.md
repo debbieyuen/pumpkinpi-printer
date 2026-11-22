@@ -21,6 +21,7 @@ the 30° default) and needed **zero** supports. Horizontal holes are teardrop-sh
 |---|---|---|
 | `plateA3.gcode` (`out/plate_A_syringe_PETG.gcode`) | Carriage v1.2 (M2 head holes) + plunger pusher v0.6 | 4 h 3 min / 71 g |
 | `pusher6.gcode` | Plunger pusher v0.6 only | 56 min / 18 g |
+| `pusher6fast.gcode` | Pusher v0.6, 0.28 mm layers, 3 walls, 25% infill | 36 min / 15 g |
 | `fitM2.gcode` (`out/fit_test.stl`) | Fit test for the M2 head-mount holes. Optional, print first. | 13 min / 4 g |
 | `plateB.gcode` (`out/plate_B_accessories_PETG.gcode`) | Camera post + holder, 2 display feet, pie locator | 3 h 56 min / 75 g |
 
