@@ -69,3 +69,31 @@ h2{font:700 20px/1.2 var(--font-body);display:flex;align-items:center;gap:10px}
   .stop{height:72px;margin-top:6px;flex:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* v2: prompt, plan, preview, on-screen keyboard */
+.pill.wait{background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.pill.sm{font-size:11px;padding:2px 6px;margin-right:8px}
+.spin.sm{width:12px;height:12px;vertical-align:-2px}
+.plancard{background:var(--surface-2);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.cap{font:800 20px/1.2 var(--font-display)}
+.meta{color:var(--accent);font-weight:700;font-size:15px;text-transform:capitalize}
+.label{color:var(--muted);font-size:13px;margin-top:4px}
+.ing{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;text-align:left;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid transparent;cursor:pointer;min-height:56px}
+.ing.open{border-color:var(--accent)}
+.ing .who,.ing .why{display:block}
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.drow{display:flex;align-items:center}
+.drow .prob{margin-left:auto}
+.detail .src{color:var(--muted);max-width:none;white-space:normal}
+.preview{width:100%;max-height:230px;flex:none}
+.preview .crust{fill:#9c5a25}.preview .filling{fill:#d9822b}
+.preview .safe{fill:none;stroke:#f6ead9;stroke-opacity:.25;stroke-dasharray:2 2;stroke-width:.4}
+.preview polyline{fill:none;stroke:#3b1f12;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.btn.ghost{flex:1}.btn.go{flex:1.2}
+.kbd{position:fixed;left:0;right:0;bottom:0;background:#120c09;border-top:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:8px;z-index:10}
+.kbd[hidden]{display:none}
+.krow{display:flex;gap:8px;justify-content:center}
+.key{flex:0 1 112px;height:54px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font-size:22px;font-weight:500;cursor:pointer}
+.key:active{background:var(--accent);color:var(--accent-ink)}
+.key.wide{flex:0 1 160px;font-size:18px}.key.space{flex:0 1 520px}
+.key[data-k="Done"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.ing,.detail,.plancard,.label{flex:none}

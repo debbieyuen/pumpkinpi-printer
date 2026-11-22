@@ -21,45 +21,46 @@
 </header>
 
 <main class="grid">
-  <section class="panel check" aria-labelledby="checkTitle">
-    <h2 id="checkTitle"><span class="step">1</span> Check every ingredient</h2>
-    <form id="checkForm" class="checkform" autocomplete="off">
-      <input id="product" name="product" type="text" placeholder="Scan or type a product" aria-label="Product name" required>
-      <button type="submit" class="btn primary" id="checkBtn">Check</button>
+  <section class="panel ask" aria-labelledby="askTitle">
+    <h2 id="askTitle"><span class="step">1</span> What should we pipe?</h2>
+    <form id="askForm" class="checkform" autocomplete="off">
+      <input id="prompt" name="prompt" type="text" inputmode="none" placeholder="Tap to type, e.g. a smiley face in chocolate for Michael" aria-label="Design prompt" required>
+      <button type="submit" class="btn primary" id="askBtn">Ask</button>
     </form>
-    <div class="chips" id="chips" aria-label="Try a product"></div>
+    <div class="chips" id="chips" aria-label="Example prompts"></div>
 
-    <div id="results" class="results" aria-live="polite">
+    <div id="plan" class="results" aria-live="polite">
       <div class="empty">
-        <p>Nothing checked yet.</p>
-        <p class="muted">Perplexity searches labels and recalls for each guest's allergens before the printer can start.</p>
+        <p>Tell Perplexity what you'd like on the pie.</p>
+        <p class="muted">The Agent API plans the design, Search finds each ingredient's label, and Decider checks every guest's allergies before Start unlocks.</p>
       </div>
     </div>
   </section>
 
   <section class="panel print" aria-labelledby="printTitle">
-    <h2 id="printTitle"><span class="step">2</span> Decorate</h2>
-
-    <label class="field">
-      <span>Pipe a name for</span>
-      <select id="guest"></select>
-    </label>
+    <h2 id="printTitle"><span class="step">2</span> Preview and pipe</h2>
+    <svg id="preview" class="preview" viewBox="-60 -60 120 120" role="img" aria-label="Piping preview">
+      <circle r="58" class="crust"/><circle r="50" class="filling"/><circle r="45" class="safe"/>
+      <g id="strokes"></g>
+    </svg>
 
     <div class="gate" id="gate">
-      <div class="gate-row"><span class="dot" id="gSafe"></span><span>All ingredients green</span></div>
+      <div class="gate-row"><span class="dot" id="gDesign"></span><span>Design planned</span></div>
+      <div class="gate-row"><span class="dot" id="gSafe"></span><span id="safeText">Every ingredient green</span></div>
       <div class="gate-row"><span class="dot" id="gReady"></span><span id="readyText">Pie centered and ready</span></div>
     </div>
-
-    <div class="meter" aria-hidden="true"><div class="fill" id="readyFill"></div></div>
     <div class="row">
-      <button class="btn ghost" id="readyBtn" type="button">Check pie with camera</button>
-      <button class="btn go" id="startBtn" type="button" disabled>Start piping</button>
+      <button class="btn ghost" id="readyBtn" type="button">Camera</button>
+      <button class="btn ghost" id="dryBtn" type="button" disabled>Dry run</button>
+      <button class="btn go" id="startBtn" type="button" disabled>Start</button>
     </div>
+    <div class="meter" aria-hidden="true"><div class="fill" id="jobFill"></div></div>
 
     <button class="stop" id="stopBtn" type="button" aria-label="Emergency stop">STOP</button>
   </section>
 </main>
 
+<div class="kbd" id="kbd" hidden aria-label="On-screen keyboard"></div>
 <footer class="log" id="log" aria-live="polite"></footer>
 <script src="app.js"></script>
 </body>
