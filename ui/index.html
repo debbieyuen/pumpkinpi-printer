@@ -47,9 +47,16 @@
     </div>
   </section>
 
-  <!-- Camera: live Pi camera preview + pie-ready check + dry run -->
+  <!-- Camera: live Pi camera preview + pie-ready check + label scan + timelapse + dry run -->
   <section class="screen camera" id="cameraView" hidden>
-    <div class="camframe"><img id="camImg" alt="Live camera view of the printer bed" hidden><span class="live" id="liveTag" hidden>Live</span><p class="muted" id="camEmpty">Camera preview runs on the Pi.</p></div>
+    <div class="camframe"><img id="camImg" alt="Live camera view of the printer bed" hidden><span class="live" id="liveTag" hidden>Live</span>
+      <svg class="dishov" id="dishOv" hidden aria-label="Dish outline the camera found"></svg>
+      <div class="dishcard" id="dishCard" hidden></div>
+      <span class="rec" id="recTag" hidden>REC 0:00</span><p class="muted" id="camEmpty">Camera preview runs on the Pi.</p>
+      <div class="sheet" id="labelSheet" hidden></div>
+      <div class="sheet clipsheet" id="clipSheet" hidden><video id="clipVid" controls playsinline></video>
+        <div class="cliprow"><span class="muted small" id="clipInfo"></span><button class="btn ghost sm" id="clipClose" type="button">Close</button></div></div>
+    </div>
     <div class="side">
       <div class="more" id="more" hidden></div>
       <div class="load" id="load" aria-live="polite"></div>
@@ -58,6 +65,9 @@
       <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
       <button class="btn" id="dripBtn" type="button">Drip test</button>
       <div class="drip" id="dripBox" hidden aria-live="polite"></div>
+      <button class="btn" id="labelBtn" type="button">Scan label</button>
+      <button class="btn" id="recBtn" type="button">Record</button>
+      <button class="btn ghost" id="clipBtn" type="button" hidden>Last clip</button>
       <p class="muted small" id="dripSet"></p>
     </div>
   </section>

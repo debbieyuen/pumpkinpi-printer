@@ -126,14 +126,20 @@ def flag_by_name(product: str, a: str, p: float, v: str) -> tuple[float, str, st
 
 
 def label_evidence(label: dict | None) -> list[dict]:
-    """The Open Food Facts label (products.py) as one evidence item, or nothing."""
+    """A package label as one evidence item, or nothing.
+
+    From Open Food Facts (products.py) or from the Pi camera (label_scan.py, source="camera")."""
     if not label or not (label.get("ingredients") or label.get("allergens")):
         return []
-    text = (f"Package label for {label.get('brand', '')} {label.get('name', '')} {label.get('size', '')}. "
+    cam = label.get("source") == "camera"
+    missing = "none printed" if cam else "none listed (Open Food Facts often misses these)"
+    text = (f"{'Photo of the package label' if cam else 'Package label'} for {label.get('brand', '')} "
+            f"{label.get('name', '')} {label.get('size', '')}. "
             f"Ingredients: {label.get('ingredients') or 'not listed'}. "
             f"Contains: {', '.join(label.get('allergens') or []) or 'none listed'}. "
-            f"May contain: {', '.join(label.get('traces') or []) or 'none listed (Open Food Facts often misses these)'}.")
-    return [{"title": f"Open Food Facts: {label.get('brand', '')} {label.get('name', '')}".strip(),
+            f"May contain: {', '.join(label.get('traces') or []) or missing}.")
+    title = "Camera photo of the label" if cam else "Open Food Facts"
+    return [{"title": f"{title}: {label.get('brand', '')} {label.get('name', '')}".strip(),
              "url": label.get("url"), "text": text}]
 
 

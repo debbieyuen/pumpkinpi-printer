@@ -8,7 +8,7 @@ REPO="$(pwd)"
 
 echo ">>> System packages"
 sudo apt update
-sudo apt install -y python3-venv python3-pip git rpicam-apps curl
+sudo apt install -y python3-venv python3-pip git rpicam-apps curl ffmpeg
 command -v chromium >/dev/null || command -v chromium-browser >/dev/null || sudo apt install -y chromium
 
 echo ">>> Python venv"

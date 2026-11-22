@@ -117,6 +117,8 @@ Design rules (when base is not none):
   diet_notes. For a dish with nothing piped (turkey), topping is empty and recipe covers the dish (7-10 steps,
   with the safe internal temperature from fsis.usda.gov for meat).
 - Fill products[] in the same order, with a Bay Area store that sells it and the UPC if a store page shows it.
+- If a dish on the bed is given, design for it: a cookie or cupcake is small, so use a shape alone or a name of at
+  most 6 letters; a pie has a crust ring, so keep the design inside the filling.
 - Never say an ingredient is safe; PumpkinPi checks each one separately. Do not put URLs in the JSON.
 - If diet options are given (vegan, dairy-free, gluten-free, egg-free, low sugar), every ingredient must fit them,
   e.g. vegan ganache uses dairy-free chocolate and oat or soy cream.
@@ -160,19 +162,26 @@ topping: ingredients, products and recipe are just for this topping, base stays 
 "Frosting layer". Pick a design that goes with the earlier layers (e.g. a name in frosting under a chocolate heart)."""
 
 
-def context(roster, diets, topping_type, layers) -> str:
+def dish_line(dish: dict | None) -> str:
+    if not dish or dish.get("dish") in (None, "nothing", "other"):
+        return ""
+    room = f", room for a design about {2 * dish['fit_r']:.0f} mm across" if dish.get("fit_r") else ""
+    return f"Dish on the bed (from the camera): {dish['dish']}{room}\n"
+
+
+def context(roster, diets, topping_type, layers, dish=None) -> str:
     s = f"Guests: {json.dumps(roster)}\nDiet options: {json.dumps(diets or [])}\nSelected topping: {topping_type or 'chocolate'}\n"
     if layers:
         s += f"Layers already piped: {json.dumps(layers)}\n"
-    return s
+    return s + dish_line(dish)
 
 
 def plan_design(client: httpx.Client, prompt: str, guests: list[dict], diets: list[str] | None = None,
-                topping_type: str | None = None, layers: list[dict] | None = None) -> dict:
+                topping_type: str | None = None, layers: list[dict] | None = None, dish: dict | None = None) -> dict:
     roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
     text, results = pplx.agent(
         client, instructions=INSTRUCTIONS + (LAYER if layers else ""), name="pumpkinpi_design", schema=SCHEMA,
-        input=context(roster, diets, topping_type, layers) + f"\nRequest: {prompt}",
+        input=context(roster, diets, topping_type, layers, dish) + f"\nRequest: {prompt}",
     )
     plan = tidy(json.loads(text))
     plan["sources"] = [{"title": r.get("title"), "url": r.get("url")} for r in results if r.get("url")][:8]
@@ -192,13 +201,13 @@ food ("make cookies instead"), plan that food from scratch."""
 
 def revise_design(client: httpx.Client, plan: dict, change: str, guests: list[dict],
                   diets: list[str] | None = None, topping_type: str | None = None,
-                  layers: list[dict] | None = None) -> dict:
+                  layers: list[dict] | None = None, dish: dict | None = None) -> dict:
     """Edit the current plan ("just a heart, no name") instead of starting over."""
     roster = [{"name": g["name"], "avoid": g.get("avoid", []), "limit": g.get("limit", [])} for g in guests]
     current = {k: plan.get(k) for k in SCHEMA["properties"]}
     text, results = pplx.agent(
         client, instructions=REVISE, name="pumpkinpi_revise", schema=SCHEMA,
-        input=context(roster, diets, topping_type or plan.get("topping_type"), layers) +
+        input=context(roster, diets, topping_type or plan.get("topping_type"), layers, dish) +
               f"Current design: {json.dumps(current)}\n\nChange: {change}",
     )
     new = tidy(json.loads(text), plan)

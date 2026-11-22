@@ -157,8 +157,13 @@ def move(strokes: list[Stroke], dx: float = 0, dy: float = 0, k: float = 1) -> l
     return [[(x * k + dx, y * k + dy) for x, y in st] for st in strokes]
 
 
+def extent(strokes: list[Stroke]) -> float:
+    return max((math.hypot(x, y) for st in strokes for x, y in st), default=0.0)
+
+
 def strokes_for(plan: dict) -> list[Stroke]:
-    """plan: {"shape": one of SHAPES, "text": optional words under the shape, "font": "print" | "cursive"}."""
+    """plan: {"shape": one of SHAPES, "text": optional words under the shape, "font": "print" | "cursive",
+    "fit_r": optional usable radius in mm (smaller dish or wide crust)}."""
     shape = plan.get("shape", "text")
     words = (plan.get("text") or "").strip()
     font = plan.get("font") if plan.get("font") in FONTS else "print"
@@ -183,6 +188,11 @@ def strokes_for(plan: dict) -> list[Stroke]:
         else:
             out = art
     out = move(out, k=BASES.get(plan.get("base") or "pie", 1.0))
+    fit = plan.get("fit_r")   # usable radius the camera measured (vision.py): only ever shrinks the design
+    if fit and fit > 0:
+        ext = extent(out)
+        if ext > fit:
+            out = move(out, k=fit / ext)
     for st in out:
         for x, y in st:
             if math.hypot(x, y) > MAX_R + 0.01:

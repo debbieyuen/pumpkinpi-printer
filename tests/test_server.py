@@ -19,6 +19,24 @@ LABEL = {"upc": "0853522000009", "name": "Mini Chips", "brand": "Enjoy Life", "s
 seen_labels: list = []
 
 
+class FakeRecorder:
+    def __init__(self):
+        self.calls = []
+
+    def start(self, auto=False):
+        self.calls.append(("start", auto))
+        return True
+
+    def stop(self):
+        self.calls.append(("stop",))
+
+    def stop_auto(self):
+        self.calls.append(("stop_auto",))
+
+    def status(self):
+        return {"recording": bool(self.calls and self.calls[-1][0] == "start"), "clips": []}
+
+
 def setup(tmp_path, monkeypatch, verdict="safe"):
     f = tmp_path / "guests.json"
     f.write_text(json.dumps({"event": "Test", "guests": [{"name": "Michael", "avoid": ["tree nuts"], "notes": "private"}]}))
@@ -33,7 +51,8 @@ def setup(tmp_path, monkeypatch, verdict="safe"):
         "search": {"queries": ["q"], "results": [{"title": "t", "url": "https://example.com"}]},
         "relevance": 0.9, "natural_flavor": 0.1})
     monkeypatch.setattr(srv, "run_job", lambda lines, dry_run=False: None)
-    srv.state.update(checks={}, ready=0.0, plan=None, strokes=None, job={"running": False})
+    monkeypatch.setattr(srv, "recorder", FakeRecorder())
+    srv.state.update(checks={}, ready=0.0, plan=None, strokes=None, job={"running": False}, dish=None)
     return TestClient(srv.app)
 
 
@@ -203,7 +222,7 @@ def test_layers_keep_first_topping_and_use_its_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(srv, "plan_design", lambda cl, p, g, diets=None, **kw: {**PLAN, "base": "cookie", "shape": "heart", "text": "", "topping_type": "chocolate"})
     c.post("/api/design", json={"prompt": "chocolate heart cookie", "topping_type": "chocolate"})
     seen = {}
-    def second(cl, p, g, diets=None, topping_type=None, layers=None):
+    def second(cl, p, g, diets=None, topping_type=None, layers=None, **kw):
         seen.update(topping_type=topping_type, layers=layers)
         return {**PLAN, "base": "pie", "shape": "text", "text": "Debbie", "topping_type": "frosting"}
     monkeypatch.setattr(srv, "plan_design", second)
@@ -225,3 +244,23 @@ def test_topping_profiles_and_drip_suggestion(tmp_path, monkeypatch):
     assert t["marshmallow"]["settings"]["dwell"] > t["frosting"]["settings"]["dwell"]
     s = c.post("/api/drip-test/result", json={"topping_type": "chocolate", "seconds": 4.2}).json()["suggest"]
     assert s["dwell"] == 4.5 and s["retract"] > t["chocolate"]["settings"]["retract"]
+
+
+def test_start_records_a_timelapse(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    c.post("/api/design", json={"prompt": "x"})
+    c.post("/api/start", json={"dry_run": True})
+    assert srv.recorder.calls == [("start", True)]
+
+
+def test_record_button(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    assert c.post("/api/record", json={"on": True}).json()["recording"] is True
+    assert c.post("/api/record", json={"on": False}).json()["recording"] is False
+    assert srv.recorder.calls == [("start", False), ("stop",)]
+
+
+def test_clip_names_are_checked(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch)
+    assert c.get("/api/clips/..%2F.env").status_code == 404
+    assert c.get("/api/clips/20261126-153000.mp4").status_code == 404

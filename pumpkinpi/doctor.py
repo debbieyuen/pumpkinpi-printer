@@ -58,6 +58,13 @@ def main():
                "no camera found - check the ribbon cable (power off first)")
     else:
         report(False, "rpicam-hello not installed (sudo apt install rpicam-apps)")
+    try:
+        import cv2  # noqa: F401
+        report(True, "OpenCV installed (crust finder)")
+    except ImportError:
+        report(False, "OpenCV missing - .venv/bin/pip install -r requirements.txt")
+    report(shutil.which("ffmpeg"), "ffmpeg installed (timelapse clips)" if shutil.which("ffmpeg") else
+           "ffmpeg missing - timelapse keeps only photos (sudo apt install -y ffmpeg)")
     print("\nAll good." if ok else "\nFix the lines marked FIX, then run again.")
 
 

@@ -9,11 +9,17 @@ Endpoints
     POST /api/design   {"prompt": "...", "diets": ["vegan"]} -> Agent API recipe + design plan + piping preview
     POST /api/check    {"product": "...", "diets": [...]} -> Open Food Facts label + Search API sources + Decider verdict per guest
                        allergen and per chosen diet (vegan, dairy-free, gluten-free, egg-free)
-    POST /api/ready    photo -> Decider: is the pie ready?  {"probability": 0.97}
+    POST /api/ready    photo -> Decider: is the pie ready? + vision: which dish, where the crust is; the design
+                       shrinks to fit inside the filling  {"probability": 0.97, "dish": {...}, "design": {...}}
+    POST /api/dish/center  one-time: the dish now sits where pie_x/pie_y was measured (camera_cal.json)
     POST /api/start    {"dry_run": bool} -> refuses until every ingredient is green and readiness >= 0.9,
                        then writes the G-code to the printer's microSD (PPMMDDNN.GCO) and prints from it
     GET  /api/photo    latest camera photo
     GET  /api/camera.mjpg  live camera preview (MJPEG)
+    POST /api/label    camera photo of a package label -> Agent API reads it -> same check as /api/check
+    GET  /api/label/photo  the last label photo
+    GET  /api/record   timelapse status + saved clips;  POST /api/record {"on": true|false}
+    GET  /api/clips/{name}  a saved timelapse MP4
     GET  /api/job      piping progress
     POST /api/stop     sends M112 immediately
 """
@@ -33,14 +39,15 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .allergen_check import check_ingredient
-from . import allergy_guide
+from . import allergy_guide, label_scan, vision
 from .allergens import scan_blocks, scan_recipe
 from .camera import camera
 from .design import plan_design, revise_design
 from .pie_ready import PHOTO, pie_ready, take_photo
 from .pplx import make_client
 from .products import enrich
-from .shapes import FONTS, SHAPES, split_lines, strokes_for
+from .timelapse import Recorder, clip_path
+from .shapes import FONTS, MAX_TEXT, SHAPES, extent, split_lines, strokes_for
 from .toolpath import TOPPING_INFO, TOPPINGS, Machine, drip_test_gcode, piped_path, save_topping, to_gcode
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,6 +76,8 @@ state: dict = {"checks": {}, "ready": 0.0, "plan": None, "strokes": None, "layer
                "job": {"running": False, "done": 0, "total": 0, "error": None}}
 _printer = None
 _stop = threading.Event()
+recorder = Recorder(camera)
+LABEL_PHOTO = Path("captures/label.jpg")
 
 
 def guests() -> dict:
@@ -140,6 +149,14 @@ class CheckReq(BaseModel):
     diets: list[str] = []
 
 
+class LabelReq(BaseModel):
+    diets: list[str] = []
+
+
+class RecordReq(BaseModel):
+    on: bool
+
+
 class StartReq(BaseModel):
     dry_run: bool = False
 
@@ -168,6 +185,17 @@ def status():
     return {"event": g.get("event"), "printer": connected, "diets": DIETS,
             "camera": shutil.which("rpicam-vid") is not None, "preview": PREVIEW,
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}
+
+
+def fit_info(plan: dict, strokes: list) -> dict:
+    """How the camera changed the design's size, for the screen."""
+    d = state.get("dish") or {}
+    full = extent(strokes_for({**plan, "fit_r": None}))
+    now = extent(strokes)
+    k = now / full if full else 1.0
+    letters = 10 if plan.get("shape") != "text" else 24   # letter height in mm before scaling (shapes.py)
+    return {"dish": d.get("dish"), "fit_r": plan.get("fit_r"), "scale": round(k, 2),
+            "small_text": bool(plan.get("text")) and letters * k < 6}
 
 
 def exact(plan: dict) -> tuple[list, dict]:
@@ -219,6 +247,11 @@ def answer_only(plan: dict) -> dict:
 
 
 def publish(plan: dict, keep_checks: bool) -> dict:
+    d = state.get("dish") or {}
+    if d.get("fit_r"):
+        plan["fit_r"], plan["dish"] = d["fit_r"], d.get("dish")
+    else:
+        plan.pop("fit_r", None)
     if plan.get("base") == "none":   # e.g. a roast turkey: recipe + checks, nothing to pipe
         strokes, path = [], {"strokes": [], "mm": 0, "seconds": 0}
     else:
@@ -233,7 +266,7 @@ def publish(plan: dict, keep_checks: bool) -> dict:
         state["ready"] = 0.0
         state.pop("guide", None)
     return {"plan": plan, "strokes": path["strokes"], "path": {k: path[k] for k in ("mm", "seconds")},
-            "scan": scan, "layers": state["layers"]}
+            "scan": scan, "layers": state["layers"], "fit": fit_info(plan, strokes) if strokes else None}
 
 
 @app.post("/api/design")
@@ -249,7 +282,8 @@ def design(req: DesignReq):
         layers = layers + [layer_of(state["plan"])]
     with make_client() as client:
         plan = plan_design(client, req.prompt, guests()["guests"], diets=diets, topping_type=ttype,
-                           layers=[{k: l[k] for k in ("topping_type", "shape", "text")} for l in layers] if req.add_layer else None)
+                           layers=[{k: l[k] for k in ("topping_type", "shape", "text")} for l in layers] if req.add_layer else None,
+                           dish=state.get("dish"))
     if plan.get("kind") == "question":
         add_labels(plan)
         return answer_only(plan)
@@ -279,7 +313,8 @@ def revise(req: ReviseReq):
     with make_client() as client:
         plan = revise_design(client, old, req.change, guests()["guests"], diets=diets,
                              topping_type=topping_type(req.topping_type or old.get("topping_type")),
-                             layers=[{k: l[k] for k in ("topping_type", "shape", "text")} for l in state["layers"]] or None)
+                             layers=[{k: l[k] for k in ("topping_type", "shape", "text")} for l in state["layers"]] or None,
+                             dish=state.get("dish"))
     if plan.get("kind") == "question":
         return answer_only(plan)
     plan["diets"] = diets
@@ -307,23 +342,83 @@ def edit(req: EditReq):
     return publish(plan, keep_checks=True)
 
 
-@app.post("/api/check")
-def check(req: CheckReq):
+def run_check(product: str, diets: list[str], label: dict | None, adjust=None) -> dict:
+    """Search API + Decider for one product, one row per guest allergen and chosen diet.
+    adjust(checks) may make verdicts stricter before rows are built (label scan)."""
     g = guests()["guests"]
-    diets = [d for d in clean_diets(req.diets) if d in DIET_CHECKS]
+    diets = [d for d in clean_diets(diets) if d in DIET_CHECKS]
     terms = allergens() + [DIET_CHECKS[d] for d in diets if DIET_CHECKS[d] not in allergens()]
     with make_client() as client:
-        label = label_for(req.product)
-        res = check_ingredient(client, req.product, terms, label=label)
+        res = check_ingredient(client, product, terms, label=label)
+    if adjust:
+        adjust(res["checks"])
     rows = [{"name": x["name"], **asdict(res["checks"][a])} for x in g for a in x.get("avoid", [])]
     rows += [{"name": d.capitalize(), "diet": d, **asdict(res["checks"][DIET_CHECKS[d]])} for d in diets]
-    state["checks"][req.product.lower()] = [r["verdict"] for r in rows]
     off = [{"title": f"Open Food Facts: {label.get('brand', '')} {label.get('name', '')}".strip(), "url": label["url"]}] \
         if label and label.get("url") else []
-    return {"product": req.product, "results": rows, "relevance": res["relevance"], "label": label,
+    return {"product": product, "results": rows, "relevance": res["relevance"], "label": label,
             "natural_flavor": res["natural_flavor"], "queries": res["search"]["queries"],
             "sources": off + [{"title": r.get("title"), "url": r.get("url"), "tag": r.get("tag", "label")}
                                for r in res["search"]["results"]][:8]}
+
+
+@app.post("/api/check")
+def check(req: CheckReq):
+    out = run_check(req.product, req.diets, label_for(req.product))
+    state["checks"][req.product.lower()] = [r["verdict"] for r in out["results"]]
+    return out
+
+
+@app.post("/api/label")
+def label(req: LabelReq):
+    """Scan a package label held up to the camera. Counts for the matching recipe ingredient, if any."""
+    try:
+        photo = take_photo(LABEL_PHOTO)
+    except Exception as e:   # noqa: BLE001 - no camera / rpicam-still failed
+        raise HTTPException(503, f"Camera not available: {e}"[:200])
+    with make_client() as client:
+        read = label_scan.read_label(client, photo.read_bytes())
+    if not read["readable"]:
+        raise HTTPException(422, "Couldn't read the ingredients. Hold the label flat, closer and out of glare."
+                            + (f" ({read['problem']})" if read.get("problem") else ""))
+    ingredient = label_scan.match_ingredient(read, state["plan"])
+    # Ask about the recipe's exact product when it matched, so a different bag can't turn it green.
+    product = ingredient or label_scan.title(read) or "this product"
+    lab = label_scan.as_label(read, image=f"/api/label/photo?t={int(time.time())}")
+    out = run_check(product, req.diets, lab, adjust=lambda checks: label_scan.apply_printed(checks, read))
+    if ingredient:
+        state["checks"][ingredient.lower()] = [r["verdict"] for r in out["results"]]
+    out["sources"] = [{"title": "Camera photo of the label", "url": lab["image"], "tag": "label"}] + out["sources"]
+    return {**out, "read": read, "ingredient": ingredient, "title": label_scan.title(read)}
+
+
+@app.get("/api/label/photo")
+def label_photo():
+    if not LABEL_PHOTO.exists():
+        raise HTTPException(404, "No label photo yet")
+    return FileResponse(LABEL_PHOTO, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/record")
+def record_status():
+    return recorder.status()
+
+
+@app.post("/api/record")
+def record(req: RecordReq):
+    if req.on:
+        recorder.start(auto=False)
+    else:
+        recorder.stop()
+    return recorder.status()
+
+
+@app.get("/api/clips/{name}")
+def clip(name: str):
+    p = clip_path(name)
+    if not p:
+        raise HTTPException(404, "No such clip")
+    return FileResponse(p, media_type="video/mp4")
 
 
 @app.post("/api/guide")
@@ -346,10 +441,38 @@ def guide():
 
 @app.post("/api/ready")
 def ready():
-    with make_client() as client:
-        p = pie_ready(client, take_photo())
+    """One photo: Decider says if it's ready; vision says what it is and where the crust is."""
+    from concurrent.futures import ThreadPoolExecutor
+    photo = take_photo()
+    jpeg = photo.read_bytes()
+    pie_mm = Machine.load().pie_mm
+    with make_client() as client, ThreadPoolExecutor(2) as ex:
+        p_job = ex.submit(pie_ready, client, photo)
+        v_job = ex.submit(vision.inspect, client, jpeg, pie_mm)
+        p, v = p_job.result(), v_job.result()
+    state["dish"] = v
+    design = publish(dict(state["plan"]), keep_checks=True) if state["plan"] else None
     state["ready"] = p
-    return {"probability": p}
+    return {"probability": p, "dish": v, "design": design}
+
+
+@app.post("/api/dish/center")
+def dish_center():
+    """Calibrate once: the pie sits where pie_x/pie_y was measured. Saves the target and the mm scale."""
+    v = state.get("dish")
+    if not v or not v.get("edges"):
+        raise HTTPException(409, "Check the pie first so the camera can find its edge")
+    if v["dish"] in vision.TYPICAL_MM:
+        raise HTTPException(409, f"Save the center with the pie on the bed, not a {v['dish']}")
+    m = Machine.load()
+    vision.save_cal(v["edges"], m.pie_mm)
+    v = {**v, "calibrated": True, **vision.sizes(v["edges"], v["dish"], m.pie_mm, vision.load_cal())}
+    cal = vision.load_cal()
+    v["target"] = {"cx": cal["cx"] * v["edges"]["w"], "cy": cal["cy"] * v["edges"]["h"]}
+    v["warnings"] = vision.warnings(v)
+    state["dish"] = v
+    design = publish(dict(state["plan"]), keep_checks=True) if state["plan"] else None
+    return {"dish": v, "design": design}
 
 
 @app.get("/api/photo")
@@ -445,6 +568,7 @@ def run_job(lines: list[str], dry_run: bool = False) -> None:
         job["error"] = str(e)
     finally:
         job["running"] = False
+        recorder.stop_auto()
 
 
 @app.post("/api/start")
@@ -455,6 +579,7 @@ def start(req: StartReq):
     _stop.clear()
     state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": "start", "file": None,
                     "error": None, "dry_run": req.dry_run}
+    recorder.start(auto=True)   # timelapse for the video; never touches the printer
     threading.Thread(target=run_job, args=(lines, req.dry_run), daemon=True).start()
     return {"started": True, "lines": len(lines), "dry_run": req.dry_run}
 
