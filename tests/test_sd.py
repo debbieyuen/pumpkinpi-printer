@@ -68,3 +68,14 @@ def test_no_card_raises_so_server_can_fall_back():
     p = printer(FakeMarlin(sd=False))
     with pytest.raises(SDError):
         p.sd_upload("PP112601.GCO", ["G90"])
+
+
+def test_card_file_heats_but_never_homes():
+    import datetime as _dt
+    from pumpkinpi.printer import card_file
+    d = _dt.date(2026, 11, 22)
+    assert sd_name(False, ["CD112201.GCO"], d, prefix="CD") == "CD112202.GCO"
+    out = card_file(["G90", "M109 S205", "G1 X10 Y10 E0.1 ; draw"], "CD112201.GCO")
+    assert out[0] == "M302 P0" and "M109 S205" in out and "G1 X10 Y10 E0.1" in out
+    with pytest.raises(FoodModeError):
+        card_file(["G28"], "CD112201.GCO")

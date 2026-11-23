@@ -39,12 +39,13 @@ class SDError(RuntimeError):
 # .gcode, .gco and .g). https://marlinfw.org/docs/gcode/M020.html
 #   PPMMDDNN.GCO  piping job   e.g. PP112601.GCO = first pie on Nov 26
 #   DRMMDDNN.GCO  dry run (path 15 mm above the pie, no topping)
+#   CDMMDDNN.GCO  PLA menu card (heats the nozzle; run only after Heat & home)
 SD_NAME = re.compile(r"^[A-Z][A-Z0-9]{0,7}\.GCO$")
 
 
-def sd_name(dry_run: bool, existing: list[str], today: dt.date | None = None) -> str:
+def sd_name(dry_run: bool, existing: list[str], today: dt.date | None = None, prefix: str | None = None) -> str:
     today = today or dt.date.today()
-    stem = f"{'DR' if dry_run else 'PP'}{today:%m%d}"
+    stem = f"{prefix or ('DR' if dry_run else 'PP')}{today:%m%d}"
     taken = {n.upper() for n in existing}
     for i in range(1, 100):
         name = f"{stem}{i:02d}.GCO"
@@ -63,6 +64,26 @@ def file_safe(lines: list[str]) -> None:
         ln = ln.split(";")[0].strip()
         if ln and FOOD_MODE_BLOCKED.match(ln) and not HEATER_OFF.match(ln):
             raise FoodModeError(f"{ln!r} may not go in a food file (homing/probing/heating)")
+
+
+# PLA card files may heat the nozzle (PLA needs ~205 C) but never home or probe: the card is taped to
+# the bed by then, and the CR Touch would tap it. Heat & home (bed empty) always runs first over USB.
+CARD_BLOCKED = re.compile(r"^(G28|G29|G30|G34|G35|M48|M303|M851|M302 P1)\b", re.I)
+
+
+def card_file_safe(lines: list[str]) -> None:
+    for ln in lines:
+        ln = ln.split(";")[0].strip()
+        if ln and CARD_BLOCKED.match(ln):
+            raise FoodModeError(f"{ln!r} may not go in a card file (no homing/probing; cold extrusion stays off)")
+
+
+def card_file(lines: list[str], name: str) -> list[str]:
+    """The exact lines written to the card for a PLA menu card: cold-extrusion guard on, then the drawing."""
+    body = [ln.split(";")[0].strip() for ln in lines]
+    out = ["M302 P0", f"M117 PLA card {name[:-4]}", *[b for b in body if b]]
+    card_file_safe(out)
+    return out
 
 
 def sd_file(lines: list[str], name: str) -> list[str]:
@@ -138,11 +159,13 @@ class Printer:
         return files
 
     def sd_upload(self, name: str, lines: list[str], progress: Callable[[int, int], None] | None = None,
-                  stop: Callable[[], bool] | None = None) -> None:
-        """Write `lines` to the card as `name`, then check the file size from M20."""
+                  stop: Callable[[], bool] | None = None, card: bool = False) -> None:
+        """Write `lines` to the card as `name`, then check the file size from M20.
+
+        card=True: a PLA menu card file (may heat, never homes); otherwise a food file (no heat, no homing)."""
         if not SD_NAME.match(name):
             raise SDError(f"{name!r} is not an 8.3 name like PP112601.GCO")
-        file_safe(lines)
+        (card_file_safe if card else file_safe)(lines)
         out = self.send("M21", wait_s=10)
         if any("init fail" in x.lower() or "no sd" in x.lower() for x in out):
             raise SDError("No microSD card in the printer (M21 failed)")

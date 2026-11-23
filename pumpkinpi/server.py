@@ -24,7 +24,7 @@ Endpoints
     POST /api/cards/check   Search API + Decider on every menu product -> one line per dish
     POST /api/cards/preview {"guest": "Lily"} -> the card's strokes (mm)
     POST /api/cards/prep    {"confirm": true} PLA: heat + home with the bed EMPTY, park at the back
-    POST /api/cards/print   {"guest": "Lily", "confirm": true} PLA: draw the card (streamed over USB)
+    POST /api/cards/print   {"guest": "Lily", "confirm": true} PLA: write CDMMDDNN.GCO to the microSD, print it
     GET  /api/job      piping progress
     POST /api/stop     sends M112 immediately
 """
@@ -783,6 +783,52 @@ def run_stream(lines: list[str], phase: str) -> None:
         job["running"] = False
 
 
+def run_card(lines: list[str]) -> None:
+    """PLA card: write CDMMDDNN.GCO to the printer's microSD (copy in gcode/), print it from the card.
+    Streams over USB if the SD write fails. Heat & home already ran with the bed empty."""
+    from .printer import SDError, card_file, sd_name
+    job = state["job"]
+    try:
+        p = printer()
+        p.pla_mode()
+        try:
+            name = sd_name(False, list(p.sd_list()), prefix="CD")
+            data = card_file(lines, name)
+            GCODE_DIR.mkdir(exist_ok=True)
+            (GCODE_DIR / name).write_text("\n".join(data) + "\n")
+            job.update(phase="upload", file=name)
+            p.sd_upload(name, data, progress=lambda i, n: job.update(pct=round(40 * i / n)), stop=_stop.is_set, card=True)
+            if _stop.is_set():
+                return
+            p.sd_start(name)
+            job["phase"] = "card"
+            seen, t0 = False, time.time()
+            while not _stop.is_set():
+                time.sleep(1.0)
+                pr = p.sd_progress()
+                if pr:
+                    seen = True
+                    job["pct"] = 40 + round(60 * pr[0] / max(1, pr[1]))
+                elif seen or time.time() - t0 > 15:
+                    break
+            job["pct"] = 100
+        except SDError as e:
+            if _stop.is_set():
+                return
+            job.update(note=f"SD write failed ({e}); streaming over USB")
+            for i, ln in enumerate(lines, 1):
+                if _stop.is_set():
+                    break
+                p.send(ln, wait_s=300)
+                job["done"] = i
+                job["pct"] = round(100 * i / len(lines))
+    except Exception as e:  # noqa: BLE001
+        job["error"] = str(e)
+        state["pla_homed"] = False
+    finally:
+        job["running"] = False
+
+
 def pla_job(req: CardReq, lines: list[str], phase: str) -> dict:
     if not req.confirm:
         raise HTTPException(409, "Confirm first: no food on the bed, syringe tip above the nozzle")
@@ -793,7 +839,8 @@ def pla_job(req: CardReq, lines: list[str], phase: str) -> dict:
     _stop.clear()
     state["ready"] = 0.0          # food checks must be redone after PLA printing
     state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": phase, "file": None, "error": None}
-    threading.Thread(target=run_stream, args=(lines, phase), daemon=True).start()
+    threading.Thread(target=run_card if phase == "card" else run_stream,
+                     args=(lines,) if phase == "card" else (lines, phase), daemon=True).start()
     return {"started": True, "lines": len(lines)}
 
 

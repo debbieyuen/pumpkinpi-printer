@@ -963,10 +963,12 @@ async function plaJob(path, body, what) {
       await sleep(700);
       const j = await apiJson("/api/job");
       $("jobFill").style.width = `${j.pct || 0}%`;
-      $("cardMsg").textContent = `${what}… ${j.pct || 0}%. Stay next to the printer.`;
+      $("cardMsg").textContent = j.phase === "upload" ? `Saving ${j.file} to the SD card… ${j.pct || 0}%`
+        : j.file && j.phase === "card" ? `Printing ${j.file} from the SD card… ${j.pct || 0}%. Stay next to the printer.`
+        : `${what}… ${j.pct || 0}%. Stay next to the printer.`;
       if (!j.running) {
         $("cardMsg").textContent = j.error ? `Stopped: ${j.error}` :
-          path.endsWith("prep") ? "Homed and hot. Tape the card to the corner guide, then Print card." : "Card done. Let it cool a minute before lifting.";
+          path.endsWith("prep") ? "Homed and hot. Tape the card to the corner guide, then Print card." : `Card done${j.file ? ` (saved on the SD card as ${j.file})` : ""}. Let it cool a minute before lifting.`;
         break;
       }
     }
