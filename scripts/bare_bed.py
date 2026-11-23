@@ -5,10 +5,11 @@
 
 Temperatures must match the filament in the printer. PETG at PLA temperatures (210 C, bed 50 C) barely melts: it
 comes out as a stiff thread that lies on the plate without bonding, and the next travel drags it away.
-PETG: same as the OrcaSlicer profile the parts printed with (Generic PETG, 240 C, bed 70 C), fan low.
+PETG: like the OrcaSlicer profile the parts printed with (Generic PETG, 240 C, bed 70 C), 5 C cooler for less
+stringing, fan low.
 PLA: Creality's filament table (https://store.creality.com/uk/blogs/basics/creality-filaments-parameter-reference-table),
 Ender-PLA 200-210 C, bed 50 C.
-Normal first layer (0.2 mm, 100 % flow), fan off on layer 1, 3 layers so the letters peel off in one piece.
+Normal first layer (0.2 mm, 100 % flow), fan off on layer 1.
 paper_mm 0: the prime line is on the same surface as the print. The measured paper thickness is kept in
 paper_measured for paper_6x9.py.
 """
@@ -16,8 +17,13 @@ import json, shutil, sys
 from pathlib import Path
 
 FILAMENTS = {
-    "petg": {"nozzle": 240, "bed": 70, "fan": 90},     # fan ~35 % from layer 2: PETG bonds worse when cooled hard
-    "pla": {"nozzle": 210, "bed": 50, "fan": 255},
+    # PETG strings: retract like the OrcaSlicer profile (1.2 mm at 40 mm/s, back in at 30 mm/s), wipe the tip back
+    # along the line before lifting, 235 C (bottom of Creality's 230-250 range: less ooze, still bonds on a 70 C
+    # bed), 2 layers so the nozzle crosses the letters less often. Fan ~35 % from layer 2.
+    "petg": {"nozzle": 235, "bed": 70, "fan": 90, "layers": 2, "retract": 1.2, "retract_feed": 2400,
+             "unretract_feed": 1800, "wipe": 1.5, "hop": 1.0},
+    "pla": {"nozzle": 210, "bed": 50, "fan": 255, "layers": 3, "retract": 0.8, "retract_feed": 2700,
+            "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8},
 }
 kind = (sys.argv[1] if len(sys.argv) > 1 else "petg").lower()
 if kind not in FILAMENTS:
@@ -32,12 +38,12 @@ pla = data.setdefault("pla", {})      # "pla" is the settings block name; it hol
 if pla.get("paper_mm"):
     pla["paper_measured"] = pla["paper_mm"]
 pla.update({"surface": "bed", "filament": kind, **FILAMENTS[kind], "first_fan": 0, "paper_mm": 0.0,
-            "first_z": 0.2, "first_flow": 1.0, "first_feed": 1200, "layers": 3, "z_adjust": 0.0,
+            "first_z": 0.2, "first_flow": 1.0, "first_feed": 1200, "z_adjust": 0.0,
             # Card text is mostly strokes under 4 mm, each printing ~0.15 mm of filament. A 1.5 mm retract and a
             # slow 4 mm lift on every one starves the start of the next stroke and drags the last one off the bed.
             # Small retract, short pause so the line sets, low hop: the string breaks instead of pulling.
-            "retract": 0.8, "end_pause": 0.15, "hop": 0.8, "hop_feed": 1200})
+            "end_pause": 0.15, "hop_feed": 1200})
 path.write_text(json.dumps(data, indent=1) + "\n")
 f = FILAMENTS[kind]
-print(f"machine.json: {kind.upper()} on the bare bed, nozzle {f['nozzle']} C, bed {f['bed']} C, 3 layers. "
+print(f"machine.json: {kind.upper()} on the bare bed, nozzle {f['nozzle']} C, bed {f['bed']} C, {f['layers']} layers. "
       "Nothing on the bed. Back to paper: python3 scripts/paper_6x9.py")

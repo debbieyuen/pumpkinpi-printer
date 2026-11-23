@@ -778,6 +778,10 @@ class Pla:
     retract: float = 1.5           # direct drive; pulls the string back before a lift
     hop: float = 4.0               # lift high so strings (dot of an i) snap off
     hop_feed: float = 1200.0       # mm/min for the lift (the firmware caps Z speed anyway)
+    retract_feed: float = 2700.0   # mm/min pulling back (OrcaSlicer PETG: 2400)
+    unretract_feed: float = 2700.0 # mm/min pushing back before a stroke (OrcaSlicer PETG: 1800)
+    wipe: float = 0.0              # mm to move back along the stroke after the retract, nozzle still down: the
+                                   # tip wipes its ooze onto the line instead of pulling a string to the next one
     end_pause: float = 0.0         # seconds to hold still after the retract, before lifting: the line sets
                                    # and the ooze stops, so the lift doesn't pull a short stroke off the bed
     prime_x: float = 5.0           # prime blob off the card, on bare bed
@@ -814,6 +818,18 @@ def prime_lines(p: "Pla") -> list[str]:
     return ["M211 S0", *line, "M211 S1"] if z < 0.05 else line
 
 
+def wipe_point(st: Stroke, dist: float) -> tuple[float, float]:
+    """The point dist mm back along the stroke from its end (or its start, if the stroke is shorter)."""
+    left = dist
+    for (bx, by), (ax, ay) in zip(st[::-1], st[-2::-1]):     # walk from the end towards the start
+        seg = math.hypot(bx - ax, by - ay)
+        if seg >= left and seg > 0:
+            t = left / seg
+            return bx + (ax - bx) * t, by + (ay - by) * t
+        left -= seg
+    return st[0]
+
+
 def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
     """One file the printer runs on its own from the microSD: heat, home ON the card, prime off it, draw."""
     out = [f"M140 S{p.bed:.0f}", f"M104 S{p.nozzle:.0f}", "M107", "G90", "M83",
@@ -839,11 +855,14 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
                 continue
             x, y = st[0]
             out += [f"G0 X{p.card_x + x:.2f} Y{p.card_y + y:.2f} F{p.travel:.0f}", f"G1 Z{z:.2f} F600",
-                    f"G1 E{p.retract:.2f} F2700"]
+                    f"G1 E{p.retract:.2f} F{p.unretract_feed:.0f}"]
             for (ax, ay), (bx, by) in zip(st, st[1:]):
                 e = math.hypot(bx - ax, by - ay) * p.e_per_mm * flow
                 out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{feed:.0f}")
-            out.append(f"G1 E-{p.retract:.2f} F2700")
+            out.append(f"G1 E-{p.retract:.2f} F{p.retract_feed:.0f}")
+            if p.wipe > 0:
+                wx, wy = wipe_point(st, p.wipe)
+                out.append(f"G1 X{p.card_x + wx:.2f} Y{p.card_y + wy:.2f} F{p.travel / 2:.0f}")
             if p.end_pause > 0:
                 out.append(f"G4 P{round(p.end_pause * 1000)}")
             out.append(f"G0 Z{zt:.2f} F{p.hop_feed:.0f}")

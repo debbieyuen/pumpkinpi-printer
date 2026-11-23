@@ -35,3 +35,11 @@ def test_nut_examples_are_red_and_cited():
     lines = cards.item_lines([("Example", p) for p in menu_plan.EXAMPLES], {})
     assert lines[0]["terms"]["peanut"] == "found" and lines[1]["terms"]["tree nut"] == "found"
     assert all(p["source"].startswith("https://") for p in menu_plan.EXAMPLES)
+
+
+def test_wipe_moves_back_along_the_stroke_after_retract():
+    st = [[(10, 10), (20, 10)]]
+    g = cards.card_gcode(st, cards.Pla(retract=1.2, retract_feed=2400, wipe=1.5, layers=1, card_x=0, card_y=0))
+    i = g.index("G1 E-1.20 F2400")
+    assert g[i + 1].startswith("G1 X18.50 Y10.00")          # 1.5 mm back from the end, no extrusion
+    assert cards.wipe_point([(0, 0), (1, 0)], 5) == (0, 0)  # short stroke: wipe to its start, never past it
