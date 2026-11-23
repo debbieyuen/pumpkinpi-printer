@@ -824,4 +824,6 @@ app.mount("/", StaticFiles(directory=ROOT / "ui", html=True), name="ui")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    import os
+    # Default: only the Pi's own screen. PUMPKINPI_HOST=0.0.0.0 in .env lets a laptop on the same Wi-Fi open it.
+    uvicorn.run(app, host=os.environ.get("PUMPKINPI_HOST", "127.0.0.1"), port=8000)
