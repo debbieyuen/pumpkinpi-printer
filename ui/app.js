@@ -208,7 +208,7 @@ $("npBanner").onclick = () => { $("noPrinter").hidden = false; };
 // ---------- screens ----------
 // The top box asks for a new idea on Recipe/Camera ("Make"), and for a change on Design ("Update").
 const PH = { make: "Ask for a recipe for any diet, then a design to pipe on top", change: "Change the design, e.g. just a heart, no name",
-  menu: "What's for dinner? e.g. hot pot with beef, lamb and shrimp; pumpkin pie" };
+  menu: "What's for dinner? e.g. hot pot and pumpkin pie" };
 let boxMode = "make";
 function setBox(mode) {
   if (mode === boxMode) return;
@@ -844,7 +844,14 @@ function renderMenu() {
     ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "<span class=\"yes\">YES</span> everything"}</div>`).join("");
   box.innerHTML = `<div class="mhead"><h2>${esc(cards.title)}</h2>${cards.prompt ? `<span class="muted">“${esc(cards.prompt)}”</span>` : ""}</div>
     <div class="mbody"><div class="mmenu">${secs}</div><div class="mnos"><h3>Allergens</h3>${cards.lines.length ? nos : "<p class=\"muted\">Not checked yet.</p>"}</div></div>`;
+  moreCue(box);
 }
+// Long menus scroll: fade the bottom edge and say so, so nothing looks cut off.
+function moreCue(box) {
+  const set = () => box.classList.toggle("more", box.scrollHeight - box.scrollTop - box.clientHeight > 4);
+  box.onscroll = set; requestAnimationFrame(set);
+}
+window.addEventListener("resize", () => { const b = $("menuView"); if (b) moreCue(b); });
 async function makeMenu() {
   const prompt = $("prompt").value.trim();
   if (!prompt || state.menuBusy) return;
