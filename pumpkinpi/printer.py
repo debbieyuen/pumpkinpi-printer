@@ -81,10 +81,11 @@ def file_safe(lines: list[str]) -> None:
 
 
 # PLA card files are started from the printer's screen, so they heat and home themselves. G28 taps the
-# CR Touch on the paper card (bed center) and a plain G29 probes the paper in a grid (kept in memory only:
-# M500 stays blocked, and the file ends with M501 to reload the saved mesh). No PID, no Z-offset change,
-# and cold extrusion stays blocked. Paper only on the bed: never food.
-CARD_BLOCKED = re.compile(r"^(G29\s*\S|G30|G34|G35|M48|M303|M851|M500|M302 P1)", re.I)
+# CR Touch once on the paper card (bed center) to find its top; no bed probing/mesh rebuild, no PID,
+# no Z-offset change, and cold extrusion stays blocked. Paper only on the bed: never food.
+# G29 stays blocked: the V3 SE's G29 saves its mesh to EEPROM and re-homes, so probing the paper would
+# overwrite the bare-bed mesh (https://github.com/navaismo/Ender-3V3-SE/blob/e714e1e6/Marlin/src/gcode/bedlevel/abl/G29.cpp).
+CARD_BLOCKED = re.compile(r"^(G29|G30|G34|G35|M48|M303|M851|M500|M302 P1)\b", re.I)
 
 
 def card_file_safe(lines: list[str]) -> None:
