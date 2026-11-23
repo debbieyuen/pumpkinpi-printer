@@ -24,11 +24,13 @@
     }
   },
   "pla": {
-    "nozzle": 205,
+    "nozzle": 190,
+    "bed": 0,
+    "fan": 255,
     "card_x": 15,
     "card_y": 20,
-    "paper_z": 0.45,
-    "layer": 0.25,
-    "layers": 1
+    "z_adjust": 0.0,
+    "layer": 0.2,
+    "layers": 2
   }
 }

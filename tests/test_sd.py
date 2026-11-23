@@ -70,7 +70,7 @@ def test_no_card_raises_so_server_can_fall_back():
         p.sd_upload("PP112601.GCO", ["G90"])
 
 
-def test_card_file_heats_but_never_homes():
+def test_card_file_homes_on_card_but_never_probes_bed():
     import datetime as _dt
     from pumpkinpi.printer import card_file
     d = _dt.date(2026, 11, 22)
@@ -78,7 +78,9 @@ def test_card_file_heats_but_never_homes():
     from pumpkinpi.printer import card_label
     assert card_label(["card_11_22_print01.gcode"], d) == "card_11_22_print02"
     out = card_file(["G90", "M109 S205", "G1 X10 Y10 E0.1 ; draw"], "card_11_22_print01.gcode")
-    assert out[1] == "M117 card_11_22_print01"
-    assert out[0] == "M302 P0" and "M109 S205" in out and "G1 X10 Y10 E0.1" in out
-    with pytest.raises(FoodModeError):
-        card_file(["G28"], "CD112201.GCO")
+    assert out[2] == "M117 card_11_22_print01" and out[0].startswith("; card_11_22_print01")
+    assert out[1] == "M302 P0" and "M109 S205" in out and "G1 X10 Y10 E0.1" in out
+    assert "G28" in card_file(["G28", "M420 S1"], "CD112201.GCO")
+    for bad in ("G29", "M302 P1", "M851 Z-1", "M500"):
+        with pytest.raises(FoodModeError):
+            card_file([bad], "CD112201.GCO")

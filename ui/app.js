@@ -953,7 +953,6 @@ function renderCards() {
   $("cardTitle").textContent = cards.title ? `Menu: ${cards.title}` : "";
   if (!state.job) $("cardMsg").textContent = cards.lines.length ? "" : "Make the menu on Recipe first.";
   $("cardBtn").disabled = !cards.lines.length || !!state.job;
-  $("homeBtn").disabled = !!state.job;
 }
 $("cardGuests").onchange = (e) => { cards.guest = e.target.value; renderCards(); drawCard(); };
 $("cardSide").onclick = (e) => {
@@ -984,7 +983,23 @@ $("menuBtn").onclick = async () => {
   catch (e) { log(`Menu check failed: ${e.message}`); }
   $("menuBtn").disabled = false; $("menuBtn").textContent = "Recheck";
 };
+// Print card only makes the file and puts it on the microSD. The steps below tell you how to print it.
+function cardSteps(j) {
+  const f = j.sd_file ? j.sd_file.replace(/\.(gcode|gco)$/i, "") : j.file;
+  const s = [];
+  if (j.where === "reader") s.push("Take the microSD out of the Pi's card reader. Put it in the printer.");
+  if (j.where === "download") s.push(`<a href="/api/cards/file/${j.file}.gcode" download>Download ${j.file}.gcode</a>. Copy it to the printer's microSD.`);
+  s.push("Clear the bed. Only the paper card goes on it. No food.");
+  s.push("Tape the card down on all 4 edges. Long side front to back, front-left corner 34 mm from the left, hanging 4 mm off the front. Keep the middle clear.");
+  s.push("Raise the syringe so its tip is above the nozzle.");
+  s.push(`On the printer screen: Print → <b>${f}</b> → start.`);
+  s.push(`It heats to 190 °C, touches the card to find it, then draws 2 thin layers.${j.minutes ? ` About ${j.minutes} min.` : ""} Stay nearby.`);
+  s.push("Too faint or not sticking? Lower Z offset 0.05 on the printer screen while it prints. Scraping? Raise it.");
+  s.push("Let it cool 1 minute. Peel the tape outward.");
+  return s.map((t) => `<li>${t}</li>`).join("");
+}
 async function plaJob(path, body, what) {
+  $("cardSteps").hidden = true;
   try {
     await apiJson(path, { ...body, confirm: true });
     state.job = true; renderCards(); $("jobMeter").classList.add("on");
@@ -992,12 +1007,12 @@ async function plaJob(path, body, what) {
       await sleep(700);
       const j = await apiJson("/api/job");
       $("jobFill").style.width = `${j.pct || 0}%`;
-      $("cardMsg").textContent = j.phase === "upload" ? `Saving ${j.file} to the SD card… ${j.pct || 0}%`
-        : j.file && j.phase === "card" ? `Printing ${j.file} from the SD card… ${j.pct || 0}%. Stay next to the printer.`
-        : `${what}… ${j.pct || 0}%. Stay next to the printer.`;
+      $("cardMsg").textContent = `${what}… ${j.pct || 0}%`;
       if (!j.running) {
-        $("cardMsg").textContent = j.error ? `Stopped: ${j.error}` :
-          path.endsWith("prep") ? "Homed and hot. Tape the card to the corner guide, then Print card." : `Card done${j.file ? ` (saved on the SD card as ${j.file}${j.sd_file && !j.sd_file.startsWith(j.file) ? `, short name ${j.sd_file}` : ""})` : ""}. Let it cool a minute before lifting.`;
+        if (j.error) { $("cardMsg").textContent = `Stopped: ${j.error}`; break; }
+        $("cardMsg").textContent = j.where === "download" ? `Saved ${j.file}. No microSD found on the Pi or printer.`
+          : `Saved ${j.sd_file} on the microSD${j.where === "printer" ? " in the printer" : ""}.`;
+        $("cardSteps").innerHTML = cardSteps(j); $("cardSteps").hidden = false;
         break;
       }
     }
@@ -1005,8 +1020,7 @@ async function plaJob(path, body, what) {
   state.job = false; renderCards();
   setTimeout(() => { if (!state.job) $("jobMeter").classList.remove("on"); }, 2000);
 }
-$("homeBtn").onclick = () => plaJob("/api/cards/prep", {}, "Heating and homing");
-$("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest, side: cards.side }, `Drawing ${cards.guest}'s card (${cards.side})`);
+$("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest, side: cards.side }, `Making ${cards.guest}'s card file`);
 
 // ---------- on-screen keyboard (kiosk Chromium has no OS keyboard) ----------
 const KEYS = ["qwertyuiop", "asdfghjkl'", "zxcvbnm,.", ["shift", "space", "back", "Done"]];

@@ -29,10 +29,13 @@ def test_card_fits_and_gcode_stays_on_card():
     assert all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
     p = cards.Pla()
     g = cards.card_gcode(st, p)
-    assert "G28" not in g                       # homing only in prep, with the bed empty
-    assert g[-7] == "M104 S0"                   # heater off at the end
+    # standalone file: bed off, heat, home ON the card, then prime off the card before drawing
+    assert g.index("M140 S0") < g.index("G28") < g.index("M109 S190") < g.index("M106 S255")
+    assert g.index("M420 S1") > g.index("G28") and "G29" not in g
+    assert "M104 S0" in g[-9:] and g[-1] == "M117 Card done"
     zs = [float(w[1:]) for ln in g if ln.startswith(("G0", "G1")) for w in ln.split()[1:] if w[0] == "Z"]
-    assert min(zs) >= p.paper_z + p.layer - 1e-6
+    assert abs(min(zs) - p.layer) < 1e-6         # first layer 0.2 mm above the probed paper
+    assert sum(ln.startswith("G1 Z") for ln in g) == 2 * sum(1 for s in st if len(s) > 1)  # 2 layers
 
 
 def test_too_many_dishes_refused():
@@ -42,10 +45,11 @@ def test_too_many_dishes_refused():
         cards.layout(cfg, [{"text": "x: y", "unsure": []}] * 40)
 
 
-def test_prep_homes_then_parks_high():
-    g = cards.prep_gcode(cards.Pla())
-    assert g.index("G28") < g.index("M109 S205")
-    assert any(ln.startswith("G0 Z40") for ln in g)
+def test_card_file_passes_sd_guard():
+    from pumpkinpi.printer import card_file
+    st = cards.layout(cards.load(), [{"text": "Pie: none", "unsure": []}], "Lily")
+    out = card_file(cards.card_gcode(st, cards.Pla()), "card_11_22_print01.gcode")
+    assert "M302 P0" in out and "M117 card_11_22_print01" in out
 
 
 def test_back_lists_exact_label_ingredients_and_fits():

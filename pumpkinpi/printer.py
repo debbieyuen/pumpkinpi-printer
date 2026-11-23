@@ -80,22 +80,25 @@ def file_safe(lines: list[str]) -> None:
             raise FoodModeError(f"{ln!r} may not go in a food file (homing/probing/heating)")
 
 
-# PLA card files may heat the nozzle (PLA needs ~205 C) but never home or probe: the card is taped to
-# the bed by then, and the CR Touch would tap it. Heat & home (bed empty) always runs first over USB.
-CARD_BLOCKED = re.compile(r"^(G28|G29|G30|G34|G35|M48|M303|M851|M302 P1)\b", re.I)
+# PLA card files are started from the printer's screen, so they heat and home themselves. G28 taps the
+# CR Touch once on the paper card (bed center) to find its top; no bed probing/mesh rebuild, no PID,
+# no Z-offset change, and cold extrusion stays blocked. Paper only on the bed: never food.
+CARD_BLOCKED = re.compile(r"^(G29|G30|G34|G35|M48|M303|M851|M500|M302 P1)\b", re.I)
 
 
 def card_file_safe(lines: list[str]) -> None:
     for ln in lines:
         ln = ln.split(";")[0].strip()
         if ln and CARD_BLOCKED.match(ln):
-            raise FoodModeError(f"{ln!r} may not go in a card file (no homing/probing; cold extrusion stays off)")
+            raise FoodModeError(f"{ln!r} may not go in a card file (no bed probing or settings changes; cold extrusion stays off)")
 
 
 def card_file(lines: list[str], name: str) -> list[str]:
     """The exact lines written to the card for a PLA menu card: cold-extrusion guard on, then the drawing."""
     body = [ln.split(";")[0].strip() for ln in lines]
-    out = ["M302 P0", f"M117 {name.rsplit('.', 1)[0][:30]}", *[b for b in body if b]]
+    stem = name.rsplit('.', 1)[0][:30]
+    out = [f"; {stem}: PLA on paper. Paper card taped down, nothing else on the bed.", "M302 P0", f"M117 {stem}",
+           *[b for b in body if b]]
     card_file_safe(out)
     return out
 
@@ -105,6 +108,24 @@ def sd_file(lines: list[str], name: str) -> list[str]:
     body = [ln.split(";")[0].strip() for ln in lines]
     out = [*FROSTING_SETUP[:-1], f"M117 PumpkinPi {name[:-4]}", *[b for b in body if b]]
     file_safe(out)
+    return out
+
+
+def sd_mounts() -> list[str]:
+    """microSD cards plugged into the Pi (USB card reader), e.g. /media/debbiepumpkinpi/3D PRINTER.
+    PUMPKINPI_SD_DIR overrides (any folder)."""
+    if os.environ.get("PUMPKINPI_SD_DIR"):
+        return [os.environ["PUMPKINPI_SD_DIR"]]
+    out = []
+    try:
+        with open("/proc/mounts") as f:
+            for ln in f:
+                dev, mnt, fs = ln.split()[:3]
+                mnt = mnt.replace("\\040", " ")
+                if fs in ("vfat", "exfat", "msdos") and mnt.startswith(("/media/", "/run/media/", "/mnt/")):
+                    out.append(mnt)
+    except OSError:
+        pass
     return out
 
 

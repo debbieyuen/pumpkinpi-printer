@@ -23,8 +23,8 @@ Endpoints
     GET  /api/cards    invitation cards: event, guests, menu, last menu check, card size
     POST /api/cards/check   Search API + Decider on every menu product -> one line per dish
     POST /api/cards/preview {"guest": "Lily"} -> the card's strokes (mm)
-    POST /api/cards/prep    {"confirm": true} PLA: heat + home with the bed EMPTY, park at the back
-    POST /api/cards/print   {"guest": "Lily", "confirm": true} PLA: write CDMMDDNN.GCO to the microSD, print it
+    POST /api/cards/print   {"guest": "Lily", "confirm": true} PLA: save card_MM_DD_printNN.gcode to the microSD
+                            (you start it on the printer screen);  GET /api/cards/file/{name} downloads it
     GET  /api/job      piping progress
     POST /api/stop     sends M112 immediately
 """
@@ -811,49 +811,50 @@ def run_stream(lines: list[str], phase: str) -> None:
 
 
 def run_card(lines: list[str]) -> None:
-    """PLA card: write CDMMDDNN.GCO to the printer's microSD (copy in gcode/), print it from the card.
-    Streams over USB if the SD write fails. Heat & home already ran with the bed empty."""
-    from .printer import SDError, card_file, card_label, sd_name
+    """PLA card: save card_MM_DD_printNN.gcode and put it on the microSD. Nothing starts from here:
+    you tape the card down and start it on the printer's own screen.
+      1. microSD in a USB card reader on the Pi -> copy it there (long name shows on the printer screen)
+      2. else printer on USB -> write it to the printer's microSD (8.3 name if the firmware needs it)
+      3. else -> only saved in gcode/ (download it from the app)"""
+    import shutil
+    from .printer import SDError, card_file, card_label, sd_mounts, sd_name
     job = state["job"]
     try:
-        p = printer()
-        p.pla_mode()
+        GCODE_DIR.mkdir(exist_ok=True)
+        mounts = sd_mounts()
+        taken = [f.name for f in GCODE_DIR.iterdir()]
+        for m in mounts:
+            try:
+                taken += os.listdir(m)
+            except OSError:
+                pass
+        label = card_label(taken)
+        data = card_file(lines, f"{label}.gcode")
+        local = GCODE_DIR / f"{label}.gcode"
+        local.write_text("\n".join(data) + "\n")
+        job.update(file=label, sd_file=f"{label}.gcode", minutes=cards.minutes(lines, cards.Pla.load()))
+        for m in mounts:
+            try:
+                shutil.copyfile(local, Path(m) / local.name)
+                os.sync()
+                job.update(where="reader", pct=100)
+                return
+            except OSError as e:
+                job["note"] = f"Couldn't copy to {m}: {e}"
         try:
+            p = printer()
+            p.pla_mode()
             on_sd = list(p.sd_list())
-            GCODE_DIR.mkdir(exist_ok=True)
-            label = card_label([f.name for f in GCODE_DIR.iterdir()] + on_sd)
-            name = f"{label}.gcode" if p.long_names() else sd_name(False, on_sd, prefix="CD")
-            data = card_file(lines, f"{label}.gcode")
-            (GCODE_DIR / f"{label}.gcode").write_text("\n".join(data) + "\n")
-            job.update(phase="upload", file=label, sd_file=name)
-            p.sd_upload(name, data, progress=lambda i, n: job.update(pct=round(40 * i / n)), stop=_stop.is_set, card=True)
-            if _stop.is_set():
-                return
-            p.sd_start(name)
-            job["phase"] = "card"
-            seen, t0 = False, time.time()
-            while not _stop.is_set():
-                time.sleep(1.0)
-                pr = p.sd_progress()
-                if pr:
-                    seen = True
-                    job["pct"] = 40 + round(60 * pr[0] / max(1, pr[1]))
-                elif seen or time.time() - t0 > 15:
-                    break
-            job["pct"] = 100
-        except SDError as e:
-            if _stop.is_set():
-                return
-            job.update(note=f"SD write failed ({e}); streaming over USB")
-            for i, ln in enumerate(lines, 1):
-                if _stop.is_set():
-                    break
-                p.send(ln, wait_s=300)
-                job["done"] = i
-                job["pct"] = round(100 * i / len(lines))
+            name = local.name if p.long_names() else sd_name(False, on_sd, prefix="CD")
+            job.update(phase="upload", sd_file=name)
+            p.sd_upload(name, data, progress=lambda i, n: job.update(pct=round(100 * i / n)),
+                        stop=_stop.is_set, card=True)
+            if not _stop.is_set():
+                job.update(where="printer", pct=100)
+        except Exception as e:  # noqa: BLE001  (no printer on USB, or SD write failed)
+            job.update(where="download", pct=100, note=f"Not on a microSD yet ({e})")
     except Exception as e:  # noqa: BLE001
         job["error"] = str(e)
-        state["pla_homed"] = False
     finally:
         job["running"] = False
 
@@ -863,19 +864,21 @@ def pla_job(req: CardReq, lines: list[str], phase: str) -> dict:
         raise HTTPException(409, "Confirm first: no food on the bed, syringe tip above the nozzle")
     if state["job"]["running"]:
         raise HTTPException(409, "Printer is busy")
-    if phase == "card" and not state.get("pla_homed"):
-        raise HTTPException(409, "Heat & home first (bed empty), then tape the card down")
     _stop.clear()
     state["ready"] = 0.0          # food checks must be redone after PLA printing
-    state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": phase, "file": None, "error": None}
-    threading.Thread(target=run_card if phase == "card" else run_stream,
-                     args=(lines,) if phase == "card" else (lines, phase), daemon=True).start()
+    state["job"] = {"running": True, "done": 0, "total": len(lines), "pct": 0, "phase": phase, "file": None,
+                    "error": None, "where": None}
+    threading.Thread(target=run_card, args=(lines,), daemon=True).start()
     return {"started": True, "lines": len(lines)}
 
 
-@app.post("/api/cards/prep")
-def cards_prep(req: CardReq):
-    return pla_job(req, cards.prep_gcode(cards.Pla.load()), "card-prep")
+@app.get("/api/cards/file/{name}")
+def cards_file(name: str):
+    from fastapi.responses import FileResponse
+    f = GCODE_DIR / Path(name).name
+    if not (f.name.startswith("card_") and f.suffix == ".gcode" and f.exists()):
+        raise HTTPException(404, "No such card file")
+    return FileResponse(f, filename=f.name, media_type="text/plain")
 
 
 @app.post("/api/cards/print")

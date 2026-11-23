@@ -18,9 +18,9 @@ How each line is made (cards.json, copy cards.example.json):
      Nothing is ever printed as safe: a dish with no red terms says "none" plus "?" if any were unsure.
 
 Printing (PLA, the stock hot end; the syringe stays mounted but must sit ABOVE the nozzle tip):
-  prep_gcode()  heat + home with the bed EMPTY, then park at the back so you can tape the card down
-  card_gcode()  the card's strokes, 1-2 thin layers, Z from the paper top you measured (pla.paper_z)
-These are streamed over USB, never written to the microSD as a food file, and never run in food mode.
+  card_gcode()  one standalone file: bed off, 190 C, home ON the taped card (CR Touch at the bed center,
+                so Z0 = paper top), prime off the card, 2 thin layers, fan 100 %. Saved to the microSD and
+                started from the printer's own screen. Paper only on the bed: never food.
 """
 from __future__ import annotations
 
@@ -653,27 +653,35 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
 
 
 # ---------------------------------------------------------------- PLA G-code
+# Paper settings follow Callum Coles' "3D Printing on Paper" (https://www.youtube.com/watch?v=9UiPPWbeScY):
+# heated bed off, hot end as cool as PLA allows (190 C) and part fan 100 % so the paper doesn't warp,
+# card taped down on every edge. The V3 SE homes Z with the CR Touch at the bed center, which is under the
+# card, so G28 measures the paper's top: Z0 = paper surface, and each layer is laid on top of it.
 @dataclass
 class Pla:
-    nozzle: float = 205.0          # PLA nozzle temp (check your filament's range)
-    bed: float = 0.0               # paper: no bed heat
-    card_x: float = 15.0           # printer X/Y of the card's front-left corner (tape a corner guide there)
+    nozzle: float = 190.0          # PLA, as cool as it flows (video: 190 C). Raise to 195-200 if lines break up.
+    bed: float = 0.0               # paper: bed heater off
+    fan: int = 255                 # part fan 100 %
+    card_x: float = 15.0           # printer X/Y of the card's front-left corner (6x9: run scripts/paper_6x9.py)
     card_y: float = 20.0
-    paper_z: float = 0.45          # Z where the nozzle just drags a sheet of copy paper ON the card (measure!)
-    layer: float = 0.25
-    layers: int = 1                # 2 = raised lines you can feel
+    z_adjust: float = 0.0          # extra Z above the paper the probe found (+0.05 if it scrapes, -0.05 if it won't stick)
+    layer: float = 0.2             # thin lines: 2 layers of 0.2 mm = 0.4 mm raised text
+    layers: int = 2
     line_w: float = 0.45
-    feed: float = 900.0            # mm/min drawing
+    feed: float = 900.0            # mm/min drawing (15 mm/s: clean letters on textured paper)
     travel: float = 6000.0
     retract: float = 0.8           # direct drive
     hop: float = 1.2
+    prime_x: float = 5.0           # prime blob off the card, on bare bed
+    prime_y: float = 5.0
     x_min: float = 2.0
     x_max: float = 215.0
     y_min: float = 2.0
     y_max: float = 215.0
-    park_x: float = 110.0          # where the head waits while you tape the card down
-    park_y: float = 215.0
+    park_x: float = 110.0
+    park_y: float = 215.0          # bed forward at the end so you can peel the card
     park_z: float = 40.0
+    paper_z: float = 0.0           # old setting (Z of the paper over a bare-bed home); no longer used
 
     @classmethod
     def load(cls, path: Path = MACHINE_FILE) -> "Pla":
@@ -685,17 +693,17 @@ class Pla:
         return self.line_w * self.layer / (math.pi * (1.75 / 2) ** 2)
 
 
-def prep_gcode(p: Pla) -> list[str]:
-    """Bed EMPTY: heat, home, then park high at the back for taping the card down."""
-    return ["M140 S0" if not p.bed else f"M140 S{p.bed:.0f}", f"M104 S{p.nozzle:.0f}", "G90", "G28",
-            "M420 S1", f"G0 Z{p.park_z:.1f} F600", f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}",
-            f"M109 S{p.nozzle:.0f}", "M117 Tape the card down"]
-
-
 def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
-    out = ["G90", "M83", f"M109 S{p.nozzle:.0f}", "M106 S255"]
+    """One file the printer runs on its own from the microSD: heat, home ON the card, prime off it, draw."""
+    out = [f"M140 S{p.bed:.0f}", f"M104 S{p.nozzle:.0f}", "M107", "G90", "M83",
+           "G28",                                     # CR Touch taps the card at the bed center: Z0 = paper top
+           "M420 S1",                                 # saved bed mesh
+           f"G0 Z10 F600", f"G0 X{p.prime_x:.1f} Y{p.prime_y:.1f} F{p.travel:.0f}",
+           f"M109 S{p.nozzle:.0f}",
+           "G1 E8 F150", f"G1 E-{p.retract:.2f} F2400", "G4 S2",   # prime blob lands on bare bed, not the card
+           f"M106 S{p.fan}"]
     for n in range(p.layers):
-        z = p.paper_z + p.layer * (n + 1)
+        z = p.z_adjust + p.layer * (n + 1)
         zt = z + p.hop
         out.append(f"G0 Z{zt:.2f} F600")
         for st in strokes:
@@ -709,9 +717,23 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
                 out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{p.feed:.0f}")
             out += [f"G1 E-{p.retract:.2f} F2400", f"G0 Z{zt:.2f} F600"]
     out += ["M104 S0", "M140 S0", "M107", f"G0 Z{p.park_z:.1f} F600",
-            f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}", "M400", "M117 Card done"]
+            f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}", "M400", "M84", "M117 Card done"]
     check_bounds(out, p)
     return out
+
+
+def minutes(lines: list[str], p: Pla) -> float:
+    """Rough print time: drawing + travel + ~3 min to heat and home."""
+    import re as _re
+    t, x, y = 0.0, None, None
+    for ln in lines:
+        m = _re.match(r"G[01] X([-\d.]+) Y([-\d.]+)(?:.* F(\d+))?", ln)
+        if m:
+            nx, ny = float(m[1]), float(m[2])
+            if x is not None:
+                t += math.hypot(nx - x, ny - y) / (float(m[3]) if m[3] else p.travel)
+            x, y = nx, ny
+    return round(t + 3, 0)
 
 
 def check_bounds(lines: list[str], p: Pla) -> None:
@@ -719,9 +741,9 @@ def check_bounds(lines: list[str], p: Pla) -> None:
         if not ln.startswith(("G0", "G1")):
             continue
         for w in ln.split()[1:]:
-            lim = {"X": (p.x_min, p.x_max), "Y": (p.y_min, p.y_max), "Z": (p.paper_z, 120.0)}.get(w[0])
+            lim = {"X": (p.x_min, p.x_max), "Y": (p.y_min, p.y_max), "Z": (0.05, 120.0)}.get(w[0])
             if lim and not lim[0] <= float(w[1:]) <= lim[1]:
-                raise ValueError(f"{ln!r}: {w[0]} outside {lim}. Check pla.card_x/card_y/paper_z in machine.json")
+                raise ValueError(f"{ln!r}: {w[0]} outside {lim}. Check pla.card_x/card_y/z_adjust in machine.json")
 
 
 def load(path: Path = CARDS_FILE, use_menu: bool = True) -> dict:

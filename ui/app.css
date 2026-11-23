@@ -504,3 +504,6 @@ select.pick,select.guestpick{-webkit-appearance:none;appearance:none;padding-rig
 .legend dt.maybe{color:#5c4500;background:var(--y)}
 .legend dd{margin:0;color:var(--ink,#1d2b2a)}
 .achart tr.exhead th{padding-top:1.1rem;font-size:.85rem;color:#b3261e;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #f3c9c5}
+.cardsteps{margin:.4rem 0 0;padding-left:1.4rem;font-size:1rem;line-height:1.4}
+.cardsteps li{margin:.2rem 0}
+.cardsteps a{color:var(--teal)}
