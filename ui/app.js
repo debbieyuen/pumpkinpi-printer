@@ -931,6 +931,7 @@ async function loadCards() {
     Object.assign(cards, { title: c.title || "", simple: c.simple || {}, avoid: c.avoid || {}, prompt: c.prompt || "", menu: c.menu || [],
       recipes: c.recipes || [], chart: c.chart || { guests: [], rows: [] } });
     if (!state.menuPrompt && cards.prompt) state.menuPrompt = cards.prompt;
+    cards.w = +(c.card || {}).w || 127; cards.h = +(c.card || {}).h || 178;   // card size in mm (6x9 = 152.4 x 228.6)
     const one = ["one", "simple"].includes((c.card || {}).style);               // one-page card: no back side to pick
     $("cardSide").hidden = one; if (one) cards.side = "front";
     if (!cards.guest && cards.guests.length) cards.guest = cards.guests[0];
@@ -964,16 +965,18 @@ async function drawCard() {
   if (!cards.lines.length) { g.innerHTML = ""; return; }
   try {
     const r = await apiJson("/api/cards/preview", { guest: cards.guest, side: cards.side });
-    g.innerHTML = `<path d="${r.strokes.map((s) => "M" + s.map(([x, y]) => `${x},${178 - y}`).join("L")).join("")}"/>`;
+    g.innerHTML = `<path d="${r.strokes.map((s) => "M" + s.map(([x, y]) => `${x},${(cards.h || 178) - y}`).join("L")).join("")}"/>`;
     zoomCard(r.strokes);
   } catch (e) { g.innerHTML = ""; log(`Card: ${e.message}`); }
 }
 // Show only the written part of the card so the preview text is big enough to read on the Pi screen.
 function zoomCard(strokes) {
-  const ys = strokes.flat().map(([, y]) => 178 - y);
-  if (!ys.length) { $("cardSvg").setAttribute("viewBox", "0 0 127 178"); return; }
-  const y0 = Math.max(0, Math.min(...ys) - 6), y1 = Math.min(178, Math.max(...ys) + 6);
-  $("cardSvg").setAttribute("viewBox", `0 ${y0.toFixed(1)} 127 ${(y1 - y0).toFixed(1)}`);
+  const W = cards.w || 127, H = cards.h || 178, svg = $("cardSvg"), paper = svg.querySelector(".paper");
+  paper.setAttribute("width", W); paper.setAttribute("height", H);
+  const ys = strokes.flat().map(([, y]) => H - y);
+  if (!ys.length) { svg.setAttribute("viewBox", `0 0 ${W} ${H}`); return; }
+  const y0 = Math.max(0, Math.min(...ys) - 6), y1 = Math.min(H, Math.max(...ys) + 6);
+  svg.setAttribute("viewBox", `0 ${y0.toFixed(1)} ${W} ${(y1 - y0).toFixed(1)}`);
 }
 $("menuBtn").onclick = async () => {
   if (!state.live) return log("Menu check runs on the Pi.");
