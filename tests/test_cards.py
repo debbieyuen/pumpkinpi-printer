@@ -298,3 +298,14 @@ def test_first_layer_slower_and_thicker_for_paper():
     e1, e2 = (float(x.split("E")[1].split()[0]) for x in draws)
     assert "F480" in draws[0] and abs(e1 / e2 - 1.3) < 0.01            # layer 1: 8 mm/s, 30 % more PLA
     assert "M107" in g[g.index("G0 Z4.10 F1200") - 1]                    # fan off for layer 1
+
+
+def test_prime_line_drops_by_measured_paper():
+    from pumpkinpi.cards import Pla, card_gcode, check_bounds
+    p = Pla(paper_mm=0.3)
+    g = card_gcode([[(20, 20), (40, 20)]], p)
+    i = g.index("M211 S0")
+    assert g[i + 1] == "G1 Z-0.25 F600" and "M211 S1" in g[i:i + 6]
+    check_bounds(g, p)
+    assert "M211 S0" not in card_gcode([[(20, 20), (40, 20)]], Pla())
+    assert "G1 Z-0.55 F600" in card_gcode([[(20, 20), (40, 20)]], Pla(paper_mm=5))   # clamped to 0.6

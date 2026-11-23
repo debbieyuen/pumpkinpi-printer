@@ -712,6 +712,7 @@ class Pla:
     park_x: float = 110.0
     park_y: float = 215.0          # bed forward at the end so you can peel the card
     park_z: float = 40.0
+    paper_mm: float = 0.0          # paper thickness measured by scripts/measure_paper.py (CR Touch, paper vs bare bed)
     paper_z: float = 0.0           # old setting (Z of the paper over a bare-bed home); no longer used
 
     @classmethod
@@ -724,6 +725,17 @@ class Pla:
         return self.line_w * self.layer / (math.pi * (1.75 / 2) ** 2)
 
 
+def paper(p: "Pla") -> float:
+    return max(0.0, min(p.paper_mm, 0.6))      # never dig more than 0.6 mm below the paper top
+
+
+def prime_lines(p: "Pla") -> list[str]:
+    z = 0.05 + p.z_adjust - paper(p)
+    line = [f"G1 Z{z:.2f} F600", f"G1 Y{p.prime_y + 70:.1f} E12 F400", f"G1 E-{p.retract:.2f} F2700",
+            f"G0 Z{p.hop + 1:.1f} F1200"]
+    return ["M211 S0", *line, "M211 S1"] if z < 0.05 else line
+
+
 def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
     """One file the printer runs on its own from the microSD: heat, home ON the card, prime off it, draw."""
     out = [f"M140 S{p.bed:.0f}", f"M104 S{p.nozzle:.0f}", "M107", "G90", "M83",
@@ -732,8 +744,9 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
            f"G0 Z10 F600", f"G0 X{p.prime_x:.1f} Y{p.prime_y:.1f} F{p.travel:.0f}",
            f"M109 S{p.nozzle:.0f}",
            # prime line on the bare bed left of the card (card starts at X34). Z0 is the paper top, so the bed
-           # here is a paper-thickness lower: go to Z0.05 and push a thick line so it lands and wipes the nozzle.
-           "G1 Z0.05 F600", f"G1 Y{p.prime_y + 70:.1f} E12 F400", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600"]
+           # here is one paper-thickness lower. With a measured paper_mm, drop by it (below Z0, so the software
+           # Z-min stop is off just for this line), else Z0.05 and a thick line.
+           *prime_lines(p)]
     for n in range(p.layers):
         # layer 1 fan off so the PLA grabs the paper (tape loops under the card keep it flat); full fan after
         out.append(f"M106 S{p.first_fan if n == 0 else p.fan}" if n or p.first_fan else "M107")
@@ -777,7 +790,7 @@ def check_bounds(lines: list[str], p: Pla) -> None:
         if not ln.startswith(("G0", "G1")):
             continue
         for w in ln.split()[1:]:
-            lim = {"X": (p.x_min, p.x_max), "Y": (p.y_min, p.y_max), "Z": (0.05, 120.0)}.get(w[0])
+            lim = {"X": (p.x_min, p.x_max), "Y": (p.y_min, p.y_max), "Z": (min(0.05, round(0.05 + p.z_adjust - paper(p), 2)) - 1e-6, 120.0)}.get(w[0])
             if lim and not lim[0] <= float(w[1:]) <= lim[1]:
                 raise ValueError(f"{ln!r}: {w[0]} outside {lim}. Check pla.card_x/card_y/z_adjust in machine.json")
 
