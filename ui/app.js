@@ -1010,7 +1010,7 @@ async function plaJob(path, body, what) {
       $("cardMsg").textContent = `${what}… ${j.pct || 0}%`;
       if (!j.running) {
         if (j.error) { $("cardMsg").textContent = `Stopped: ${j.error}`; break; }
-        $("cardMsg").textContent = j.where === "download" ? `Saved ${j.file}. No microSD found on the Pi or printer.`
+        $("cardMsg").textContent = j.where === "download" ? `Saved ${j.file} on the Pi only. ${j.note || "No microSD found."}`
           : `Saved ${j.sd_file} on the microSD${j.where === "printer" ? " in the printer" : ""}.`;
         $("cardSteps").innerHTML = cardSteps(j); $("cardSteps").hidden = false;
         break;

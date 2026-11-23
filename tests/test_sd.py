@@ -11,7 +11,9 @@ class FakeMarlin:
         self.sd, self.files, self.writing, self.out = sd, {}, None, []
 
     def write(self, b):
-        ln = b.decode().strip()
+        ln = b.decode().split(";", 1)[0].strip()
+        if not ln:
+            return                      # real Marlin: no reply at all for a comment-only line
         if self.writing and ln != "M29":
             self.files[self.writing] += len(ln) + 2; self.out += ["ok"]; return
         cmd = ln.split()[0]
@@ -62,6 +64,15 @@ def test_upload_verifies_size_and_starts():
     p.sd_upload("PP112601.GCO", data)
     assert "PP112601.GCO" in p.sd_list()
     p.sd_start("PP112601.GCO")
+
+
+def test_card_upload_skips_comment_lines():
+    from pumpkinpi.printer import card_file
+    f = FakeMarlin(); p = printer(f)
+    data = card_file(["G90", "M104 S190", "G1 X10 Y10 E0.1 ; draw"], "card_11_22_print01.gcode")
+    assert data[0].startswith(";")
+    p.sd_upload("CD112201.GCO", data, card=True)
+    assert f.files["CD112201.GCO"] > 0
 
 
 def test_no_card_raises_so_server_can_fall_back():

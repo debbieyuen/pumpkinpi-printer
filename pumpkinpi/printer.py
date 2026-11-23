@@ -207,6 +207,8 @@ class Printer:
         if not (SD_NAME.match(name) or (card and LONG_NAME.match(name))):
             raise SDError(f"{name!r} is not an 8.3 name like PP112601.GCO")
         (card_file_safe if card else file_safe)(lines)
+        # Marlin sends no "ok" for a comment-only or blank line, so never send one: strip comments first.
+        lines = [c for c in (ln.split(";", 1)[0].strip() for ln in lines) if c]
         out = self.send("M21", wait_s=10)
         if any("init fail" in x.lower() or "no sd" in x.lower() for x in out):
             raise SDError("No microSD card in the printer (M21 failed)")
