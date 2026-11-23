@@ -469,3 +469,8 @@ h1{font-size:1.15rem;white-space:nowrap}
 .camera .side .flow .btn,.camera .side .flow .load .btn{font-size:1.05rem}
 .flow .load.ok{font-size:.8rem}
 .camera .side .flow li > .btn{width:0;flex:1 1 0;padding-left:.4rem;padding-right:.4rem}
+
+/* Dropdowns: our own arrow with room on the right */
+select.pick,select.guestpick{-webkit-appearance:none;appearance:none;padding-right:2.8rem;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1.5 1.5 7 7l5.5-5.5' fill='none' stroke='%23334' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 1.1rem center;background-size:.85rem auto}
