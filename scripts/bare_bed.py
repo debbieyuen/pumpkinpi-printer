@@ -22,10 +22,15 @@ FILAMENTS = {
     # bed), 2 layers so the nozzle crosses the letters less often. Fan ~35 % from layer 2.
     # Bold 0.6 mm lines (0.4 mm nozzle): ~1/3 more plastic on the plate, tougher letters, still open counters at
     # 5 mm. 0.3 s pause after the wipe so the end of the stroke sets before the lift (longer just grows a blob).
-    "petg": {"nozzle": 235, "bed": 70, "fan": 90, "layers": 2, "retract": 1.2, "retract_feed": 2400,
-             "unretract_feed": 1800, "wipe": 1.5, "hop": 1.0, "line_w": 0.6, "end_pause": 0.3},
+    # Grip: bed 75 C (PETG range 70-80), layer 1 at 10 mm/s so each short stroke has time to press into the
+    # plate, +10 % plastic on layer 1 only. Not lower: PETG squished too close sticks to the nozzle instead.
+    # 1.5 mm lift so a blob on the tip clears letters already printed.
+    "petg": {"nozzle": 235, "bed": 75, "fan": 90, "layers": 2, "retract": 1.2, "retract_feed": 2400,
+             "unretract_feed": 1800, "wipe": 1.5, "hop": 1.5, "line_w": 0.6, "end_pause": 0.3,
+             "first_feed": 600, "first_flow": 1.1},
     "pla": {"nozzle": 210, "bed": 50, "fan": 255, "layers": 3, "retract": 0.8, "retract_feed": 2700,
-            "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8, "line_w": 0.45, "end_pause": 0.15},
+            "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8, "line_w": 0.45, "end_pause": 0.15,
+            "first_feed": 1200, "first_flow": 1.0},
 }
 kind = (sys.argv[1] if len(sys.argv) > 1 else "petg").lower()
 if kind not in FILAMENTS:
@@ -40,7 +45,7 @@ pla = data.setdefault("pla", {})      # "pla" is the settings block name; it hol
 if pla.get("paper_mm"):
     pla["paper_measured"] = pla["paper_mm"]
 pla.update({"surface": "bed", "filament": kind, **FILAMENTS[kind], "first_fan": 0, "paper_mm": 0.0,
-            "first_z": 0.2, "first_flow": 1.0, "first_feed": 1200, "z_adjust": 0.0,
+            "first_z": 0.2, "z_adjust": 0.0,
             # Card text is mostly strokes under 4 mm, each printing ~0.15 mm of filament. A 1.5 mm retract and a
             # slow 4 mm lift on every one starves the start of the next stroke and drags the last one off the bed.
             # Small retract, short pause so the line sets, low hop: the string breaks instead of pulling.
