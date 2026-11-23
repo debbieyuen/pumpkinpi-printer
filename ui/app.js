@@ -632,6 +632,7 @@ function updateGate() {
   b.classList.toggle("stop", step === "stop");
   if (step === "stop") { b.disabled = false; b.textContent = "Stop"; return; }
   $("sendBtn").title = reason();
+  b.hidden = step === "cards" && !state.menuShown;
   if (step === "cards") { b.textContent = "Make Cards"; b.disabled = !cards.lines.length || state.busy || state.menuBusy; }
   else if (step === "design") { b.textContent = "Start Designing"; b.disabled = !p || state.busy; }
   else if (step === "camera") { b.textContent = `Check the ${noun()}`; b.disabled = !p || state.busy; }
@@ -838,7 +839,7 @@ function renderMenu() {
     box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Picking exact brands, then checking every label… about a minute.</p>`;
     return;
   }
-  if (!cards.title) { box.innerHTML = `<p class="muted menuhint">Type what's for dinner. Perplexity picks an exact brand for each product and checks every label against your guests' allergies.</p>`; return; }
+  if (!cards.title || !state.menuShown) { box.innerHTML = ""; return; }   // start with only the prompt
   const secs = Object.entries(cards.simple).map(([t, ls]) => `<div class="msec"><h3>${esc(t)}</h3>${ls.map((l) => `<p>${esc(l)}</p>`).join("")}</div>`).join("");
   const nos = Object.entries(cards.avoid).map(([g, ls]) => `<div class="mguest"><b>${esc(g)}</b>${ls.length
     ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "<span class=\"yes\">YES</span> everything"}</div>`).join("");
@@ -859,7 +860,7 @@ async function makeMenu() {
   state.menuPrompt = prompt; state.menuBusy = true; $("askBtn").disabled = true; renderMenu(); updateGate();
   try {
     const r = await apiJson("/api/menu", { prompt });
-    cards.lines = r.lines; await loadCards(); log(`Menu ready: ${r.title}.`);
+    cards.lines = r.lines; state.menuShown = true; await loadCards(); log(`Menu ready: ${r.title}.`);
   } catch (e) { log(`Menu: ${e.message}`); }
   state.menuBusy = false; $("askBtn").disabled = false; renderMenu(); updateGate();
 }
