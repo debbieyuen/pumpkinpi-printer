@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -126,6 +127,19 @@ def flag_by_name(product: str, a: str, p: float, v: str) -> tuple[float, str, st
     return p, v, ""
 
 
+# Store / website boilerplate that lists every allergen for every product, e.g. Acme/Safeway:
+# "Products in our stores may contain, or may have been exposed to, ... peanuts, tree nuts, sesame, ... fish".
+# It says nothing about this product, so it's removed before the Decider reads the evidence.
+BOILERPLATE = re.compile(
+    r"[^.\n]*(?:\bour stores?\b|\bin (?:our|the) (?:store|bakery|deli|kitchen)s?\b|may have been exposed to|"
+    r"actual product packaging|not intended to be a substitute|does not represent or warrant|"
+    r"product information is provided by|for educational purposes only)[^.\n]*[.\n]?", re.I)
+
+
+def strip_boilerplate(text: str) -> str:
+    return re.sub(r"\s{2,}", " ", BOILERPLATE.sub(" ", text or "")).strip()
+
+
 def label_evidence(label: dict | None) -> list[dict]:
     """A package label as one evidence item, or nothing.
 
@@ -175,7 +189,7 @@ def check_ingredient(client: httpx.Client, product: str, allergens: list[str], l
 
     state = {"product": product,
              "evidence": label_evidence(label) +
-                         [{"title": r.get("title"), "url": r.get("url"), "text": (r.get("snippet") or "")[:2500]}
+                         [{"title": r.get("title"), "url": r.get("url"), "text": strip_boilerplate(r.get("snippet") or "")[:2500]}
                           for r in results]}
     questions = {
         "about_product": {"type": "noul", "instructions":
@@ -188,7 +202,9 @@ def check_ingredient(client: httpx.Client, product: str, allergens: list[str], l
         hidden = f" Count every form of it, including {', '.join(HIDDEN[k]['contains'][:18])}." if k else ""
         questions[f"a{i}"] = {"type": "noul", "instructions":
                               f"Based on the evidence, does {product} contain {a} or a {a}-derived ingredient, "
-                              f"or carry a may-contain or shared-facility/equipment warning for {a}?{hidden}"}
+                              f"or carry a may-contain or shared-facility/equipment warning for {a}?{hidden} "
+                              f"Only count this product's own ingredient list, Contains line or may-contain line. "
+                              f"Ignore store or website notices that list many allergens for every product."}
     ans = pplx.decide(client, state, questions)["answers"]
     rel = float(ans["about_product"]["noul"])
     flav = float(ans["natural_flavor"]["noul"])

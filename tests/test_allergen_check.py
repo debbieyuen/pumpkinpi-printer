@@ -102,3 +102,19 @@ def test_label_found_and_decider_leans_no_is_safe():
     assert _lean(0.9, 0.2) == "safe"        # exact label found, 20% -> OK
     assert _lean(0.5, 0.2) == "unsure"      # not this product's label -> still NO
     assert _lean(0.9, 0.4) == "unsure"      # too close to call -> still NO
+
+
+def test_store_allergen_notice_is_not_evidence():
+    from pumpkinpi.allergen_check import check_ingredient
+    sent = []
+
+    def handler(request):
+        if request.url.path == "/search":
+            return httpx.Response(200, json={"results": [{"title": "Libby's", "url": "https://acme.example", "snippet":
+                "Ingredients: pumpkin. Allergen Notice: Products in our stores may contain, or may have been exposed to, "
+                "peanuts, tree nuts, sesame, fish and crustacean shellfish. Made in a facility with milk."}]})
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"answers": {"about_product": {"noul": 0.9}, "natural_flavor": {"noul": 0.0}, "a0": {"noul": 0.02}}})
+    check_ingredient(httpx.Client(transport=httpx.MockTransport(handler)), "Libby's 100% Pure Pumpkin", ["fish"])
+    text = json.dumps(sent[0])
+    assert "our stores" not in text and "Ingredients: pumpkin." in text and "facility with milk" in text
