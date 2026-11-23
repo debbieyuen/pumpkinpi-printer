@@ -859,7 +859,7 @@ function renderTiles() {
   const box = $("tiles");
   let subs = null;
   if (state.mode === "menu") {
-    if (state.menuBusy) { box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Picking brands, checking labels…</p>`; return; }
+    if (state.menuBusy) { box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity Search and Decider models are checking every label…</p>`; return; }
     if (cards.title && state.menuShown) {
       const n = Object.values(cards.avoid).reduce((a, ls) => a + ls.length, 0);
       const items = Object.values(cards.simple).reduce((a, ls) => a + ls.length, 0);
