@@ -23,11 +23,12 @@ FILAMENTS = {
     # Bold 0.6 mm lines (0.4 mm nozzle): ~1/3 more plastic on the plate, tougher letters, still open counters at
     # 5 mm. 0.3 s pause after the wipe so the end of the stroke sets before the lift (longer just grows a blob).
     # Grip: bed 75 C (PETG range 70-80), layer 1 at 10 mm/s so each short stroke has time to press into the
-    # plate, +10 % plastic on layer 1 only. Not lower: PETG squished too close sticks to the nozzle instead.
+    # plate, 100 % plastic (110 % pushed the extra up the sides of the nozzle). Not lower: PETG squished too close
+    # sticks to the nozzle instead.
     # 1.5 mm lift so a blob on the tip clears letters already printed.
     "petg": {"nozzle": 235, "bed": 75, "fan": 90, "layers": 2, "retract": 1.2, "retract_feed": 2400,
              "unretract_feed": 1800, "wipe": 1.5, "hop": 1.5, "line_w": 0.6, "end_pause": 0.3,
-             "first_feed": 600, "first_flow": 1.1},
+             "first_feed": 600, "first_flow": 1.0},
     "pla": {"nozzle": 210, "bed": 50, "fan": 255, "layers": 3, "retract": 0.8, "retract_feed": 2700,
             "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8, "line_w": 0.45, "end_pause": 0.15,
             "first_feed": 1200, "first_flow": 1.0},
