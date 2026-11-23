@@ -20,3 +20,10 @@ def test_whole_foods_ok_but_not_mixtures():
         assert "unsure" in cards.term_status({"item": n}, None).values(), n
     found = {"checks": {cards.TERMS["tree nut"]: {"verdict": "found"}}}
     assert cards.term_status({"item": "Almond-fed chicken"}, found)["tree nut"] == "found"
+
+
+def test_nut_examples_are_red_and_cited():
+    from pumpkinpi import menu_plan
+    lines = cards.item_lines([("Example", p) for p in menu_plan.EXAMPLES], {})
+    assert lines[0]["terms"]["peanut"] == "found" and lines[1]["terms"]["tree nut"] == "found"
+    assert all(p["source"].startswith("https://") for p in menu_plan.EXAMPLES)

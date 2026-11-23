@@ -35,6 +35,21 @@ sold in US grocery stores (San Francisco Bay Area): brand + product name + size,
   from your web search). Keep sugar modest where you can; never claim the dish is allergen-free.
 If the request is not a meal, return no products and say why in note."""
 
+# Two real products that DO contain nuts, always added to the allergy chart (not the printed card) so the
+# chart shows what a NO looks like. Labels copied from the brand / retailer pages cited below.
+EXAMPLES = [
+    {"item": "Nabisco Nutter Butter Peanut Butter Sandwich Cookies, 16 oz", "brand": "Nutter Butter",
+     "tag": "cookies", "contains": ["peanut"],
+     "label": "Unbleached enriched flour, sugar, peanut butter (roasted peanuts, corn syrup solids, hydrogenated "
+              "vegetable oil, salt, peanut oil), soybean and/or canola oil, whole grain wheat flour, high fructose "
+              "corn syrup, palm oil, salt, leavening, soy lecithin, artificial flavor. Contains: wheat, peanut, soy.",
+     "source": "https://www.heb.com/product-detail/nutter-butter-peanut-butter-sandwich-cookies-family-size/139057"},
+    {"item": "Nutella Hazelnut Spread with Cocoa, 13 oz", "brand": "Nutella", "tag": "hazelnut spread",
+     "contains": ["tree nut"],
+     "label": "Sugar, palm oil, hazelnuts, skim milk, cocoa, lecithin as emulsifier, vanillin: an artificial flavor.",
+     "source": "https://www.nutella.com/us/en/products/spread/nutella"},
+]
+
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -97,7 +112,7 @@ def to_cards(plan: dict) -> dict:
     simple = {sec: pack([card_word(x) for x in items]) for sec, items in menu.items()}
     return {"title": plan.get("title", "").strip() or "Dinner", "prompt": plan.get("prompt", ""),
             "menu": [{"name": sec, "products": items} for sec, items in menu.items()],
-            "dessert": None, "more": [], "sauces": sauces, "simple": simple, "avoid_extra": [],
+            "dessert": None, "more": [], "examples": [dict(x) for x in EXAMPLES], "sauces": sauces, "simple": simple, "avoid_extra": [],
             "recipes": clean_recipes(plan.get("recipes") or [], plan.get("_urls"))}
 
 

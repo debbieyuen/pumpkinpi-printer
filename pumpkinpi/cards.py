@@ -213,7 +213,7 @@ def check_menu(client, cfg: dict) -> list[dict]:
     want: dict[str, list[str]] = {}
     labels: dict[str, dict | None] = {}
     dessert = [cfg["dessert"]] if cfg.get("dessert") else []
-    more = [{"name": "More", "products": cfg.get("more", [])}]
+    more = [{"name": "More", "products": cfg.get("more", []) + cfg.get("examples", [])}]
     for dish in cfg["menu"] + dessert + more + [{"name": "Sauce", "products": cfg.get("sauces", [])}]:
         for p in dish["products"]:
             prod = prod_name(p)
@@ -232,8 +232,10 @@ def check_menu(client, cfg: dict) -> list[dict]:
     sauces = item_lines([("Sauce", p) for p in cfg.get("sauces", [])], results)
     sweet = item_lines([(d["name"], p) for d in dessert for p in d["products"]], results)
     extra = item_lines([("More", p) for p in cfg.get("more", [])], results)
+    examples = item_lines([("Example", p) for p in cfg.get("examples", [])], results)   # chart only, never printed
     return ([{**ln, "part": "menu"} for ln in menu] + [{**ln, "part": "dessert"} for ln in sweet]
             + [{**ln, "part": "more"} for ln in extra]
+            + [{**ln, "part": "example"} for ln in examples]
             + [{**ln, "part": "sauce"} for ln in sauces])
 
 
@@ -470,7 +472,7 @@ def product_name(ln: dict) -> str:
     brand = (ln.get("brand") or "").strip()
     if not item or ln.get("each"):
         return ln["name"]
-    return item if not brand or item.lower().startswith(brand.lower()) else f"{brand} {item}"
+    return item if not brand or brand.lower() in item.lower() else f"{brand} {item}"
 
 
 def chart(cfg: dict, lines: list[dict]) -> dict:
@@ -731,6 +733,7 @@ def load(path: Path = CARDS_FILE, use_menu: bool = True) -> dict:
     if m:
         cfg.update({k: v for k, v in m.items() if k not in ("title", "prompt")})
         cfg["menu_title"], cfg["menu_prompt"] = m.get("title", "Dinner"), m.get("prompt", "")
+        cfg.setdefault("examples", [dict(x) for x in menu_plan.EXAMPLES])
     return cfg
 
 

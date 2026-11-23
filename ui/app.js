@@ -848,7 +848,7 @@ function renderMenu() {
   const ch = cards.chart || { guests: [], rows: [] };
   const cell = (c) => c.v === "ok" ? `<td class="ok">✓ OK</td>` : `<td class="no">✗ NO${c.why ? `<small>${esc(c.why)}</small>` : ""}</td>`;
   const table = ch.rows.length ? `<table class="achart"><thead><tr><th>Ingredient</th>${ch.guests.map((g) => `<th>${esc(g)}</th>`).join("")}</tr></thead>
-    <tbody>${ch.rows.map((r) => `<tr><th scope="row">${esc(r.name)}</th>${ch.guests.map((g) => cell(r.cells[g] || { v: "no" })).join("")}</tr>`).join("")}</tbody></table>
+    <tbody>${ch.rows.map((r) => `<tr class="${r.part === "example" ? "ex" : ""}"><th scope="row">${esc(r.name)}${r.part === "example" ? `<small>Example (not on the menu)</small>` : ""}</th>${ch.guests.map((g) => cell(r.cells[g] || { v: "no" })).join("")}</tr>`).join("")}</tbody></table>
     <p class="muted small">NO includes "may have": no clear label. Everything else is okay. But double check labels.</p>` : "";
   $("ingCol").innerHTML = `<h2 class="rph">Allergies</h2>${cards.lines.length ? table : `<p class="muted">Not checked yet.</p>`}`;
   const seen = new Set();

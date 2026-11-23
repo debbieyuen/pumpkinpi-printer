@@ -708,14 +708,15 @@ def card_lines() -> list[dict]:
 @app.get("/api/cards")
 def cards_info():
     cfg = cards.load()
-    lines = card_lines()
+    every = card_lines()
+    lines = [ln for ln in every if ln.get("part") != "example"]   # nut examples: chart only, never on a card
     avoid = {g: cards.simple_avoid(cfg, lines, g) for g in cfg.get("allergies", {})} if lines else {}
     return {"avoid": avoid, "event": cfg.get("event", {}), "guests": cfg.get("guests", []), "card": cfg.get("card", {}),
             "menu": [{"name": d["name"], "recipe": d.get("recipe"), "products": d["products"]} for d in cfg["menu"]],
             "steps": cfg.get("steps", []), "sauces": cfg.get("sauces", []), "allergies": cfg.get("allergies", {}),
             "lines": lines, "title": cfg.get("menu_title", ""), "prompt": cfg.get("menu_prompt", ""),
             "simple": cfg.get("simple", {}), "recipes": cfg.get("recipes", []),
-            "chart": cards.chart(cfg, lines) if lines else {"guests": [], "rows": []},
+            "chart": cards.chart(cfg, every) if every else {"guests": [], "rows": []},
             "pla": asdict(cards.Pla.load())}
 
 
@@ -773,7 +774,7 @@ def make_menu(req: MenuReq):
 
 
 def card_strokes(guest: str, side: str = "front") -> list:
-    lines = card_lines()
+    lines = [ln for ln in card_lines() if ln.get("part") != "example"]
     if not lines:
         raise HTTPException(409, "Check the menu first")
     try:

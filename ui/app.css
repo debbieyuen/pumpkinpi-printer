@@ -492,3 +492,4 @@ select.pick,select.guestpick{-webkit-appearance:none;appearance:none;padding-rig
 .achart td small{display:block;font-weight:500;font-size:.78rem;color:#7a2a24}
 @media (orientation:portrait){.rcpcols{grid-template-columns:1fr}}
 .rsteps{padding-left:1.3rem;margin:.2rem 0}.rsteps li{margin:.25rem 0;line-height:1.4}
+.achart th[scope=row] small{display:block;font-weight:500;color:var(--muted);font-size:.8rem}.achart tr.ex{background:color-mix(in srgb,var(--peach) 10%,transparent)}
