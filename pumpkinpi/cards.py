@@ -661,7 +661,8 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
 class Pla:
     nozzle: float = 200.0          # PLA. Video uses 190 C; 200 C soaks into watercolor paper better (first test didn't stick)
     bed: float = 0.0               # paper: bed heater off
-    fan: int = 255                 # part fan 100 %
+    fan: int = 255                 # part fan 100 % (layer 2+)
+    first_fan: int = 128           # layer 1: 50 %. Off made the paper warp; 100 % (video) can hurt sticking
     card_x: float = 15.0           # printer X/Y of the card's front-left corner (6x9: run scripts/paper_6x9.py)
     card_y: float = 20.0
     z_adjust: float = 0.0          # extra Z above the paper the probe found (+0.05 if it scrapes, -0.05 if it won't stick)
@@ -706,8 +707,8 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
            # here is a paper-thickness lower: go to Z0.05 and push a thick line so it lands and wipes the nozzle.
            "G1 Z0.05 F600", f"G1 Y{p.prime_y + 70:.1f} E12 F400", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600"]
     for n in range(p.layers):
-        # fan off for the first layer so the PLA grabs the paper; full fan after (video: keeps paper from warping)
-        out.append("M107" if n == 0 else f"M106 S{p.fan}")
+        # layer 1 at half fan so PLA grabs the paper without heating it enough to curl; full fan after
+        out.append(f"M106 S{p.first_fan if n == 0 else p.fan}")
         z = p.z_adjust + p.first_z + p.layer * n
         feed = p.first_feed if n == 0 else p.feed
         zt = z + p.hop
