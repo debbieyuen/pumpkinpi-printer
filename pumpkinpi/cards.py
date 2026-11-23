@@ -712,6 +712,7 @@ class Pla:
     park_x: float = 110.0
     park_y: float = 215.0          # bed forward at the end so you can peel the card
     park_z: float = 40.0
+    surface: str = "paper"         # "paper" (taped card) or "bed" (straight on the bare bed: scripts/bare_bed.py)
     paper_mm: float = 0.0          # paper thickness measured by scripts/measure_paper.py (CR Touch, paper vs bare bed)
     paper_z: float = 0.0           # old setting (Z of the paper over a bare-bed home); no longer used
 
@@ -739,6 +740,7 @@ def prime_lines(p: "Pla") -> list[str]:
 def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
     """One file the printer runs on its own from the microSD: heat, home ON the card, prime off it, draw."""
     out = [f"M140 S{p.bed:.0f}", f"M104 S{p.nozzle:.0f}", "M107", "G90", "M83",
+           *([f"M190 S{p.bed:.0f}"] if p.bed > 0 else []),     # bare bed: wait until it's warm before homing
            "G28",                                     # CR Touch taps the card at the bed center: Z0 = paper top
            "M420 S1",                                 # saved bed mesh
            f"G0 Z10 F600", f"G0 X{p.prime_x:.1f} Y{p.prime_y:.1f} F{p.travel:.0f}",

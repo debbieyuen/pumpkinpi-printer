@@ -997,13 +997,14 @@ $("menuBtn").onclick = async () => {
 function cardSteps(j) {
   const s = [];
   if (j.where === "reader") s.push("Take the microSD out of the Pi's card reader. Put it in the printer.");
-  s.push("Clear the bed. Only the paper card goes on it. No food.");
-  s.push("Put 3–4 loops of tape (sticky side out) under the card so the middle stays flat. Tape all 4 edges, overlapping the paper. Long side front to back, front-left corner 34 mm from the left, hanging 4 mm off the front. Keep the middle clear.");
+  const bed = j.surface === "bed", n = j.layers || 2;
+  s.push(bed ? "Clear the bed. Nothing on it: it prints straight on the bed. No food." : "Clear the bed. Only the paper card goes on it. No food.");
+  if (!bed) s.push("Put 3–4 loops of tape (sticky side out) under the card so the middle stays flat. Tape all 4 edges, overlapping the paper. Long side front to back, front-left corner 34 mm from the left, hanging 4 mm off the front. Keep the middle clear.");
   s.push("Raise the syringe so its tip is above the nozzle.");
   s.push(`On the printer screen: Print → <b>${j.sd_file}</b> → start.`);
-  s.push(`It heats to 215 °C, taps the middle of the card to find the paper, then draws 2 thin layers.${j.minutes ? ` About ${j.minutes} min.` : ""} Stay nearby.`);
+  s.push(`It heats to ${j.nozzle || 215} °C${bed ? " (bed 50 °C)" : ""}, taps the middle of the ${bed ? "bed" : "card"}, then draws ${n} thin layers.${j.minutes ? ` About ${j.minutes} min.` : ""} Stay nearby.`);
   s.push("Too faint or not sticking? Lower Z offset 0.05 on the printer screen while it prints. Scraping? Raise it.");
-  s.push("Let it cool 1 minute. Peel the tape outward.");
+  s.push(bed ? "Let the bed cool 5 minutes, then flex the bed sheet so the letters pop off." : "Let it cool 1 minute. Peel the tape outward.");
   return s.map((t) => `<li>${t}</li>`).join("");
 }
 function cardPop(mode, j = {}) {

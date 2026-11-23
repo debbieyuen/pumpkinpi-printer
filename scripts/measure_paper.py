@@ -42,6 +42,6 @@ path = ROOT / "machine.json"
 if not path.exists():
     shutil.copy(ROOT / "machine.example.json", path)
 data = json.loads(path.read_text())
-data.setdefault("pla", {})["paper_mm"] = mm
+data.setdefault("pla", {}).update(paper_mm=mm, paper_measured=mm)
 path.write_text(json.dumps(data, indent=1) + "\n")
 print(f"Saved pla.paper_mm = {mm}. The prime line now goes {mm} mm lower, onto the bare bed.")

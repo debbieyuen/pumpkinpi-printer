@@ -855,7 +855,7 @@ def run_card(lines: list[str]) -> None:
     try:
         GCODE_DIR.mkdir(exist_ok=True)
         local_names = [f.name for f in GCODE_DIR.iterdir()]
-        job.update(minutes=cards.minutes(lines, pla))
+        job.update(minutes=cards.minutes(lines, pla), surface=pla.surface, nozzle=round(pla.nozzle), layers=pla.layers)
 
         def save(label: str) -> tuple[list[str], Path]:
             data = card_file(lines, f"{label}.gcode")
