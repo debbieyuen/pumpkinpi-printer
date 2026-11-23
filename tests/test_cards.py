@@ -326,3 +326,21 @@ def test_card_letters_never_below_readable_size_and_allergens_always_kept():
     assert "Full menu on the back." in short and "Hot Pot Menu:" not in short
     assert "Lee Kum Kee Satay: peanut, sesame" in joined and "But double check labels." in short
     assert cards.layout(cfg, L, "Debbie", "front")
+
+
+def test_full_card_short_names_never_name_the_wrong_product():
+    # the planner's tag can name the dish: never print "Carnation pumpkin pie" for evaporated milk
+    assert cards.short_name("Nestlé Carnation Evaporated Milk", "Carnation", "pumpkin pie") == "Nestlé Carnation Evaporated Milk"
+    assert cards.short_name("C&H Premium Pure Cane Granulated Sugar", "C&H", "sugar") == "C&H sugar"
+    assert cards.short_name("Libby's 100% Pure Pumpkin", "Libby's", "pumpkin pie") == "Libby's Pumpkin"
+    assert cards.short_name("Fresh ginger", "", "aromatics") == "Fresh ginger"
+
+
+def test_lines_leave_room_for_descenders():
+    rows = cards.simple_rows(cards.load(), [], "Debbie")
+    for (_, h, _, _, step), (_, h2, *_ ) in zip(rows, rows[1:]):
+        assert step >= 0.33 * h + 1.05 * h2 + 0.25 * min(h, h2)    # g/p/y never touch the next line's capitals
+
+
+def test_accented_letters_are_printed():
+    assert len(cards.text_line("Nestlé", 5)) == len(cards.text_line("Nestle", 5))

@@ -243,6 +243,10 @@ def check_menu(client, cfg: dict) -> list[dict]:
 def text_line(s: str, h: float, font: str = "print") -> list[Stroke]:
     """Single-stroke text, capital letters h mm tall, left edge at x=0, baseline at y=0 (descenders go below)."""
     from HersheyFonts import HersheyFonts
+    import unicodedata
+    # The Hershey fonts have no accented letters and silently drop them ("Nestlé" -> "Nestl"): print the plain
+    # letter instead (é -> e, ñ -> n).
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
     if not s.strip():
         return []
     f = HersheyFonts()
@@ -516,22 +520,26 @@ def simple_avoid(cfg: dict, lines: list[dict], guest: str) -> list[str]:
 
 # Smallest letters that print cleanly in PLA with a 0.4 mm nozzle. Below this the strokes are ~1-3 mm long,
 # the 0.45 mm line fills the letters in, and short strokes don't stick to the bed or the paper.
+LINE_PITCH = 1.75                # baseline to baseline, in letter heights (see simple_rows)
 SIMPLE_MIN_MM = 5.0              # product names and section titles
 SIMPLE_AVOID_MIN_MM = 4.5        # "Allergens:" lines
 INGREDIENT_MIN_MM = 4.0          # label ingredients under a product
 
 
 def simple_rows(cfg: dict, lines: list[dict], guest: str, ingredients: bool = True,
-                menu: bool = True) -> list[tuple]:
+                menu: bool = True, short: bool = False) -> list[tuple]:
     """Plain list card: name, then each section ("Hot Pot Menu:", "Dessert:", "Allergens:") left-aligned.
     When the card is too full, layout() cuts the least important text first, never the letter size:
     ingredients=False leaves out the label lines under each product (they are on the back),
+    short=True prints "brand + tag" instead of the full product name (so they share lines),
     menu=False replaces the menu list with one line. The guest name and allergen lines are never cut."""
     card = cfg.get("card", {})
     W, m = card.get("w", 127.0), card.get("margin", 10.0)
     h = max(card.get("simple_mm", 5.5), SIMPLE_MIN_MM)
     ah = max(card.get("simple_avoid_mm", 5.0), SIMPLE_AVOID_MIN_MM)
-    p, ap = h * 1.4, ah * 1.3
+    # Line pitch: this font rises 1.05 h above the baseline and descends 0.33 h (g, p, y), so 1.75 h leaves a
+    # clear ~0.37 h gap between a line's descenders and the next line's capitals. 1.4 h made them touch.
+    p, ap = h * LINE_PITCH, ah * LINE_PITCH
     rows = []
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
@@ -550,7 +558,7 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str, ingredients: bool = Tr
 
     if not menu:
         rows.append(("Full menu on the back.", h, "print", False, p + 3))
-    for title, items in (simple_items(cfg) if menu else {}).items():
+    for title, items in (simple_items(cfg, short) if menu else {}).items():
         rows.append((f"{title}:", h + 0.6, "print", False, p))
         plain: list[str] = []
         for i, (t, ing) in enumerate(items):
@@ -563,8 +571,8 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str, ingredients: bool = Tr
                 plain = []
                 continue
             rows += [(x, h, "print", False, p) for x in wrap(t, h, max_w)]
-            rows[-1] = rows[-1][:4] + (h * 1.3,)
-            rows += [(x, ih, "print", False, ih * 1.35) for x in wrap(" " + ing, ih, max_w)]
+            rows[-1] = rows[-1][:4] + (h * 0.33 + ih * 1.05 + 0.4 * ih,)
+            rows += [(x, ih, "print", False, ih * LINE_PITCH) for x in wrap(" " + ing, ih, max_w)]
             rows[-1] = rows[-1][:4] + (p + 1,)
         rows[-1] = rows[-1][:4] + (p + 2,)
     rows.append(("Allergens:", h + 0.6, "print", False, p))
@@ -581,7 +589,27 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str, ingredients: bool = Tr
 OK_LINES = ("Everything else is okay.", "But double check labels.")
 
 
-def simple_items(cfg: dict) -> dict[str, list[tuple[str, str]]]:
+# Words that describe packaging or marketing, not what the product is. Dropped from names on a full card.
+FILLER = {"premade", "refrigerated", "premium", "pure", "100%", "cane", "granulated", "large", "grade", "a",
+          "white", "brown", "organic", "extra", "original", "classic", "natural", "all", "fresh", "count",
+          "deep", "dish", "easy", "family", "size", "value", "pack", "the", "and", "of", "with"}
+
+
+def short_name(full: str, brand: str = "", tag: str = "") -> str:
+    """A shorter but still true product name for a full card ("C&H sugar", "Libby's Pumpkin").
+
+    The planner's tag is used only when its words are in the product name: a tag can name the dish instead
+    ("pumpkin pie" on evaporated milk), and the card must never name the wrong product."""
+    if not brand:
+        return full                  # plain produce ("Fresh ginger") is already short
+    low = full.lower()
+    if tag and all(w.rstrip("s") in low for w in tag.lower().split()):
+        return f"{brand} {tag}"
+    words = [w for w in re.sub(r",.*$", "", full).split() if w.lower() not in FILLER]
+    return " ".join(words) or full
+
+
+def simple_items(cfg: dict, short: bool = False) -> dict[str, list[tuple[str, str]]]:
     """{section: [(exact product name, label ingredients or "")]}. Menus planned from a prompt carry the
     exact name ("card") and label per product; older configs only have the packed "simple" lines."""
     menu = [d for d in cfg.get("menu") or [] if any(isinstance(x, dict) and x.get("card") for x in d["products"])]
@@ -590,7 +618,10 @@ def simple_items(cfg: dict) -> dict[str, list[tuple[str, str]]]:
         # so simple_rows can re-pack them for the current letter size without splitting a name
         return {k: [(x.strip(), "") for t in v for x in t.split(", ") if x.strip()]
                 for k, v in (cfg.get("simple") or {}).items()}
-    return {d["name"]: [(x.get("card") or x["item"], x.get("ingredients", "")) for x in d["products"]] for d in menu}
+    def name(x: dict) -> str:
+        full = x.get("card") or x["item"]
+        return short_name(full, x.get("brand", ""), x.get("tag", "")) if short else full
+    return {d["name"]: [(name(x), x.get("ingredients", "")) for x in d["products"]] for d in menu}
 
 
 def one_page_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
@@ -686,14 +717,17 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
         rows.append((guest, 8, "cursive", True, 12))
     if card.get("style", "short") == "simple":
         # A longer menu: smaller letters until it fits, never below the SIMPLE_*_MIN_MM sizes (simple_rows clamps).
-        # Cut order (least important first): ingredient lines, then the menu list. Never the allergen lines.
-        tries = ([(k, True, True) for k in (1, .92, .85, .78, .72, .66, .6)]
-                 + [(k, False, True) for k in (1, .9, .8)] + [(k, False, False) for k in (1, .9, .8)])
-        for i, (k, ing, mn) in enumerate(tries):
+        # Cut order (least important first): ingredient lines, then full product names become "brand + tag",
+        # then the menu list. Never the allergen lines.
+        tries = ([(k, True, False, True) for k in (1, .92, .85, .78, .72, .66, .6)]
+                 + [(k, False, False, True) for k in (1, .9)] + [(k, False, True, True) for k in (1, .9)]
+                 + [(k, False, False, False) for k in (1, .9)])
+        for i, (k, ing, sh, mn) in enumerate(tries):
             c = {**cfg, "card": {**card, "simple_mm": card.get("simple_mm", 5.5) * k,
                                  "simple_avoid_mm": card.get("simple_avoid_mm", 5.0) * k}}
             try:                                  # start right under the top margin: room for labels + allergens
-                return draw_rows(simple_rows(c, lines, guest, ingredients=ing, menu=mn), W, H, m, top=True)[0]
+                return draw_rows(simple_rows(c, lines, guest, ingredients=ing, menu=mn, short=sh),
+                                 W, H, m, top=True)[0]
             except ValueError as e:
                 if i == len(tries) - 1:
                     raise ValueError(f"Allergen list too long for one card at readable letter sizes "
