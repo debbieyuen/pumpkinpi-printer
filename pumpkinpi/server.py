@@ -843,49 +843,75 @@ def run_stream(lines: list[str], phase: str) -> None:
 
 
 def run_card(lines: list[str]) -> None:
-    """PLA card: save card_MM_DD_printNN.gcode and put it on the microSD. Nothing starts from here:
-    you tape the card down and start it on the printer's own screen.
-      1. microSD in a USB card reader on the Pi -> copy it there (long name shows on the printer screen)
-      2. else printer on USB -> write it to the printer's microSD (8.3 name if the firmware needs it)
-      3. else -> only saved in gcode/ (download it from the app)"""
+    """PLA card: make the file and put it on the microSD. Nothing starts from here: you tape the card down
+    and start it on the printer's own screen. The name is the same on the Pi and on the printer.
+      1. microSD in a USB card reader on the Pi -> copy it there (card_MM_DD_printNN)
+      2. else printer on USB -> write it to the printer's microSD (CDMMDDNN if the firmware needs 8.3 names)
+      3. else -> only saved in gcode/ (download it)"""
     import shutil
-    from .printer import SDError, card_file, card_label, sd_mounts, sd_name
+    from .printer import card_file, card_label, sd_mounts, sd_name
     job = state["job"]
+    pla = cards.Pla.load()
     try:
         GCODE_DIR.mkdir(exist_ok=True)
+        local_names = [f.name for f in GCODE_DIR.iterdir()]
+        job.update(minutes=cards.minutes(lines, pla))
+
+        def save(label: str) -> tuple[list[str], Path]:
+            data = card_file(lines, f"{label}.gcode")
+            local = GCODE_DIR / f"{label}.gcode"
+            local.write_text("\n".join(data) + "\n")
+            job.update(file=label, sd_file=label)
+            return data, local
+
         mounts = sd_mounts()
-        taken = [f.name for f in GCODE_DIR.iterdir()]
-        for m in mounts:
-            try:
-                taken += os.listdir(m)
-            except OSError:
-                pass
-        label = card_label(taken)
-        data = card_file(lines, f"{label}.gcode")
-        local = GCODE_DIR / f"{label}.gcode"
-        local.write_text("\n".join(data) + "\n")
-        job.update(file=label, sd_file=f"{label}.gcode", minutes=cards.minutes(lines, cards.Pla.load()))
-        for m in mounts:
-            try:
-                shutil.copyfile(local, Path(m) / local.name)
-                os.sync()
-                job.update(where="reader", pct=100)
-                return
-            except OSError as e:
-                job["note"] = f"Couldn't copy to {m}: {e}"
+        if mounts:
+            taken = list(local_names)
+            for m in mounts:
+                try:
+                    taken += os.listdir(m)
+                except OSError:
+                    pass
+            data, local = save(card_label(taken))
+            for m in mounts:
+                try:
+                    job.update(phase="upload", where="reader")
+                    shutil.copyfile(local, Path(m) / local.name)
+                    os.sync()
+                    job.update(where="reader", pct=100, uploaded=True)
+                    return
+                except OSError as e:
+                    job["note"] = f"Couldn't copy to {m}: {e}"
         try:
             p = printer()
+        except Exception as e:  # noqa: BLE001
+            save(card_label(local_names))
+            job.update(where="download", pct=100, note=f"Printer not connected over USB ({e})")
+            return
+        try:
             p.pla_mode()
-            on_sd = list(p.sd_list())
-            name = local.name if p.long_names() else sd_name(False, on_sd, prefix="CD")
-            job.update(phase="upload", sd_file=name)
+            on_sd = p.sd_list()
+            for n in [n for n, size in on_sd.items() if size == -1 and n.startswith("CD")]:
+                sz = p.sd_size(n)                  # M20 without sizes: ask M23
+                on_sd[n] = -1 if sz is None else sz
+            for n, size in on_sd.items():          # empty card files from failed uploads: clear them off
+                if size == 0 and n.startswith("CD"):
+                    p.sd_delete(n)
+            names = [n for n, size in on_sd.items() if not (size == 0 and n.startswith("CD"))]
+            label = card_label(local_names + names) if p.long_names() else \
+                sd_name(False, names + [n.upper().replace(".GCODE", ".GCO") for n in local_names], prefix="CD")[:-4]
+            data, local = save(label)
+            name = f"{label}.gcode" if p.long_names() else f"{label}.GCO"
+            job.update(phase="upload", where="printer", sd_file=label)
             p.sd_upload(name, data, progress=lambda i, n: job.update(pct=round(100 * i / n)),
                         stop=_stop.is_set, card=True)
             if not _stop.is_set():
-                job.update(where="printer", pct=100)
-        except Exception as e:  # noqa: BLE001  (no printer on USB, or SD write failed)
-            job.update(where="download", pct=100, note=f"Not on a microSD yet ({e})")
+                job.update(pct=100, uploaded=True)
+        except Exception as e:  # noqa: BLE001  (SD write failed)
+            print(f"card upload failed: {e}", flush=True)
+            job.update(where="download", pct=100, uploaded=False, note=str(e))
     except Exception as e:  # noqa: BLE001
+        print(f"card failed: {e}", flush=True)
         job["error"] = str(e)
     finally:
         job["running"] = False

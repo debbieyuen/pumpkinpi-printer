@@ -258,10 +258,12 @@ class Printer:
         size = self.sd_list().get(name)
         if size in (None, -1):            # M20 without sizes: M23 reports "File opened: NAME Size: N"
             size = self.sd_size(name)
-        want = sum(len(numbered(i, x)) for i, x in enumerate(lines, 1))
-        if size is None or not want <= size <= want + 2 * len(lines):  # Marlin ends lines with \n or \r\n
+        # Stock Marlin saves "N5 G1 X1*42"; some builds save only "G1 X1". Either is a complete file.
+        lo = sum(len(x) for x in lines)
+        hi = sum(len(numbered(i, x)) + 2 for i, x in enumerate(lines, 1))
+        if size is None or not lo <= size <= hi:
             self.sd_delete(name)
-            raise SDError(f"{name} is {size} bytes on the card, expected about {want}; upload failed, deleted it")
+            raise SDError(f"{name} is {size} bytes on the card, expected {lo}-{hi}; upload failed, deleted it")
 
     def sd_size(self, name: str) -> int | None:
         for x in self.send(f"M23 {name}", wait_s=10):

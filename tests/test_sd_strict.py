@@ -17,7 +17,8 @@ MAX_CMD = 96
 
 
 class StrictMarlin:
-    def __init__(self):
+    def __init__(self, strip=False):
+        self.strip = strip          # some builds save the line without "N.. " and "*cs"
         self.files, self.saving, self.last_n, self.out, self.rx = {}, None, 0, [], []
 
     def _cs(self, body):
@@ -49,7 +50,7 @@ class StrictMarlin:
             if cmd == "M29":
                 self.saving = None; self.out += ["Done saving file.", "ok"]
             else:
-                self.files[self.saving].append(ln); self.out += ["ok"]
+                self.files[self.saving].append(cmd if self.strip else ln); self.out += ["ok"]
             return
         word = cmd.split()[0]
         if word == "M28":
@@ -82,8 +83,8 @@ class StrictMarlin:
         pass
 
 
-def strict():
-    f = StrictMarlin()
+def strict(strip=False):
+    f = StrictMarlin(strip)
     p = Printer.__new__(Printer); p.ser, p.food_mode, p.port = f, False, "/dev/null"
     return f, p
 
@@ -147,5 +148,30 @@ def test_server_print_card_puts_full_file_on_printer(monkeypatch, tmp_path):
     server.run_card(lines)
     job = server.state["job"]
     assert job.get("error") is None and job["where"] == "printer", job
-    name = job["sd_file"]
+    assert job["file"] == job["sd_file"] and job["uploaded"]      # same name on the Pi and the printer
+    name = job["sd_file"] + ".GCO"
     assert f.runs(name)[3] == "M104 S190" and "G28" in f.runs(name) and f.runs(name)[-1] == "M117 Card done"
+
+
+def test_build_that_saves_plain_lines_also_passes(monkeypatch):
+    monkeypatch.setattr("time.time", iter(range(10**7)).__next__)
+    f, p = strict(strip=True)
+    data = card_lines()
+    p.sd_upload("CD112201.GCO", data, card=True)
+    assert f.runs("CD112201.GCO")[3] == "M104 S190"
+
+
+def test_empty_files_from_old_uploads_are_cleared(monkeypatch, tmp_path):
+    monkeypatch.setattr("time.time", iter(range(10**7)).__next__)
+    from pumpkinpi import server
+    f, p = strict()
+    p._long = False
+    f.files = {"CD112201.GCO": [], "fittest.GCO": ["G90"]}
+    monkeypatch.setattr(server, "_printer", p)
+    monkeypatch.setattr(server, "GCODE_DIR", tmp_path)
+    monkeypatch.setattr("pumpkinpi.printer.sd_mounts", lambda: [])
+    server.state["job"] = {"running": True}
+    server.run_card(["M104 S190", "G1 X50 Y50"])
+    assert "CD112201.GCO" not in f.files                             # empty leftover deleted
+    assert f.files[server.state["job"]["sd_file"] + ".GCO"]          # new file is full
+    assert "fittest.GCO" in f.files

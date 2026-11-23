@@ -993,44 +993,60 @@ $("menuBtn").onclick = async () => {
   catch (e) { log(`Menu check failed: ${e.message}`); }
   $("menuBtn").disabled = false; $("menuBtn").textContent = "Recheck";
 };
-// Print card only makes the file and puts it on the microSD. The steps below tell you how to print it.
+// Print card only makes the file and puts it on the microSD. A popup shows the copy, then how to print it.
 function cardSteps(j) {
-  const f = j.sd_file ? j.sd_file.replace(/\.(gcode|gco)$/i, "") : j.file;
   const s = [];
   if (j.where === "reader") s.push("Take the microSD out of the Pi's card reader. Put it in the printer.");
-  if (j.where === "download") s.push(`<a href="/api/cards/file/${j.file}.gcode" download>Download ${j.file}.gcode</a>. Copy it to the printer's microSD.`);
   s.push("Clear the bed. Only the paper card goes on it. No food.");
   s.push("Tape the card down on all 4 edges. Long side front to back, front-left corner 34 mm from the left, hanging 4 mm off the front. Keep the middle clear.");
   s.push("Raise the syringe so its tip is above the nozzle.");
-  s.push(`On the printer screen: Print → <b>${f}</b> → start.`);
+  s.push(`On the printer screen: Print → <b>${j.sd_file}</b> → start.`);
   s.push(`It heats to 190 °C, touches the card to find it, then draws 2 thin layers.${j.minutes ? ` About ${j.minutes} min.` : ""} Stay nearby.`);
   s.push("Too faint or not sticking? Lower Z offset 0.05 on the printer screen while it prints. Scraping? Raise it.");
   s.push("Let it cool 1 minute. Peel the tape outward.");
   return s.map((t) => `<li>${t}</li>`).join("");
 }
+function cardPop(mode, j = {}) {
+  const pop = $("cardPop"), up = mode === "copy", ok = mode === "ok";
+  pop.hidden = false; pop.dataset.mode = mode;
+  $("cpIcon").textContent = up ? "" : ok ? "✓ 🎉" : "✗";
+  $("cpTitle").textContent = up ? "Copying to the printer's SD card…"
+    : ok ? "Uploaded to the SD card" : "Couldn't put it on the SD card";
+  $("cpName").innerHTML = j.sd_file ? `File: <b>${j.sd_file}</b>` : "";
+  $("cpBar").hidden = $("cpPct").hidden = !up;
+  $("cpFill").style.width = `${j.pct || 0}%`;
+  $("cpPct").textContent = `${j.pct || 0}%`;
+  $("cpSteps").hidden = true;
+  if (ok) $("cpName").innerHTML = `On the printer screen:<br><b class="cpgo">Print → ${j.sd_file} → start</b>
+    <br><span class="cpsub">Tape the card down and raise the syringe first. Steps are next to the card.</span>`;
+  if (!up && !ok) $("cpName").innerHTML += `<br><span class="cperr">${j.error || j.note || "Unknown error"}</span>`;
+  $("cpBtns").hidden = up;
+  $("cpDl").hidden = ok || !j.file;
+  if (j.file) $("cpDl").href = `/api/cards/file/${j.file}.gcode`;
+}
+$("cpDone").onclick = () => { $("cardPop").hidden = true; };
 async function plaJob(path, body, what) {
   $("cardSteps").hidden = true;
   try {
     await apiJson(path, { ...body, confirm: true });
-    state.job = true; renderCards(); $("jobMeter").classList.add("on");
+    state.job = true; renderCards(); cardPop("copy");
     for (let i = 0; i < 7200; i++) {
-      await sleep(700);
+      await sleep(500);
       const j = await apiJson("/api/job");
-      $("jobFill").style.width = `${j.pct || 0}%`;
+      cardPop("copy", j);
       $("cardMsg").textContent = `${what}… ${j.pct || 0}%`;
       if (!j.running) {
-        if (j.error) { $("cardMsg").textContent = `Stopped: ${j.error}`; break; }
-        $("cardMsg").textContent = j.where === "download" ? `Saved ${j.file} on the Pi only. ${j.note || "No microSD found."}`
-          : `Saved ${j.sd_file} on the microSD${j.where === "printer" ? " in the printer" : ""}.`;
-        $("cardSteps").innerHTML = cardSteps(j); $("cardSteps").hidden = false;
+        const ok = !j.error && j.uploaded;
+        cardPop(ok ? "ok" : "fail", j);
+        $("cardMsg").textContent = ok ? `On the printer screen: Print → ${j.sd_file}` : `Not on the SD card: ${j.error || j.note || ""}`;
+        if (ok) { $("cardSteps").innerHTML = cardSteps(j); $("cardSteps").hidden = false; }
         break;
       }
     }
-  } catch (e) { log(`${what} refused: ${e.message}`); }
+  } catch (e) { log(`${what} refused: ${e.message}`); $("cardPop").hidden = true; }
   state.job = false; renderCards();
-  setTimeout(() => { if (!state.job) $("jobMeter").classList.remove("on"); }, 2000);
 }
-$("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest, side: cards.side }, `Making ${cards.guest}'s card file`);
+$("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest, side: cards.side }, `Copying ${cards.guest}'s card to the SD card`);
 
 // ---------- on-screen keyboard (kiosk Chromium has no OS keyboard) ----------
 const KEYS = ["qwertyuiop", "asdfghjkl'", "zxcvbnm,.", ["shift", "space", "back", "Done"]];

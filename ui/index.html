@@ -157,6 +157,21 @@
       <button class="btn go" id="loadedBtn" type="button">Loaded</button></div></div>
 </div>
 
+<!-- Print card: copying to the SD card, then done (or why it failed) -->
+<div class="popwrap" id="cardPop" hidden role="dialog" aria-labelledby="cpTitle">
+  <div class="popcard cardpop">
+    <div class="cpicon" id="cpIcon" aria-hidden="true"></div>
+    <h2 id="cpTitle"></h2>
+    <p class="cpname" id="cpName"></p>
+    <div class="cpbar" id="cpBar"><i id="cpFill"></i></div>
+    <p class="cppct" id="cpPct"></p>
+    <ol class="cardsteps big" id="cpSteps" hidden></ol>
+    <div class="popbtns" id="cpBtns" hidden>
+      <a class="btn ghost" id="cpDl" hidden download>Download file</a>
+      <button class="btn go" id="cpDone" type="button">Done</button></div>
+  </div>
+</div>
+
 <!-- Recipe details: swipe between Recipe, Allergies and Sources -->
 <div class="popwrap recpop" id="recPop" hidden role="dialog" aria-label="Recipe details">
   <div class="popcard">

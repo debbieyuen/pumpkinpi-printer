@@ -508,3 +508,18 @@ select.pick,select.guestpick{-webkit-appearance:none;appearance:none;padding-rig
 .cardsteps li{margin:.2rem 0}
 .cardsteps a{color:var(--teal)}
 .ver{font-size:.7rem;color:var(--muted, #888);margin-left:.4rem;white-space:nowrap}
+.cardpop{max-width:min(40rem,92vw);max-height:90vh;overflow:auto;text-align:center}
+.cardpop h2{font-size:1.5rem;margin:.2rem 0}
+.cpicon{font-size:3.2rem;line-height:1;color:var(--teal)}
+#cardPop[data-mode=fail] .cpicon{color:#c0392b}
+.cpname{font-size:1.15rem;margin:.3rem 0}
+.cperr{color:#c0392b;font-size:1rem}
+.cpbar{height:1.4rem;border-radius:.7rem;background:var(--line,#e3e3e3);overflow:hidden;margin:.8rem 0 .3rem}
+.cpbar i{display:block;height:100%;width:0;background:var(--teal);transition:width .4s}
+.cppct{font-size:1.3rem;font-weight:650;margin:0}
+.cardsteps.big{text-align:left;font-size:1.1rem}
+.cardpop .popbtns{justify-content:center}
+.cardpop .popbtns .btn{font-size:1.15rem;padding:.7rem 1.4rem}
+#cardPop [hidden]{display:none !important}
+.cpgo{display:inline-block;font-size:1.45rem;margin:.35rem 0;color:var(--teal)}
+.cpsub{font-size:1rem;color:var(--muted,#666)}
