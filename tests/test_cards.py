@@ -169,7 +169,7 @@ def test_short_card_back_lists_only_nos_for_debbie():
     assert "Ponzu (Kikkoman): fish" in bad
     assert not any("YES" in b or "Tofu" in b or "Crust" in b for b in bad)
     texts = [r[0] for r in cards.short_back_rows(cfg, _lines(cfg), "Debbie")]
-    assert texts[0] == "Debbie: don't eat" and "Not on the card? Check the label." in texts
+    assert texts[0] == "Debbie: don't eat" and "Everything else is okay." in texts
 
 
 def test_unsure_counts_as_dont_eat():
@@ -182,7 +182,7 @@ def test_michael_unsure_sauces_are_a_no_with_reason():
     cfg = cards.load()
     t = [r[0] for r in cards.simple_rows(cfg, _lines(cfg), "Michael")]
     assert "Lee Kum Kee Satay: coconut" in t and "Bull Head Sha cha: unnamed spices" in t
-    assert not any("check label" in x.lower() for x in t)
+    assert not any("check label" in x.lower() for x in t if x not in cards.OK_LINES)
 
 
 def test_no_allergy_guest_gets_no_avoid_list():
@@ -246,8 +246,8 @@ def test_simple_card_like_the_note():
     t = [r[0] for r in cards.simple_rows(cfg, L, "Debbie")]
     assert t[0] == "Debbie" and "Hot Pot Menu:" in t and "Dessert:" in t and "Allergens:" in t
     assert "Lee Kum Kee Satay: peanut, sesame" in t
-    assert not any("check label" in x.lower() for x in t)         # every item decided YES/NO
-    assert "Everything else: YES" in t and any("Little Sheep lamb" in x for x in t)
+    assert not any("check label" in x.lower() for x in t if x not in cards.OK_LINES)         # every item decided YES/NO
+    assert "Everything else is okay." in t and any("Little Sheep lamb" in x for x in t)
     assert any("Mrs. Smith" in x for x in t) and any("Straus" in x for x in t)
     assert cards.layout(cfg, L, "Debbie", "front") and cards.layout(cfg, L, "Debbie", "back") == []
 

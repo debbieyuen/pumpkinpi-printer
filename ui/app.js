@@ -842,7 +842,7 @@ function renderMenu() {
   if (!cards.title || !state.menuShown) { box.innerHTML = ""; return; }   // start with only the prompt
   const secs = Object.entries(cards.simple).map(([t, ls]) => `<div class="msec"><h3>${esc(t)}</h3>${ls.map((l) => `<p>${esc(l)}</p>`).join("")}</div>`).join("");
   const nos = Object.entries(cards.avoid).map(([g, ls]) => `<div class="mguest"><b>${esc(g)}</b>${ls.length
-    ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "<span class=\"yes\">YES</span> everything"}</div>`).join("");
+    ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "Nothing to avoid"}${ls.length ? "<br><span class=\"yes\">OK</span> Everything else is okay. But double check labels." : ""}</div>`).join("");
   box.innerHTML = `<div class="mhead"><h2>${esc(cards.title)}</h2>${cards.prompt ? `<span class="muted">“${esc(cards.prompt)}”</span>` : ""}</div>
     <div class="mbody"><div class="mmenu">${secs}</div><div class="mnos"><h3>Allergens</h3>${cards.lines.length ? nos : "<p class=\"muted\">Not checked yet.</p>"}</div></div>`;
   moreCue(box);

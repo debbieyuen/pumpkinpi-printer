@@ -371,7 +371,7 @@ def section(title: str, h: float = 5.5, step: float = 8.0) -> tuple:
 def avoid_lines(cfg: dict, lines: list[dict], guest: str) -> list[str]:
     """Everything this guest should NOT eat: each NO (with what's in it) and each "check label".
 
-    Unsure always counts as NO here, so nothing unchecked hides under "Everything else: YES".
+    Unsure always counts as NO here, so nothing unchecked hides under the "Everything else is okay" line.
     A guest with no allergy list gets nothing here (their back says so instead)."""
     if not (cfg.get("allergies") or {}).get(guest):
         return []
@@ -415,9 +415,7 @@ def short_back_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
         rows.append(("Nothing on the menu", h, "print", True, pitch))
     rows[-1] = rows[-1][:4] + (pitch + 5,)
     rows += [(x, h * 0.85, "print", True, h * 0.85 * 1.5)
-             for x in wrap("Everything else on the menu: YES.", h * 0.85, W - 2 * m)]
-    rows += [(x, h * 0.85, "print", True, h * 0.85 * 1.5)
-             for x in wrap("Not on the card? Check the label.", h * 0.85, W - 2 * m)]
+             for t in OK_LINES for x in wrap(t, h * 0.85, W - 2 * m)]
     return rows
 
 
@@ -466,8 +464,11 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
         for b in simple_avoid(cfg, lines, guest) or ["None on the menu"]:
             rows += [(x, ah, "print", False, ap) for x in wrap(b, ah, W - 2 * m)]
         rows[-1] = rows[-1][:4] + (ap + 2,)
-        rows.append(("Everything else: YES", ah, "print", False, ap))
+        rows += [(x, ah, "print", False, ap) for t in OK_LINES for x in wrap(t, ah, W - 2 * m)]
     return rows
+
+
+OK_LINES = ("Everything else is okay.", "But double check labels.")
 
 
 def one_page_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
@@ -498,8 +499,7 @@ def one_page_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
         for b in avoid_lines(cfg, lines, guest) or ["Nothing on the menu"]:
             rows += [(x, ah, "print", False, ap) for x in wrap(b, ah, W - 2 * m)]
         rows[-1] = rows[-1][:4] + (ap + 3,)
-        rows.append(("Everything else: YES", 3.8, "print", True, 6.5))
-    rows.append(("Not on the card? Check the label.", 3.8, "print", True, 6.5))
+        rows += [(x, 3.8, "print", True, 6.5) for t in OK_LINES for x in wrap(t, 3.8, W - 2 * m)]
     return rows
 
 
