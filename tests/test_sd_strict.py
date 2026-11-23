@@ -101,7 +101,7 @@ def test_card_on_sd_runs_every_command_in_order(monkeypatch):
     p.sd_upload("CD112201.GCO", data, card=True)
     want = [c for c in (x.split(";", 1)[0].strip() for x in data) if c]
     assert f.runs("CD112201.GCO") == want                          # nothing dropped, nothing extra
-    assert want[:4] == ["M302 P0", "M117 card_11_22_print01", "M140 S0", "M104 S150"]
+    assert want[:4] == ["M302 P0", "M117 card_11_22_print01", "M140 S50", "M104 S150"]
 
 
 def test_food_file_on_sd_runs_every_command(monkeypatch):
