@@ -297,4 +297,4 @@ def test_first_layer_slower_and_thicker_for_paper():
     draws = [x for x in g if x.startswith("G1 X")]
     e1, e2 = (float(x.split("E")[1].split()[0]) for x in draws)
     assert "F480" in draws[0] and abs(e1 / e2 - 1.3) < 0.01            # layer 1: 8 mm/s, 30 % more PLA
-    assert "M107" in g[g.index("G0 Z1.30 F600") - 1]                    # fan off for layer 1
+    assert "M107" in g[g.index("G0 Z4.10 F1200") - 1]                    # fan off for layer 1

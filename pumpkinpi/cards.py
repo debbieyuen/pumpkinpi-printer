@@ -701,8 +701,8 @@ class Pla:
     line_w: float = 0.45
     feed: float = 900.0            # mm/min drawing (15 mm/s: clean letters on textured paper)
     travel: float = 6000.0
-    retract: float = 0.8           # direct drive
-    hop: float = 1.2
+    retract: float = 1.5           # direct drive; pulls the string back before a lift
+    hop: float = 4.0               # lift high so strings (dot of an i) snap off
     prime_x: float = 5.0           # prime blob off the card, on bare bed
     prime_y: float = 5.0
     x_min: float = 2.0
@@ -741,17 +741,17 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
         feed = p.first_feed if n == 0 else p.feed
         flow = p.first_flow if n == 0 else 1.0
         zt = z + p.hop
-        out.append(f"G0 Z{zt:.2f} F600")
+        out.append(f"G0 Z{zt:.2f} F1200")
         for st in strokes:
             if len(st) < 2:
                 continue
             x, y = st[0]
             out += [f"G0 X{p.card_x + x:.2f} Y{p.card_y + y:.2f} F{p.travel:.0f}", f"G1 Z{z:.2f} F600",
-                    f"G1 E{p.retract:.2f} F2400"]
+                    f"G1 E{p.retract:.2f} F2700"]
             for (ax, ay), (bx, by) in zip(st, st[1:]):
                 e = math.hypot(bx - ax, by - ay) * p.e_per_mm * flow
                 out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{feed:.0f}")
-            out += [f"G1 E-{p.retract:.2f} F2400", f"G0 Z{zt:.2f} F600"]
+            out += [f"G1 E-{p.retract:.2f} F2700", f"G0 Z{zt:.2f} F1200"]
     out += ["M104 S0", "M140 S0", "M107", f"G0 Z{p.park_z:.1f} F600",
             f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}", "M400", "M84", "M117 Card done"]
     check_bounds(out, p)
