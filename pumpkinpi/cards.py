@@ -659,13 +659,15 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
 # card, so G28 measures the paper's top: Z0 = paper surface, and each layer is laid on top of it.
 @dataclass
 class Pla:
-    nozzle: float = 190.0          # PLA, as cool as it flows (video: 190 C). Raise to 195-200 if lines break up.
+    nozzle: float = 200.0          # PLA. Video uses 190 C; 200 C soaks into watercolor paper better (first test didn't stick)
     bed: float = 0.0               # paper: bed heater off
     fan: int = 255                 # part fan 100 %
     card_x: float = 15.0           # printer X/Y of the card's front-left corner (6x9: run scripts/paper_6x9.py)
     card_y: float = 20.0
     z_adjust: float = 0.0          # extra Z above the paper the probe found (+0.05 if it scrapes, -0.05 if it won't stick)
     layer: float = 0.2             # thin lines: 2 layers of 0.2 mm = 0.4 mm raised text
+    first_z: float = 0.1           # nozzle height for layer 1 above the probed paper: squishes PLA into the paper texture
+    first_feed: float = 600.0      # mm/min on layer 1 (10 mm/s) so it grabs
     layers: int = 2
     line_w: float = 0.45
     feed: float = 900.0            # mm/min drawing (15 mm/s: clean letters on textured paper)
@@ -700,12 +702,14 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
            "M420 S1",                                 # saved bed mesh
            f"G0 Z10 F600", f"G0 X{p.prime_x:.1f} Y{p.prime_y:.1f} F{p.travel:.0f}",
            f"M109 S{p.nozzle:.0f}",
-           # prime line on the bare bed left of the card (card starts at X34): wipes the ooze off the nozzle
-           "G1 Z0.3 F600", f"G1 Y{p.prime_y + 70:.1f} E5 F600", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600"]
+           # prime line on the bare bed left of the card (card starts at X34). Z0 is the paper top, so the bed
+           # here is a paper-thickness lower: go to Z0.05 and push a thick line so it lands and wipes the nozzle.
+           "G1 Z0.05 F600", f"G1 Y{p.prime_y + 70:.1f} E12 F400", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600"]
     for n in range(p.layers):
         # fan off for the first layer so the PLA grabs the paper; full fan after (video: keeps paper from warping)
         out.append("M107" if n == 0 else f"M106 S{p.fan}")
-        z = p.z_adjust + p.layer * (n + 1)
+        z = p.z_adjust + p.first_z + p.layer * n
+        feed = p.first_feed if n == 0 else p.feed
         zt = z + p.hop
         out.append(f"G0 Z{zt:.2f} F600")
         for st in strokes:
@@ -716,7 +720,7 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
                     f"G1 E{p.retract:.2f} F2400"]
             for (ax, ay), (bx, by) in zip(st, st[1:]):
                 e = math.hypot(bx - ax, by - ay) * p.e_per_mm
-                out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{p.feed:.0f}")
+                out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{feed:.0f}")
             out += [f"G1 E-{p.retract:.2f} F2400", f"G0 Z{zt:.2f} F600"]
     out += ["M104 S0", "M140 S0", "M107", f"G0 Z{p.park_z:.1f} F600",
             f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}", "M400", "M84", "M117 Card done"]

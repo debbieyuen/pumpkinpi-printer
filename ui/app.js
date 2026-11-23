@@ -1001,7 +1001,7 @@ function cardSteps(j) {
   s.push("Tape the card down on all 4 edges. Long side front to back, front-left corner 34 mm from the left, hanging 4 mm off the front. Keep the middle clear.");
   s.push("Raise the syringe so its tip is above the nozzle.");
   s.push(`On the printer screen: Print → <b>${j.sd_file}</b> → start.`);
-  s.push(`It heats to 190 °C, touches the card to find it, then draws 2 thin layers.${j.minutes ? ` About ${j.minutes} min.` : ""} Stay nearby.`);
+  s.push(`It heats to 200 °C, touches the card to find it, then draws 2 thin layers.${j.minutes ? ` About ${j.minutes} min.` : ""} Stay nearby.`);
   s.push("Too faint or not sticking? Lower Z offset 0.05 on the printer screen while it prints. Scraping? Raise it.");
   s.push("Let it cool 1 minute. Peel the tape outward.");
   return s.map((t) => `<li>${t}</li>`).join("");

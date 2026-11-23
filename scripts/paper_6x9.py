@@ -20,5 +20,5 @@ def update(name: str, key: str, values: dict) -> None:
 
 
 update("cards.json", "card", {"w": 152.4, "h": 228.6, "margin": 15})
-update("machine.json", "pla", {"nozzle": 190, "bed": 0, "fan": 255, "card_x": 34, "card_y": -4, "layer": 0.2, "layers": 2, "z_adjust": 0.0})
+update("machine.json", "pla", {"nozzle": 200, "bed": 0, "fan": 255, "card_x": 34, "card_y": -4, "layer": 0.2, "layers": 2, "z_adjust": 0.0, "first_z": 0.1})
 print("Now: tape all 4 edges, front-left corner at X34 Y-4 (4 mm in front of the bed edge). The printer finds the paper itself when it homes.")

@@ -30,12 +30,12 @@ def test_card_fits_and_gcode_stays_on_card():
     p = cards.Pla()
     g = cards.card_gcode(st, p)
     # standalone file: bed off, heat, home ON the card, then prime off the card before drawing
-    assert g.index("M140 S0") < g.index("G28") < g.index("M109 S190") < g.index("M106 S255")
-    assert g.index("G1 Z0.20 F600") < g.index("M106 S255")      # fan off on the first layer
+    assert g.index("M140 S0") < g.index("G28") < g.index("M109 S200") < g.index("M106 S255")
+    assert g.index("G1 Z0.10 F600") < g.index("M106 S255")      # fan off on the first layer
     assert g.index("M420 S1") > g.index("G28") and "G29" not in g
     assert "M104 S0" in g[-9:] and g[-1] == "M117 Card done"
     zs = [float(w[1:]) for ln in g if ln.startswith(("G0", "G1")) for w in ln.split()[1:] if w[0] == "Z"]
-    assert abs(min(zs) - p.layer) < 1e-6         # first layer 0.2 mm above the probed paper
+    assert abs(min(z for z in zs if z > 0.06) - p.first_z) < 1e-6   # layer 1 squished: 0.1 mm above the paper
     assert sum(ln.startswith("G1 Z") for ln in g) == 1 + 2 * sum(1 for s in st if len(s) > 1)  # prime + 2 layers
 
 
