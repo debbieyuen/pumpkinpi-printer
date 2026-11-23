@@ -35,7 +35,7 @@ def test_card_fits_and_gcode_stays_on_card():
     assert "M104 S0" in g[-9:] and g[-1] == "M117 Card done"
     zs = [float(w[1:]) for ln in g if ln.startswith(("G0", "G1")) for w in ln.split()[1:] if w[0] == "Z"]
     assert abs(min(zs) - p.layer) < 1e-6         # first layer 0.2 mm above the probed paper
-    assert sum(ln.startswith("G1 Z") for ln in g) == 2 * sum(1 for s in st if len(s) > 1)  # 2 layers
+    assert sum(ln.startswith("G1 Z") for ln in g) == 1 + 2 * sum(1 for s in st if len(s) > 1)  # prime + 2 layers
 
 
 def test_too_many_dishes_refused():

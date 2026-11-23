@@ -700,7 +700,8 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
            "M420 S1",                                 # saved bed mesh
            f"G0 Z10 F600", f"G0 X{p.prime_x:.1f} Y{p.prime_y:.1f} F{p.travel:.0f}",
            f"M109 S{p.nozzle:.0f}",
-           "G1 E8 F150", f"G1 E-{p.retract:.2f} F2400", "G4 S2",   # prime blob lands on bare bed, not the card
+           # prime line on the bare bed left of the card (card starts at X34): wipes the ooze off the nozzle
+           "G1 Z0.3 F600", f"G1 Y{p.prime_y + 70:.1f} E5 F600", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600",
            f"M106 S{p.fan}"]
     for n in range(p.layers):
         z = p.z_adjust + p.layer * (n + 1)

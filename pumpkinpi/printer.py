@@ -111,6 +111,18 @@ def sd_file(lines: list[str], name: str) -> list[str]:
     return out
 
 
+MAX_CMD = 96   # Marlin MAX_CMD_SIZE: longer serial lines are cut off
+
+
+def numbered(n: int, line: str) -> str:
+    """Marlin's line format for saving to SD: N<n> <cmd>*<XOR of every byte before the *>."""
+    body = f"N{n} {line.strip()}"
+    cs = 0
+    for ch in body.encode():
+        cs ^= ch
+    return f"{body}*{cs}"
+
+
 def sd_mounts() -> list[str]:
     """microSD cards plugged into the Pi (USB card reader), e.g. /media/debbiepumpkinpi/3D PRINTER.
     PUMPKINPI_SD_DIR overrides (any folder)."""
@@ -212,24 +224,57 @@ class Printer:
         out = self.send("M21", wait_s=10)
         if any("init fail" in x.lower() or "no sd" in x.lower() for x in out):
             raise SDError("No microSD card in the printer (M21 failed)")
+        # While saving, Marlin drops any line without "N<line> ... *<checksum>" (queue.cpp, STR_ERR_NO_CHECKSUM)
+        # and saves the numbered line as-is (Marlin's SD reader skips N and *). M110 N0 restarts the count.
+        self.send(numbered(0, "M110 N0"), wait_s=10, check=False)
+        for i, ln in enumerate(lines, 1):
+            if len(numbered(i, ln)) >= MAX_CMD:
+                raise SDError(f"Line {i} is too long for Marlin ({MAX_CMD - 1} chars): {ln[:40]}...")
         out = self.send(f"M28 {name}", wait_s=10)
         if not any("writing to file" in x.lower() for x in out):
             raise SDError(f"Printer would not open {name} for writing: {' '.join(out)[:120]}")
+        ok = False
         try:
             for i, ln in enumerate(lines, 1):
                 if stop and stop():
                     raise SDError("Stopped during upload")
-                self.send(ln, wait_s=10, check=False)   # saved to the card, not run
+                for _try in range(3):
+                    out = self.send(numbered(i, ln), wait_s=10, check=False)   # saved to the card, not run
+                    if not any(x.startswith(("Error", "Resend", "rs ")) for x in out):
+                        break
+                else:
+                    raise SDError(f"Printer kept rejecting line {i} ({ln!r}): {' '.join(out)[:120]}")
                 if progress:
                     progress(i, len(lines))
+            ok = True
         finally:
-            self.send("M29", wait_s=10)
+            out = self.send("M29", wait_s=10)
+            if ok and not any("done saving" in x.lower() for x in out):
+                ok = False
+            if not ok:
+                self.sd_delete(name)      # never leave a broken file on the card for someone to pick
+        if not ok:
+            raise SDError(f"Printer did not finish saving {name}: {' '.join(out)[:120]}")
         size = self.sd_list().get(name)
-        want = sum(len(x) for x in lines)
-        if size is None:
-            raise SDError(f"{name} not on the card after upload")
-        if size != -1 and not want <= size <= want + 2 * len(lines):  # Marlin ends lines with \n or \r\n
-            raise SDError(f"{name} is {size} bytes, expected about {want}; upload was corrupted")
+        if size in (None, -1):            # M20 without sizes: M23 reports "File opened: NAME Size: N"
+            size = self.sd_size(name)
+        want = sum(len(numbered(i, x)) for i, x in enumerate(lines, 1))
+        if size is None or not want <= size <= want + 2 * len(lines):  # Marlin ends lines with \n or \r\n
+            self.sd_delete(name)
+            raise SDError(f"{name} is {size} bytes on the card, expected about {want}; upload failed, deleted it")
+
+    def sd_size(self, name: str) -> int | None:
+        for x in self.send(f"M23 {name}", wait_s=10):
+            m = re.search(r"Size:\s*(\d+)", x)
+            if m:
+                return int(m[1])
+        return None
+
+    def sd_delete(self, name: str) -> None:
+        try:
+            self.send(f"M30 {name}", wait_s=10)
+        except Exception:  # noqa: BLE001
+            pass
 
     def sd_start(self, name: str) -> None:
         out = self.send(f"M23 {name}", wait_s=10)

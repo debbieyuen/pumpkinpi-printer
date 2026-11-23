@@ -1,4 +1,5 @@
 import datetime as dt
+import re
 
 import pytest
 
@@ -15,7 +16,14 @@ class FakeMarlin:
         if not ln:
             return                      # real Marlin: no reply at all for a comment-only line
         if self.writing and ln != "M29":
-            self.files[self.writing] += len(ln) + 2; self.out += ["ok"]; return
+            m = re.fullmatch(r"N(\d+) (.*)\*(\d+)", ln)
+            cs = 0
+            for ch in (ln.rsplit("*", 1)[0]).encode():
+                cs ^= ch
+            if not m or int(m[3]) != cs:   # real Marlin: drops the line, asks for a resend
+                self.out += ["Error:No Checksum with line number, Last Line: 0", "Resend: 1", "ok"]; return
+            self.files[self.writing] += len(ln) + 2      # Marlin saves the numbered line as-is
+            self.out += ["ok"]; return
         cmd = ln.split()[0]
         if cmd == "M21": self.out += (["echo:SD card ok"] if self.sd else ["echo:SD init fail"]) + ["ok"]
         elif cmd == "M28":
