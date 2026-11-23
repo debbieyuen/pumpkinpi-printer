@@ -845,9 +845,9 @@ function renderMenu() {
     ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "Nothing to avoid"}${ls.length ? `<br><span class="yes">OK</span> Everything else is okay. But double check labels.` : ""}</div>`).join("");
   $("ingCol").innerHTML = `<h2 class="rph">Allergies</h2>${cards.lines.length ? nos : `<p class="muted">Not checked yet.</p>`}`;
   const seen = new Set();
-  const srcs = (cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 1).map((u) => [ln.name, u]))
+  const srcs = (cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 2).map((u) => [ln.name, u]))
     .filter(([, u]) => u && !seen.has(u) && seen.add(u));
-  $("srcCol").innerHTML = `<h2 class="rph">Sources</h2><ol class="srcs">${srcs.map(([n, u]) => `<li class="srcitem">${favicon(u)}<span class="st"><b>${esc(n)}</b><span class="url">${esc(host(u))}</span></span></li>`).join("")}</ol>
+  $("srcCol").innerHTML = `<h2 class="rph">Sources</h2><ol class="srcs">${srcs.length ? srcs.map(([n, u]) => `<li class="srcitem"><a href="${esc(u)}" target="_blank" rel="noopener">${favicon(u)}<span class="st"><b>${esc(n)}</b><span class="url">${esc(host(u))}</span></span></a></li>`).join("") : `<p class="muted">Tap Recheck on Cards to fetch the label links.</p>`}</ol>
     <p class="muted small by"><img src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity Agent API, Search API + Decider</p>`;
 }
 const menuSources = () => new Set((cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 1))).size;

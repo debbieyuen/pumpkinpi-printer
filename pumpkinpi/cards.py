@@ -115,6 +115,9 @@ def item_lines(products: list[tuple[str, object]], results: dict[str, dict]) -> 
     for dish, p in products:
         st = term_status(p, results.get(prod_name(p)))
         src = [p["source"]] if isinstance(p, dict) and p.get("source") else []
+        for c in ((results.get(prod_name(p)) or {}).get("checks") or {}).values():   # Search API links per allergen
+            src += [u for u in (c.get("sources") or []) if u and u not in src]
+        src = src[:4]
         if isinstance(p, dict) and p.get("brand"):
             out.append({"name": f"{p.get('tag') or dish} ({p['brand']})", "item": p["item"], "terms": st,
                         "sources": src})
