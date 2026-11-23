@@ -101,7 +101,7 @@ def test_card_on_sd_runs_every_command_in_order(monkeypatch):
     p.sd_upload("CD112201.GCO", data, card=True)
     want = [c for c in (x.split(";", 1)[0].strip() for x in data) if c]
     assert f.runs("CD112201.GCO") == want                          # nothing dropped, nothing extra
-    assert want[:4] == ["M302 P0", "M117 card_11_22_print01", "M140 S0", "M104 S200"]
+    assert want[:4] == ["M302 P0", "M117 card_11_22_print01", "M140 S0", "M104 S215"]
 
 
 def test_food_file_on_sd_runs_every_command(monkeypatch):
@@ -150,7 +150,7 @@ def test_server_print_card_puts_full_file_on_printer(monkeypatch, tmp_path):
     assert job.get("error") is None and job["where"] == "printer", job
     assert job["file"] == job["sd_file"] and job["uploaded"]      # same name on the Pi and the printer
     name = job["sd_file"] + ".GCO"
-    assert f.runs(name)[3] == "M104 S200" and "G28" in f.runs(name) and f.runs(name)[-1] == "M117 Card done"
+    assert f.runs(name)[3] == "M104 S215" and "G28" in f.runs(name) and f.runs(name)[-1] == "M117 Card done"
 
 
 def test_build_that_saves_plain_lines_also_passes(monkeypatch):
@@ -158,7 +158,7 @@ def test_build_that_saves_plain_lines_also_passes(monkeypatch):
     f, p = strict(strip=True)
     data = card_lines()
     p.sd_upload("CD112201.GCO", data, card=True)
-    assert f.runs("CD112201.GCO")[3] == "M104 S200"
+    assert f.runs("CD112201.GCO")[3] == "M104 S215"
 
 
 def test_empty_files_from_old_uploads_are_cleared(monkeypatch, tmp_path):

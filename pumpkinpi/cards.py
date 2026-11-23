@@ -686,7 +686,7 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
 # card, so G28 measures the paper's top: Z0 = paper surface, and each layer is laid on top of it.
 @dataclass
 class Pla:
-    nozzle: float = 200.0          # PLA. Video uses 190 C; 200 C soaks into watercolor paper better (first test didn't stick)
+    nozzle: float = 215.0          # PLA. Video uses 190 C; hotter flows into watercolor paper better. Ender-PLA: 190-230 C
     bed: float = 0.0               # paper: bed heater off
     fan: int = 255                 # part fan 100 % (layer 2+)
     first_fan: int = 0             # layer 1: fan off. 50 % cooled the PLA before it grabbed the paper (it curled up)
