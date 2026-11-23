@@ -836,8 +836,7 @@ $("sendBtn").onclick = async () => {
 // ---------- dinner menu: prompt -> branded products (Agent API) -> every label checked (Search + Decider) ----------
 function renderMenu() {
   if (state.mode !== "menu") return;
-  renderTiles();
-  if (state.menuBusy || !cards.title || !state.menuShown) { for (const id of ["stepCol", "ingCol", "srcCol"]) $(id).innerHTML = ""; return; }
+  if (state.menuBusy || !cards.title || !state.menuShown) { for (const id of ["stepCol", "ingCol", "srcCol"]) $(id).innerHTML = ""; renderTiles(); return; }
   const dishes = (cards.menu || []).map((d) => `<li><b>${esc(d.name)}</b>${d.recipe ? `<span>${esc(d.recipe)}</span>` : ""}</li>`).join("");
   const secs = Object.entries(cards.simple).map(([t, ls]) => `<h3>${esc(t)}</h3>${ls.map((l) => `<p class="mline">${esc(l)}</p>`).join("")}`).join("");
   $("stepCol").innerHTML = `<h2 class="rph">${esc(cards.title)}</h2>${secs}${dishes ? `<h3>How to make it</h3><ol class="dishes">${dishes}</ol>` : ""}`;
@@ -847,10 +846,15 @@ function renderMenu() {
   const seen = new Set();
   const srcs = (cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 2).map((u) => [ln.name, u]))
     .filter(([, u]) => u && !seen.has(u) && seen.add(u));
-  $("srcCol").innerHTML = `<h2 class="rph">Sources</h2><ol class="srcs">${srcs.length ? srcs.map(([n, u]) => `<li class="srcitem"><a href="${esc(u)}" target="_blank" rel="noopener">${favicon(u)}<span class="st"><b>${esc(n)}</b><span class="url">${esc(host(u))}</span></span></a></li>`).join("") : `<p class="muted">Tap Recheck on Cards to fetch the label links.</p>`}</ol>
-    <p class="muted small by"><img src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity Agent API, Search API + Decider</p>`;
+  const sci = state.science || {};
+  const facts = (sci.facts || []).map((f) => `<li class="srcitem fact"><a href="${esc(f.url)}" target="_blank" rel="noopener">${favicon(f.url)}<span class="st"><b>${esc(f.topic)}</b><span>${esc(f.fact)}</span><span class="url">${esc(f.source)} · ${esc(host(f.url))}</span></span></a></li>`).join("");
+  const sciHtml = sci.busy ? `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity deep research is reading CDC, FDA, NIH and PubMed…</p>`
+    : facts ? `<ol class="srcs">${facts}</ol>` : sci.error ? `<p class="muted">Research didn't finish: ${esc(sci.error)}</p>` : "";
+  $("srcCol").innerHTML = `<h2 class="rph">Sources</h2><h3>The science (CDC, FDA, NIH, research)</h3>${sciHtml}<h3>Product labels</h3><ol class="srcs">${srcs.length ? srcs.map(([n, u]) => `<li class="srcitem"><a href="${esc(u)}" target="_blank" rel="noopener">${favicon(u)}<span class="st"><b>${esc(n)}</b><span class="url">${esc(host(u))}</span></span></a></li>`).join("") : `<p class="muted">Tap Recheck on Cards to fetch the label links.</p>`}</ol>
+    <p class="muted small by"><img src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity Agent API (deep research), Search API + Decider</p>`;
+  renderTiles();
 }
-const menuSources = () => new Set((cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 1))).size;
+const menuSources = () => $("srcCol").querySelectorAll(".srcitem").length;
 
 // ---------- Recipe tiles: three short tiles; tap (or swipe in the popup) for details ----------
 const TILE_ICON = [I('<path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h4"/>'),
@@ -863,7 +867,7 @@ function renderTiles() {
     if (cards.title && state.menuShown) {
       const n = Object.values(cards.avoid).reduce((a, ls) => a + ls.length, 0);
       const items = Object.values(cards.simple).reduce((a, ls) => a + ls.length, 0);
-      subs = [`${items} dishes`, !cards.lines.length ? "Not checked" : n ? `${n} to avoid` : "Nothing to avoid", `${menuSources()} links`];
+      subs = [`${items} dishes`, !cards.lines.length ? "Not checked" : n ? `${n} to avoid` : "Nothing to avoid", state.science?.busy && !menuSources() ? "Researching…" : `${menuSources()} links`];
     }
   } else {
     const p = state.plan;
@@ -894,7 +898,7 @@ async function makeMenu() {
   const prompt = $("prompt").value.trim();
   if (!prompt || state.menuBusy) return;
   if (!state.live) return log("The menu is made on the Pi (Agent API + Search + Decider).");
-  state.menuPrompt = prompt; state.menuBusy = true; $("askBtn").disabled = true; renderMenu(); updateGate();
+  state.menuPrompt = prompt; state.menuBusy = true; state.science = null; $("askBtn").disabled = true; renderMenu(); updateGate();
   try {
     const r = await apiJson("/api/menu", { prompt });
     cards.lines = r.lines; state.menuShown = true; await loadCards(); log(`Menu ready: ${r.title}.`);
@@ -916,7 +920,17 @@ async function loadCards() {
     $("cardSide").hidden = one; if (one) cards.side = "front";
     if (!cards.guest && cards.guests.length) cards.guest = cards.guests[0];
     renderCards(); drawCard(); renderMenu(); updateGate();
+    if (state.menuShown && cards.lines.length) loadScience();
   } catch (e) { log(`Cards: ${e.message}`); }
+}
+// Deep research (Agent API, effort=high) on CDC / FDA / NIH / PubMed / USDA pages for this menu.
+async function loadScience() {
+  const key = `${cards.title}|${cards.prompt}`;
+  if (state.science && state.science.key === key && (state.science.busy || state.science.facts)) return;
+  state.science = { key, busy: true }; renderMenu();
+  try { const r = await apiJson("/api/menu/science", {}); if (state.science.key === key) state.science = { key, facts: r.facts || [] }; }
+  catch (e) { if (state.science.key === key) state.science = { key, facts: null, error: e.message }; }
+  renderMenu();
 }
 function renderCards() {
   $("cardGuests").innerHTML = cards.guests.map((g) =>
@@ -968,7 +982,7 @@ async function plaJob(path, body, what) {
         : `${what}… ${j.pct || 0}%. Stay next to the printer.`;
       if (!j.running) {
         $("cardMsg").textContent = j.error ? `Stopped: ${j.error}` :
-          path.endsWith("prep") ? "Homed and hot. Tape the card to the corner guide, then Print card." : `Card done${j.file ? ` (saved on the SD card as ${j.file})` : ""}. Let it cool a minute before lifting.`;
+          path.endsWith("prep") ? "Homed and hot. Tape the card to the corner guide, then Print card." : `Card done${j.file ? ` (saved on the SD card as ${j.file}${j.sd_file && !j.sd_file.startsWith(j.file) ? `, short name ${j.sd_file}` : ""})` : ""}. Let it cool a minute before lifting.`;
         break;
       }
     }

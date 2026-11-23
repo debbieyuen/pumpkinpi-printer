@@ -75,7 +75,10 @@ def test_card_file_heats_but_never_homes():
     from pumpkinpi.printer import card_file
     d = _dt.date(2026, 11, 22)
     assert sd_name(False, ["CD112201.GCO"], d, prefix="CD") == "CD112202.GCO"
-    out = card_file(["G90", "M109 S205", "G1 X10 Y10 E0.1 ; draw"], "CD112201.GCO")
+    from pumpkinpi.printer import card_label
+    assert card_label(["card_11_22_print01.gcode"], d) == "card_11_22_print02"
+    out = card_file(["G90", "M109 S205", "G1 X10 Y10 E0.1 ; draw"], "card_11_22_print01.gcode")
+    assert out[1] == "M117 card_11_22_print01"
     assert out[0] == "M302 P0" and "M109 S205" in out and "G1 X10 Y10 E0.1" in out
     with pytest.raises(FoodModeError):
         card_file(["G28"], "CD112201.GCO")

@@ -61,9 +61,9 @@ def has_key() -> bool:
         return False
 
 
-def post(client: httpx.Client, url: str, body: dict, retries: int = 3) -> dict:
+def post(client: httpx.Client, url: str, body: dict, retries: int = 3, timeout: float | None = None) -> dict:
     for attempt in range(retries + 1):
-        r = client.post(url, json=body)
+        r = client.post(url, json=body, **({"timeout": timeout} if timeout else {}))
         if r.status_code == 200:
             return r.json()
         if r.status_code in RETRY_STATUS and attempt < retries:
@@ -74,18 +74,29 @@ def post(client: httpx.Client, url: str, body: dict, retries: int = 3) -> dict:
 
 
 def agent(client: httpx.Client, *, instructions: str, input: str, schema: dict, name: str,
-          domains: list[str] | None = None) -> tuple[str, list[dict]]:
-    """One Agent API run with web search and JSON output. Returns (json_text, search_results)."""
+          domains: list[str] | None = None, effort: str | None = None) -> tuple[str, list[dict]]:
+    """One Agent API run with web search and JSON output. Returns (json_text, search_results).
+
+    effort="high": Perplexity's deep, source-heavy research setup (more search rounds, slower)."""
     tool: dict = {"type": "web_search"}
     if domains:
         tool["filters"] = {"search_domain_filter": domains}
-    data = post(client, AGENT_URL, {
+    body = {
         "model": AGENT_MODEL,
         "instructions": instructions,
         "input": input,
         "tools": [tool],
         "response_format": {"type": "json_schema", "json_schema": {"name": name, "schema": schema}},
-    })
+    }
+    if effort:
+        body["effort"] = effort
+    try:
+        data = post(client, AGENT_URL, body, timeout=600 if effort in ("high", "xhigh", "ultra") else None)
+    except RuntimeError as e:          # an effort level that rejects these options: plain run instead
+        if not effort or "-> 400" not in str(e):
+            raise
+        body.pop("effort")
+        data = post(client, AGENT_URL, body)
     text, results = "", []
     for item in data.get("output", []):
         if item.get("type") == "message":

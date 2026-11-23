@@ -41,6 +41,20 @@ class SDError(RuntimeError):
 #   DRMMDDNN.GCO  dry run (path 15 mm above the pie, no topping)
 #   CDMMDDNN.GCO  PLA menu card (heats the nozzle; run only after Heat & home)
 SD_NAME = re.compile(r"^[A-Z][A-Z0-9]{0,7}\.GCO$")
+# Spelled-out names (card_11_22_print01.gcode) only when the firmware reports LONG_FILENAME_WRITE in M115;
+# it is off in stock Marlin. https://marlinfw.org/docs/settings/lcd.html
+LONG_NAME = re.compile(r"^[a-z][a-z0-9_]{0,40}\.gcode$")
+
+
+def card_label(existing: list[str], today: dt.date | None = None) -> str:
+    """card_MM_DD_printNN: the spelled-out name shown in the app, on the printer screen and in gcode/."""
+    today = today or dt.date.today()
+    stem = f"card_{today:%m_%d}_print"
+    taken = {n.lower().rsplit(".", 1)[0] for n in existing}
+    for i in range(1, 100):
+        if f"{stem}{i:02d}" not in taken:
+            return f"{stem}{i:02d}"
+    raise SDError(f"99 cards named {stem}NN today already")
 
 
 def sd_name(dry_run: bool, existing: list[str], today: dt.date | None = None, prefix: str | None = None) -> str:
@@ -81,7 +95,7 @@ def card_file_safe(lines: list[str]) -> None:
 def card_file(lines: list[str], name: str) -> list[str]:
     """The exact lines written to the card for a PLA menu card: cold-extrusion guard on, then the drawing."""
     body = [ln.split(";")[0].strip() for ln in lines]
-    out = ["M302 P0", f"M117 PLA card {name[:-4]}", *[b for b in body if b]]
+    out = ["M302 P0", f"M117 {name.rsplit('.', 1)[0][:30]}", *[b for b in body if b]]
     card_file_safe(out)
     return out
 
@@ -143,6 +157,12 @@ class Printer:
         self.food_mode = False
         self.send("M302 P0")
 
+    def long_names(self) -> bool:
+        """True if the firmware can write long file names to the SD card (M115 Cap:LONG_FILENAME_WRITE:1)."""
+        if not hasattr(self, "_long"):
+            self._long = any(re.search(r"Cap:LONG_FILENAME_WRITE:1", x) for x in self.send("M115", wait_s=10))
+        return self._long
+
     # ---- microSD: upload over USB (M28/M29), then print from the card (M23/M24) ----
     def sd_list(self) -> dict[str, int]:
         """{8.3 NAME: size in bytes} from M20."""
@@ -163,7 +183,7 @@ class Printer:
         """Write `lines` to the card as `name`, then check the file size from M20.
 
         card=True: a PLA menu card file (may heat, never homes); otherwise a food file (no heat, no homing)."""
-        if not SD_NAME.match(name):
+        if not (SD_NAME.match(name) or (card and LONG_NAME.match(name))):
             raise SDError(f"{name!r} is not an 8.3 name like PP112601.GCO")
         (card_file_safe if card else file_safe)(lines)
         out = self.send("M21", wait_s=10)

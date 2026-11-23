@@ -729,6 +729,31 @@ def cards_check():
     return {"lines": lines}
 
 
+SCIENCE_FILE = ROOT / "captures" / "menu_science.json"
+
+
+@app.post("/api/menu/science")
+def menu_science():
+    """Deep research (Agent API, effort=high, CDC/FDA/NIH/PubMed/USDA only) behind this menu's allergens
+    and label words. Cached per menu; never changes a label verdict."""
+    from . import menu_science as ms
+    cfg = cards.load()
+    key = cards.menu_key(cfg)
+    if SCIENCE_FILE.exists():
+        saved = json.loads(SCIENCE_FILE.read_text())
+        if saved.get("key") == key and saved.get("facts"):
+            return saved
+    try:
+        with make_client() as c:
+            out = ms.research(c, cfg, guests()["guests"])
+    except Exception as e:  # noqa: BLE001 - extra reading; the label checks still stand
+        raise HTTPException(502, f"Research failed: {str(e)[:160]}")
+    out["key"] = key
+    SCIENCE_FILE.parent.mkdir(exist_ok=True)
+    SCIENCE_FILE.write_text(json.dumps(out, indent=2))
+    return out
+
+
 @app.post("/api/menu")
 def make_menu(req: MenuReq):
     """Prompt -> branded menu (Agent API) -> every product checked (Search API + Decider) -> cards."""
@@ -786,17 +811,19 @@ def run_stream(lines: list[str], phase: str) -> None:
 def run_card(lines: list[str]) -> None:
     """PLA card: write CDMMDDNN.GCO to the printer's microSD (copy in gcode/), print it from the card.
     Streams over USB if the SD write fails. Heat & home already ran with the bed empty."""
-    from .printer import SDError, card_file, sd_name
+    from .printer import SDError, card_file, card_label, sd_name
     job = state["job"]
     try:
         p = printer()
         p.pla_mode()
         try:
-            name = sd_name(False, list(p.sd_list()), prefix="CD")
-            data = card_file(lines, name)
+            on_sd = list(p.sd_list())
             GCODE_DIR.mkdir(exist_ok=True)
-            (GCODE_DIR / name).write_text("\n".join(data) + "\n")
-            job.update(phase="upload", file=name)
+            label = card_label([f.name for f in GCODE_DIR.iterdir()] + on_sd)
+            name = f"{label}.gcode" if p.long_names() else sd_name(False, on_sd, prefix="CD")
+            data = card_file(lines, f"{label}.gcode")
+            (GCODE_DIR / f"{label}.gcode").write_text("\n".join(data) + "\n")
+            job.update(phase="upload", file=label, sd_file=name)
             p.sd_upload(name, data, progress=lambda i, n: job.update(pct=round(40 * i / n)), stop=_stop.is_set, card=True)
             if _stop.is_set():
                 return
