@@ -289,3 +289,12 @@ def test_simple_card_prints_exact_products_with_ingredients_from_the_top():
     top = max(y for s_ in st for _, y in s_)
     H, m = cfg["card"].get("h", 178), cfg["card"].get("margin", 10)
     assert H - cards.TOP - 3 < top <= H - cards.TOP + 0.5      # starts TOP mm under the top edge, not at the edge
+
+
+def test_first_layer_slower_and_thicker_for_paper():
+    p = cards.Pla()
+    g = cards.card_gcode([[(0, 0), (10, 0)]], p)
+    draws = [x for x in g if x.startswith("G1 X")]
+    e1, e2 = (float(x.split("E")[1].split()[0]) for x in draws)
+    assert "F480" in draws[0] and abs(e1 / e2 - 1.3) < 0.01            # layer 1: 8 mm/s, 30 % more PLA
+    assert "M107" in g[g.index("G0 Z1.30 F600") - 1]                    # fan off for layer 1

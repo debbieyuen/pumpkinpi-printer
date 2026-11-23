@@ -695,7 +695,8 @@ class Pla:
     z_adjust: float = 0.0          # extra Z above the paper the probe found (+0.05 if it scrapes, -0.05 if it won't stick)
     layer: float = 0.2             # thin lines: 2 layers of 0.2 mm = 0.4 mm raised text
     first_z: float = 0.1           # nozzle height for layer 1 above the probed paper: squishes PLA into the paper texture
-    first_feed: float = 600.0      # mm/min on layer 1 (10 mm/s) so it grabs
+    first_feed: float = 480.0      # mm/min on layer 1 (8 mm/s): slower = more time to soak into the paper
+    first_flow: float = 1.3        # layer 1 lays 30 % more PLA so it presses into the paper's texture
     layers: int = 2
     line_w: float = 0.45
     feed: float = 900.0            # mm/min drawing (15 mm/s: clean letters on textured paper)
@@ -734,10 +735,11 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
            # here is a paper-thickness lower: go to Z0.05 and push a thick line so it lands and wipes the nozzle.
            "G1 Z0.05 F600", f"G1 Y{p.prime_y + 70:.1f} E12 F400", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600"]
     for n in range(p.layers):
-        # layer 1 at half fan so PLA grabs the paper without heating it enough to curl; full fan after
+        # layer 1 fan off so the PLA grabs the paper (tape loops under the card keep it flat); full fan after
         out.append(f"M106 S{p.first_fan if n == 0 else p.fan}" if n or p.first_fan else "M107")
         z = p.z_adjust + p.first_z + p.layer * n
         feed = p.first_feed if n == 0 else p.feed
+        flow = p.first_flow if n == 0 else 1.0
         zt = z + p.hop
         out.append(f"G0 Z{zt:.2f} F600")
         for st in strokes:
@@ -747,7 +749,7 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
             out += [f"G0 X{p.card_x + x:.2f} Y{p.card_y + y:.2f} F{p.travel:.0f}", f"G1 Z{z:.2f} F600",
                     f"G1 E{p.retract:.2f} F2400"]
             for (ax, ay), (bx, by) in zip(st, st[1:]):
-                e = math.hypot(bx - ax, by - ay) * p.e_per_mm
+                e = math.hypot(bx - ax, by - ay) * p.e_per_mm * flow
                 out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{feed:.0f}")
             out += [f"G1 E-{p.retract:.2f} F2400", f"G0 Z{zt:.2f} F600"]
     out += ["M104 S0", "M140 S0", "M107", f"G0 Z{p.park_z:.1f} F600",
