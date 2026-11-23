@@ -186,7 +186,8 @@ def test_unsure_counts_as_dont_eat():
 def test_michael_unsure_sauces_are_a_no_with_reason():
     cfg = cards.load()
     t = [r[0] for r in cards.simple_rows(cfg, _lines(cfg), "Michael")]
-    assert "Lee Kum Kee Satay: coconut" in t and "Bull Head Sha cha: unnamed spices" in t
+    j = " ".join(x.strip() for x in t)       # long lines wrap at the bigger letter sizes
+    assert "Lee Kum Kee Satay: coconut" in j and "Bull Head Sha cha: unnamed spices" in j
     assert not any("check label" in x.lower() for x in t if x not in cards.OK_LINES)
 
 
@@ -250,7 +251,7 @@ def test_simple_card_like_the_note():
     L = _lines(cfg)
     t = [r[0] for r in cards.simple_rows(cfg, L, "Debbie")]
     assert t[0] == "Debbie" and "Hot Pot Menu:" in t and "Dessert:" in t and "Allergens:" in t
-    assert "Lee Kum Kee Satay: peanut, sesame" in t
+    assert "Lee Kum Kee Satay: peanut, sesame" in " ".join(x.strip() for x in t)
     assert not any("check label" in x.lower() for x in t if x not in cards.OK_LINES)         # every item decided YES/NO
     assert "Everything else is okay." in t and any("Little Sheep lamb" in x for x in t)
     assert any("Mrs. Smith" in x for x in t) and any("Straus" in x for x in t)
@@ -309,3 +310,19 @@ def test_prime_line_drops_by_measured_paper():
     check_bounds(g, p)
     assert "M211 S0" not in card_gcode([[(20, 20), (40, 20)]], Pla())
     assert "G1 Z-0.55 F600" in card_gcode([[(20, 20), (40, 20)]], Pla(paper_mm=5))   # clamped to 0.6
+
+
+def test_card_letters_never_below_readable_size_and_allergens_always_kept():
+    cfg = cards.load()
+    cfg["card"].update({"simple_mm": 3.0, "simple_avoid_mm": 2.5})     # an old cards.json with tiny letters
+    L = _lines(cfg)
+    rows = cards.simple_rows(cfg, L, "Debbie")
+    assert min(r[1] for r in rows) >= cards.INGREDIENT_MIN_MM
+    assert min(r[1] for r in rows if r[0] != "Debbie") >= cards.SIMPLE_AVOID_MIN_MM or any(
+        r[1] == cards.INGREDIENT_MIN_MM for r in rows)
+    # Too full: cut the menu list before ever cutting an allergen line
+    short = [r[0] for r in cards.simple_rows(cfg, L, "Debbie", ingredients=False, menu=False)]
+    joined = " ".join(x.strip() for x in short)
+    assert "Full menu on the back." in short and "Hot Pot Menu:" not in short
+    assert "Lee Kum Kee Satay: peanut, sesame" in joined and "But double check labels." in short
+    assert cards.layout(cfg, L, "Debbie", "front")

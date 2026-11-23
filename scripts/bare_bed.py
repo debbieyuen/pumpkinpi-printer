@@ -17,6 +17,10 @@ pla = data.setdefault("pla", {})
 if pla.get("paper_mm"):
     pla["paper_measured"] = pla["paper_mm"]
 pla.update({"surface": "bed", "bed": 50, "nozzle": 210, "paper_mm": 0.0, "first_z": 0.2, "first_flow": 1.0,
-            "first_feed": 1200, "layers": 3, "z_adjust": 0.0})
+            "first_feed": 1200, "layers": 3, "z_adjust": 0.0,
+            # Card text is mostly strokes under 4 mm, each printing ~0.15 mm of filament. A 1.5 mm retract and a
+            # slow 4 mm lift on every one starves the start of the next stroke and drags the last one off the bed.
+            # Small retract, short pause so the line sets, low hop: the string breaks instead of pulling.
+            "retract": 0.8, "end_pause": 0.15, "hop": 0.8, "hop_feed": 1200})
 path.write_text(json.dumps(data, indent=1) + "\n")
 print("machine.json pla: bare bed, bed 50 C, nozzle 210 C, 3 layers. Nothing on the bed. Back to paper: python3 scripts/paper_6x9.py")

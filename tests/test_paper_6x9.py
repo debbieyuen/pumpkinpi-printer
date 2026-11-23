@@ -13,6 +13,14 @@ def test_6x9_card_draws_inside_bed():
     assert ys and 2 <= min(ys) and max(ys) <= 215
 
 
+def test_end_pause_comes_after_retract_and_before_lift():
+    st = [[(10, 10), (12, 10)]]
+    g = cards.card_gcode(st, cards.Pla(bed=50, retract=0.8, end_pause=0.15, hop=0.8, layers=1))
+    i = g.index("G4 P150")
+    assert g[i - 1] == "G1 E-0.80 F2700" and g[i + 1].startswith("G0 Z")
+    assert all("G4" not in ln for ln in cards.card_gcode(st, cards.Pla(layers=1)))   # paper default unchanged
+
+
 def test_whole_foods_ok_but_not_mixtures():
     for n in ["Diamond Crystal Kosher Salt, 3 lb box", "Vital Farms Pasture-Raised Large Eggs 12 ct", "Bone-in leg of lamb"]:
         assert set(cards.term_status({"item": n}, None).values()) == {"safe"}, n

@@ -6,9 +6,9 @@
   "unsure_note": "Brands checked by Perplexity"
  },
  "card": {
-  "w": 127,
-  "h": 178,
-  "margin": 8,
+  "w": 152.4,
+  "h": 228.6,
+  "margin": 15,
   "text_mm": 4.2,
   "line_gap": 1.5,
   "back_mm": 3.4,
@@ -19,8 +19,8 @@
   "detail_gap": 1.35,
   "style": "simple",
   "one_avoid_mm": 3.8,
-  "simple_mm": 3.9,
-  "simple_avoid_mm": 3.4
+  "simple_mm": 5.5,
+  "simple_avoid_mm": 5.0
  },
  "guests": [
   "Debbie",
