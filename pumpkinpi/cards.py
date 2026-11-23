@@ -712,6 +712,7 @@ class Pla:
     park_x: float = 110.0
     park_y: float = 215.0          # bed forward at the end so you can peel the card
     park_z: float = 40.0
+    probe_temp: float = 150.0      # nozzle warm but not oozing while G29 probes the paper
     paper_z: float = 0.0           # old setting (Z of the paper over a bare-bed home); no longer used
 
     @classmethod
@@ -726,9 +727,12 @@ class Pla:
 
 def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
     """One file the printer runs on its own from the microSD: heat, home ON the card, prime off it, draw."""
-    out = [f"M140 S{p.bed:.0f}", f"M104 S{p.nozzle:.0f}", "M107", "G90", "M83",
+    out = [f"M140 S{p.bed:.0f}", f"M104 S{p.probe_temp:.0f}", "M107", "G90", "M83",
            "G28",                                     # CR Touch taps the card at the bed center: Z0 = paper top
-           "M420 S1",                                 # saved bed mesh
+           # Probe the PAPER in a 4x4 grid. One tap at the center wasn't enough: away from it the nozzle was too
+           # high and the PLA curled in the air. The mesh stays in memory only; M501 at the end restores yours.
+           # Nozzle held at 150 C while probing so it can't ooze on the card.
+           "G29",
            f"G0 Z10 F600", f"G0 X{p.prime_x:.1f} Y{p.prime_y:.1f} F{p.travel:.0f}",
            f"M109 S{p.nozzle:.0f}",
            # prime line on the bare bed left of the card (card starts at X34). Z0 is the paper top, so the bed
@@ -753,13 +757,15 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
                 out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{feed:.0f}")
             out += [f"G1 E-{p.retract:.2f} F2400", f"G0 Z{zt:.2f} F600"]
     out += ["M104 S0", "M140 S0", "M107", f"G0 Z{p.park_z:.1f} F600",
-            f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}", "M400", "M84", "M117 Card done"]
+            f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}", "M400",
+            "M501",                                   # back to the saved bed mesh (the paper mesh was temporary)
+            "M84", "M117 Card done"]
     check_bounds(out, p)
     return out
 
 
 def minutes(lines: list[str], p: Pla) -> float:
-    """Rough print time: drawing + travel + ~3 min to heat and home."""
+    """Rough print time: drawing + travel + ~5 min to heat, home and probe the paper."""
     import re as _re
     t, x, y = 0.0, None, None
     for ln in lines:
@@ -769,7 +775,7 @@ def minutes(lines: list[str], p: Pla) -> float:
             if x is not None:
                 t += math.hypot(nx - x, ny - y) / (float(m[3]) if m[3] else p.travel)
             x, y = nx, ny
-    return round(t + 3, 0)
+    return round(t + 5, 0)          # + ~3 min heat/home, ~2 min G29 on the paper
 
 
 def check_bounds(lines: list[str], p: Pla) -> None:

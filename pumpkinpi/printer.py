@@ -81,9 +81,10 @@ def file_safe(lines: list[str]) -> None:
 
 
 # PLA card files are started from the printer's screen, so they heat and home themselves. G28 taps the
-# CR Touch once on the paper card (bed center) to find its top; no bed probing/mesh rebuild, no PID,
-# no Z-offset change, and cold extrusion stays blocked. Paper only on the bed: never food.
-CARD_BLOCKED = re.compile(r"^(G29|G30|G34|G35|M48|M303|M851|M500|M302 P1)\b", re.I)
+# CR Touch on the paper card (bed center) and a plain G29 probes the paper in a grid (kept in memory only:
+# M500 stays blocked, and the file ends with M501 to reload the saved mesh). No PID, no Z-offset change,
+# and cold extrusion stays blocked. Paper only on the bed: never food.
+CARD_BLOCKED = re.compile(r"^(G29\s*\S|G30|G34|G35|M48|M303|M851|M500|M302 P1)", re.I)
 
 
 def card_file_safe(lines: list[str]) -> None:

@@ -100,6 +100,7 @@ def test_card_file_homes_on_card_but_never_probes_bed():
     assert out[2] == "M117 card_11_22_print01" and out[0].startswith("; card_11_22_print01")
     assert out[1] == "M302 P0" and "M109 S205" in out and "G1 X10 Y10 E0.1" in out
     assert "G28" in card_file(["G28", "M420 S1"], "CD112201.GCO")
-    for bad in ("G29", "M302 P1", "M851 Z-1", "M500"):
+    assert card_file(["G28", "G29", "M501"], "CD112201.GCO")         # plain paper probe is allowed
+    for bad in ("G29 P5", "M302 P1", "M851 Z-1", "M500"):
         with pytest.raises(FoodModeError):
             card_file([bad], "CD112201.GCO")
