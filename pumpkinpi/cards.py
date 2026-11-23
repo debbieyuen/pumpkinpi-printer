@@ -140,7 +140,7 @@ def item_lines(products: list[tuple[str, object]], results: dict[str, dict]) -> 
     out, fresh = [], []
     for dish, p in products:
         st = term_status(p, results.get(prod_name(p)))
-        src = [p["source"]] if isinstance(p, dict) and p.get("source") else []
+        src = [p[k] for k in ("source", "label_url") if isinstance(p, dict) and p.get(k)]   # shown, not "cited"
         for c in ((results.get(prod_name(p)) or {}).get("checks") or {}).values():   # Search API links per allergen
             src += [u for u in (c.get("sources") or []) if u and u not in src]
         src = ([WHOLE_SRC] if is_whole(p) else []) + src[:4]

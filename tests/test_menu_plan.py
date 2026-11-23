@@ -107,3 +107,22 @@ def test_agent_label_is_printed_but_never_a_cited_source():
 
 def test_desserts_never_fish_rule_in_agent_instructions():
     assert "Desserts must never contain fish" in menu_plan.INSTRUCTIONS
+
+
+def test_card_products_are_exactly_the_recipe_ingredients():
+    plan = {"title": "Pie", "_urls": {"https://www.libbys.com/recipes/libbys-famous-pumpkin-pie"}, "products": [
+        {"item": "Libby's 100% Pure Pumpkin, 15 oz", "brand": "Libby's", "tag": "pumpkin", "part": "dessert",
+         "section": "Dessert", "ingredients": "Pumpkin."},
+        {"item": "Marie Callender's Pumpkin Pie, 36 oz", "brand": "Marie Callender's", "tag": "pie",
+         "part": "dessert", "section": "Dessert"}],          # not in the recipe: must not reach the card
+        "recipes": [{"dish": "Pumpkin pie", "url": "https://www.libbys.com/recipes/libbys-famous-pumpkin-pie",
+                     "steps": ["Bake."], "ingredients": [
+                         {"amount": "1 can (15 oz)", "item": "Libby's 100% pure pumpkin, 15 oz"},
+                         {"amount": "2 large", "item": "Vital Farms Pasture-Raised Large Eggs, 12 ct"}]}]}
+    m = menu_plan.to_cards(plan)
+    items = [p["item"] for d in m["menu"] for p in d["products"]]
+    assert items == ["Libby's 100% Pure Pumpkin, 15 oz", "Vital Farms Pasture-Raised Large Eggs, 12 ct"]
+    assert m["recipes"][0]["ingredients"] == ["1 can (15 oz) Libby's 100% Pure Pumpkin",
+                                              "2 large Vital Farms Pasture-Raised Large Eggs"]
+    assert m["recipes"][0]["url"] == "https://www.libbys.com/recipes/libbys-famous-pumpkin-pie"
+    assert [d["name"] for d in m["menu"]] == ["Dessert"]

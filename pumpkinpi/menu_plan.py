@@ -36,8 +36,11 @@ sold in US grocery stores (San Francisco Bay Area): brand + product name + size,
 - tag: 1-2 lowercase words for the card ("beef", "broth", "apple pie").
 - At most 14 main products, 6 dessert products and 8 sauces.
 - title: 1-3 words naming the meal ("Hot pot", "Roast chicken").
-- recipes: one home recipe per dish the user asked for (e.g. "Baked lamb", "Pumpkin pie"). Use the products
-  you picked. ingredients: amount + ingredient ("2 lb bone-in lamb leg", "1 can Libby's pumpkin, 15 oz").
+- recipes: one home recipe per dish the user asked for (e.g. "Baked lamb", "Pumpkin pie").
+  ingredients: EVERY ingredient of the recipe, each {amount, item}: amount "1 can (15 oz)", "2 large",
+  "1/2 cup"; item = the exact "item" string of one of your products (copy it character for character).
+  Every product must be used by a recipe, and every recipe ingredient must be a product (eggs, sugar and
+  salt too: pick the exact brand). Dipping sauces belong in the recipe of the dish they are served with.
   steps: 4-8 short steps with temperatures and times. url: the recipe page you based it on (a real page
   from your web search). Keep sugar modest where you can; never claim the dish is allergen-free.
 If the request is not a meal, return no products and say why in note."""
@@ -66,7 +69,10 @@ SCHEMA = {
             "type": "object",
             "properties": {
                 "dish": {"type": "string"}, "serves": {"type": "string"},
-                "ingredients": {"type": "array", "items": {"type": "string"}},
+                "ingredients": {"type": "array", "items": {
+                    "type": "object",
+                    "properties": {"amount": {"type": "string"}, "item": {"type": "string"}},
+                    "required": ["amount", "item"]}},
                 "steps": {"type": "array", "items": {"type": "string"}},
                 "url": {"type": "string"},
             },
@@ -93,9 +99,9 @@ SIZE_RX = re.compile(r"(,\s*|\s+)\(?\d[\d.,/ ]*\s*(fl\.? ?oz|oz|lb|lbs|g|kg|ml|l
 def card_word(p: dict) -> str:
     """The exact product name, without the package size: "Libby's 100% Pure Pumpkin". Fresh food: "Bok choy"."""
     item, brand = p["item"].strip(), p.get("brand", "").strip()
+    name = SIZE_RX.sub("", item).strip(" ,") or item
     if not brand:
-        return item[:1].upper() + item[1:]
-    name = SIZE_RX.sub("", item).strip(" ,")
+        return name[:1].upper() + name[1:]
     return name if brand.lower().split()[0] in name.lower() else f"{brand} {name}"
 
 
@@ -115,6 +121,7 @@ def to_cards(plan: dict) -> dict:
     urls = plan.get("_urls")
     menu: dict[str, list[dict]] = {}
     sauces: list[dict] = []
+    plan = link_recipes(plan)
     for p in plan.get("products", []):
         prod = {"item": p["item"].strip(), "tag": p.get("tag", "").strip() or p["item"].strip()}
         if p.get("brand", "").strip():
@@ -136,7 +143,42 @@ def to_cards(plan: dict) -> dict:
     return {"title": plan.get("title", "").strip() or "Dinner", "prompt": plan.get("prompt", ""),
             "menu": [{"name": sec, "products": items} for sec, items in menu.items()],
             "dessert": None, "more": [], "examples": [dict(x) for x in EXAMPLES], "sauces": sauces, "simple": simple, "avoid_extra": [],
-            "recipes": clean_recipes(plan.get("recipes") or [], plan.get("_urls"))}
+            "recipes": clean_recipes(plan.get("recipes") or [], urls)}
+
+
+def _key(s: str) -> str:
+    return re.sub(r"[^a-z0-9%]+", " ", s.lower()).strip()
+
+
+def link_recipes(plan: dict) -> dict:
+    """Make the card's products exactly the recipes' ingredients.
+
+    Each recipe ingredient {amount, item} points at a product. A product no recipe uses is dropped; a recipe
+    ingredient with no product becomes its own (unbranded) product, so it still gets checked and printed.
+    The recipe's ingredient lines are rewritten from those products: "1 can (15 oz) Libby's 100% Pure Pumpkin"."""
+    recipes = plan.get("recipes") or []
+    if not any(isinstance(i, dict) for r in recipes for i in r.get("ingredients") or []):
+        return plan                                   # older plan (plain strings): nothing to link
+    by = {_key(p["item"]): p for p in plan.get("products", []) if p.get("item", "").strip()}
+    used: dict[str, dict] = {}
+    out_r = []
+    for r in recipes:
+        part = "dessert" if any((by.get(_key(i.get("item", ""))) or {}).get("part") == "dessert"
+                                for i in r.get("ingredients") or [] if isinstance(i, dict)) else "main"
+        lines = []
+        for i in r.get("ingredients") or []:
+            if not isinstance(i, dict):
+                i = {"amount": "", "item": str(i)}
+            k = _key(i.get("item", ""))
+            if not k:
+                continue
+            p = by.get(k) or {"item": i["item"].strip(), "brand": "", "tag": i["item"].strip(), "part": part,
+                              "section": "Dessert" if part == "dessert" else (plan.get("title") or "Dinner")}
+            used.setdefault(k, p)
+            word = card_word({"item": p["item"], "brand": p.get("brand", "")})
+            lines.append(f"{i.get('amount', '').strip()} {word}".strip())
+        out_r.append({**r, "ingredients": lines})
+    return {**plan, "recipes": out_r, "products": list(used.values())}
 
 
 def clean_recipes(recipes: list[dict], urls: set[str] | None = None) -> list[dict]:
