@@ -493,3 +493,14 @@ select.pick,select.guestpick{-webkit-appearance:none;appearance:none;padding-rig
 @media (orientation:portrait){.rcpcols{grid-template-columns:1fr}}
 .rsteps{padding-left:1.3rem;margin:.2rem 0}.rsteps li{margin:.25rem 0;line-height:1.4}
 .achart th[scope=row] small{display:block;font-weight:500;color:var(--muted);font-size:.8rem}.achart tr.ex{background:color-mix(in srgb,var(--peach) 10%,transparent)}
+.achart td.maybe{color:#5c4500}
+.achart td.maybe,.legend dt.maybe{--y:#ffd84d}
+.achart td.maybe{background:color-mix(in srgb,var(--y) 35%,transparent)}
+.achart td.maybe small{color:#5c4500}
+.legend{display:flex;flex-direction:column;gap:.3rem;margin:.8rem 0 0;font-size:.92rem}
+.legend div{display:flex;gap:.6rem;align-items:baseline}
+.legend dt{flex:none;min-width:9.5rem;font-weight:700;padding:.1rem .5rem;border-radius:.4rem;text-align:center}
+.legend dt.ok{color:#1b6e3a;background:#e3f3e8}.legend dt.no{color:#b3261e;background:#fbe4e2}
+.legend dt.maybe{color:#5c4500;background:var(--y)}
+.legend dd{margin:0;color:var(--ink,#1d2b2a)}
+.achart tr.exhead th{padding-top:1.1rem;font-size:.85rem;color:#b3261e;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #f3c9c5}

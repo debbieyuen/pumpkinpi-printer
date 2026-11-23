@@ -846,10 +846,16 @@ function renderMenu() {
     ${r.url ? `<a class="rcpsrc" href="${esc(r.url)}" target="_blank" rel="noopener">${favicon(r.url)} ${esc(host(r.url))}</a>` : ""}</section>`).join("");
   $("stepCol").innerHTML = `<h2 class="rph">${esc(cards.title)}</h2>${recs || `<p class="muted">No recipe yet. Tap Make again to get one.</p>`}`;
   const ch = cards.chart || { guests: [], rows: [] };
-  const cell = (c) => c.v === "ok" ? `<td class="ok">✓ OK</td>` : `<td class="no">✗ NO${c.why ? `<small>${esc(c.why)}</small>` : ""}</td>`;
+  const cell = (c) => c.v === "ok" ? `<td class="ok">✓ YES</td>`
+    : c.v === "maybe" ? `<td class="maybe">! MAY CONTAIN${c.why ? `<small>${esc(c.why)}</small>` : ""}</td>`
+    : `<td class="no">✗ NO${c.why ? `<small>${esc(c.why)}</small>` : ""}</td>`;
+  const rowsOf = (rows) => rows.map((r) => `<tr class="${r.part === "example" ? "ex" : ""}"><th scope="row">${esc(r.name)}</th>${ch.guests.map((g) => cell(r.cells[g] || { v: "no" })).join("")}</tr>`).join("");
   const table = ch.rows.length ? `<table class="achart"><thead><tr><th>Ingredient</th>${ch.guests.map((g) => `<th>${esc(g)}</th>`).join("")}</tr></thead>
-    <tbody>${ch.rows.map((r) => `<tr class="${r.part === "example" ? "ex" : ""}"><th scope="row">${esc(r.name)}${r.part === "example" ? `<small>Example (not on the menu)</small>` : ""}</th>${ch.guests.map((g) => cell(r.cells[g] || { v: "no" })).join("")}</tr>`).join("")}</tbody></table>
-    <p class="muted small">NO includes "may have": no clear label. Everything else is okay. But double check labels.</p>` : "";
+    <tbody>${rowsOf(ch.rows.filter((r) => r.part !== "example"))}</tbody>
+    ${ch.rows.some((r) => r.part === "example") ? `<tbody class="avoid"><tr class="exhead"><th colspan="${ch.guests.length + 1}">Ingredients to avoid</th></tr>${rowsOf(ch.rows.filter((r) => r.part === "example"))}</tbody>` : ""}</table>
+    <dl class="legend"><div><dt class="ok">YES</dt><dd>Safe to eat. Still glance at the package label.</dd></div>
+      <div><dt class="no">NO</dt><dd>Has nuts or fish this guest can't eat.</dd></div>
+      <div><dt class="maybe">MAY CONTAIN</dt><dd>Unclear label or shared equipment. Read the package first.</dd></div></dl>` : "";
   $("ingCol").innerHTML = `<h2 class="rph">Allergies</h2>${cards.lines.length ? table : `<p class="muted">Not checked yet.</p>`}`;
   const seen = new Set();
   const srcs = (cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 2).map((u) => [ln.name, u]))

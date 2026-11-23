@@ -476,7 +476,7 @@ def product_name(ln: dict) -> str:
 
 
 def chart(cfg: dict, lines: list[dict]) -> dict:
-    """Ingredient x guest chart: "ok" or "no" per cell (unsure counts as no), with what's in it."""
+    """Ingredient x guest chart: "ok" (YES), "no" (has it) or "maybe" (MAY CONTAIN: unclear label) per cell."""
     guests = [g for g, a in (cfg.get("allergies") or {}).items() if a]
     rows = []
     for ln in lines:
@@ -486,8 +486,8 @@ def chart(cfg: dict, lines: list[dict]) -> dict:
                 mine = cfg["allergies"][g]
                 found = [t for t in mine if it["terms"].get(t) == "found"]
                 maybe = [t for t in mine if it["terms"].get(t) == "unsure"]
-                cells[g] = {"v": "no" if found or maybe else "ok",
-                            "why": ", ".join(found + [f"may have {t}" for t in maybe])}
+                cells[g] = {"v": "no" if found else "maybe" if maybe else "ok",
+                            "why": ", ".join(found or maybe)}
             mt = re.match(r"(.+?) \((.+?)\)$", it["name"])        # "broth (Haidilao)" -> "Haidilao broth"
             rows.append({"name": f"{mt[2]} {mt[1]}" if mt else it["name"], "part": ln.get("part", ""), "cells": cells})
     return {"guests": guests, "rows": rows}
