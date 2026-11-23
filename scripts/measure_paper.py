@@ -18,17 +18,19 @@ BARE = (15, 110)    # probe point on the bare bed
 
 
 def tap(p: Printer, x: float, y: float) -> float:
-    for ln in p.send(f"G30 X{x} Y{y}", wait_s=60):
+    out = p.send(f"G30 X{x} Y{y}", wait_s=60)
+    for ln in out:
         m = re.search(r"Bed X:.*Z:\s*(-?[\d.]+)", ln)
         if m:
             return float(m.group(1))
-    raise RuntimeError(f"no reading at X{x} Y{y} (out of reach?)")
+    sys.exit(f"No reading at X{x} Y{y}. The printer said: {out}\nProbe offset: {p.send('M851')}")
 
 
 p = Printer()
 p.pla_mode()
 for cmd in ("M104 S0", "M140 S0", "G90", "G28"):
     p.send(cmd, wait_s=180)
+print("probe offset:", p.send("M851"))
 on = [tap(p, *PAPER) for _ in range(2)]
 off = [tap(p, *BARE) for _ in range(2)]
 p.send("G0 Z10 F600")
