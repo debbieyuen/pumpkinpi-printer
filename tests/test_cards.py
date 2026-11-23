@@ -31,6 +31,7 @@ def test_card_fits_and_gcode_stays_on_card():
     g = cards.card_gcode(st, p)
     # standalone file: bed off, heat, home ON the card, then prime off the card before drawing
     assert g.index("M140 S0") < g.index("G28") < g.index("M109 S190") < g.index("M106 S255")
+    assert g.index("G1 Z0.20 F600") < g.index("M106 S255")      # fan off on the first layer
     assert g.index("M420 S1") > g.index("G28") and "G29" not in g
     assert "M104 S0" in g[-9:] and g[-1] == "M117 Card done"
     zs = [float(w[1:]) for ln in g if ln.startswith(("G0", "G1")) for w in ln.split()[1:] if w[0] == "Z"]

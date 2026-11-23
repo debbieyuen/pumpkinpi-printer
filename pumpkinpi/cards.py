@@ -701,9 +701,10 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
            f"G0 Z10 F600", f"G0 X{p.prime_x:.1f} Y{p.prime_y:.1f} F{p.travel:.0f}",
            f"M109 S{p.nozzle:.0f}",
            # prime line on the bare bed left of the card (card starts at X34): wipes the ooze off the nozzle
-           "G1 Z0.3 F600", f"G1 Y{p.prime_y + 70:.1f} E5 F600", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600",
-           f"M106 S{p.fan}"]
+           "G1 Z0.3 F600", f"G1 Y{p.prime_y + 70:.1f} E5 F600", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600"]
     for n in range(p.layers):
+        # fan off for the first layer so the PLA grabs the paper; full fan after (video: keeps paper from warping)
+        out.append("M107" if n == 0 else f"M106 S{p.fan}")
         z = p.z_adjust + p.layer * (n + 1)
         zt = z + p.hop
         out.append(f"G0 Z{zt:.2f} F600")
