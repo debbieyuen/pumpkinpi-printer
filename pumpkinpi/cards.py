@@ -338,6 +338,9 @@ def back_rows(cfg: dict) -> list[tuple]:
     return rows
 
 
+TOP = 35.0     # mm from the card's top edge to the first line on top-aligned cards
+
+
 def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.0,
               top: bool = False) -> tuple[list[Stroke], float]:
     """Rows of (text, height, font, centered, step to next baseline), block centered top to bottom
@@ -345,7 +348,11 @@ def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.
     total = sum(r[4] for r in rows[:-1]) + rows[-1][1] + extra
     if total > H - 2 * m:
         raise ValueError(f"Doesn't fit the card ({total:.0f} mm of {H - 2 * m:.0f}). Use fewer dishes or smaller text.")
-    y = H - (m if top else (H - total) / 2) - rows[0][1]
+    # top=True starts TOP mm under the card's top edge. Not closer: that edge sits at the back of the bed, far
+    # from the probe point at the bed center, and the first test card's strokes curled up in the air there.
+    y = H - (max(m, TOP) if top else (H - total) / 2) - rows[0][1]
+    if top and total > H - m - max(m, TOP):
+        raise ValueError(f"Doesn't fit the card ({total:.0f} mm). Use fewer dishes or smaller text.")
     out: list[Stroke] = []
     for i, (txt, h, font, center, step) in enumerate(rows):
         st = fit_line(txt, h, W - 2 * m, font)
@@ -682,7 +689,7 @@ class Pla:
     nozzle: float = 200.0          # PLA. Video uses 190 C; 200 C soaks into watercolor paper better (first test didn't stick)
     bed: float = 0.0               # paper: bed heater off
     fan: int = 255                 # part fan 100 % (layer 2+)
-    first_fan: int = 128           # layer 1: 50 %. Off made the paper warp; 100 % (video) can hurt sticking
+    first_fan: int = 0             # layer 1: fan off. 50 % cooled the PLA before it grabbed the paper (it curled up)
     card_x: float = 15.0           # printer X/Y of the card's front-left corner (6x9: run scripts/paper_6x9.py)
     card_y: float = 20.0
     z_adjust: float = 0.0          # extra Z above the paper the probe found (+0.05 if it scrapes, -0.05 if it won't stick)
@@ -728,7 +735,7 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
            "G1 Z0.05 F600", f"G1 Y{p.prime_y + 70:.1f} E12 F400", f"G1 E-{p.retract:.2f} F2400", f"G0 Z{p.hop + 1:.1f} F600"]
     for n in range(p.layers):
         # layer 1 at half fan so PLA grabs the paper without heating it enough to curl; full fan after
-        out.append(f"M106 S{p.first_fan if n == 0 else p.fan}")
+        out.append(f"M106 S{p.first_fan if n == 0 else p.fan}" if n or p.first_fan else "M107")
         z = p.z_adjust + p.first_z + p.layer * n
         feed = p.first_feed if n == 0 else p.feed
         zt = z + p.hop

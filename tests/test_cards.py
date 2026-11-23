@@ -31,7 +31,7 @@ def test_card_fits_and_gcode_stays_on_card():
     g = cards.card_gcode(st, p)
     # standalone file: bed off, heat, home ON the card, then prime off the card before drawing
     assert g.index("M140 S0") < g.index("G28") < g.index("M109 S200") < g.index("M106 S255")
-    assert g.index("M106 S128") < g.index("G1 Z0.10 F600") < g.index("M106 S255")   # half fan on layer 1
+    assert g.index("G1 Z0.10 F600") < g.index("M106 S255")      # fan off on the first layer
     assert g.index("M420 S1") > g.index("G28") and "G29" not in g
     assert "M104 S0" in g[-9:] and g[-1] == "M117 Card done"
     zs = [float(w[1:]) for ln in g if ln.startswith(("G0", "G1")) for w in ln.split()[1:] if w[0] == "Z"]
@@ -288,4 +288,4 @@ def test_simple_card_prints_exact_products_with_ingredients_from_the_top():
     st = cards.layout(cfg, [ln], "Debbie", "front")
     top = max(y for s_ in st for _, y in s_)
     H, m = cfg["card"].get("h", 178), cfg["card"].get("margin", 10)
-    assert top > H - m - 3                     # text starts right under the top margin
+    assert H - cards.TOP - 3 < top <= H - cards.TOP + 0.5      # starts TOP mm under the top edge, not at the edge
