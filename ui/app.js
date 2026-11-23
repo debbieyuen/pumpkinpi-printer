@@ -259,6 +259,7 @@ document.querySelector(".tabs").onclick = (e) => { const t = e.target.closest(".
 
 // ---------- 1. Agent API: prompt -> plan ----------
 async function ask() {
+  const stay = document.body.dataset.view === "design";   // asked from Design: keep showing the pie while it works
   const prompt = (boxMode === "make" ? $("prompt").value : state.prompt || "").trim();
   if (!prompt || state.busy) return;
   const layering = state.addLayer && !!state.plan, before = state.plan, beforeStrokes = state.strokes;
@@ -266,7 +267,8 @@ async function ask() {
   const prev = { plan: state.plan, strokes: state.strokes, path: state.path, checks: state.checks, ready: state.ready };
   state.busy = true; state.answer = null; state.checks = {}; state.ready = 0; state.open = null; state.plan = null;
   $("askBtn").innerHTML = '<span class="spin" aria-label="Making"></span>';
-  show("recipe"); state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
+  if (!stay) show("recipe");
+  state.strokes = []; drawPreview(); window.Pie3D?.thinking(true);
   renderRecipe(); updateGate();
   try {
     let res;
@@ -284,6 +286,7 @@ async function ask() {
     window.Pie3D?.thinking(false);
     state.plan = null; state.strokes = []; drawPreview(); renderRecipe();
     $("ingCol").innerHTML = `<p class="msg">Couldn't make that: ${esc(e.message)}</p>`;
+    if (stay) log(`Couldn't make that: ${e.message}`);
   } finally {
     state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate(); renderTiles();
   }
@@ -1025,15 +1028,16 @@ $("kbd").onclick = (e) => {
   if (k === "back") el.value = el.value.slice(0, -1);
   else if (k === "space") el.value += " ";
   else if (k === "shift") { shift = !shift; drawKbd(); return; }
-  else if (k === "Done") { hideKbd(); el.blur(); boxMode === "change" ? revise() : ask(); return; }
+  else if (k === "Done") { hideKbd(); el.blur(); document.body.classList.remove("editing"); submitBox(); return; }
   else { el.value += shift ? k.toUpperCase() : k; if (shift) { shift = false; drawKbd(); } }
   syncClear();
 };
-$("askForm").onsubmit = (e) => {
-  e.preventDefault(); hideKbd(); document.body.classList.remove("editing");
-  if (document.body.dataset.view === "design" && state.plan) return revise();
+// On Design, the box always changes the pie and the screen stays on Design.
+function submitBox() {
+  if (document.body.dataset.view === "design") return state.plan ? revise() : ask();
   boxMode === "change" ? revise() : boxMode === "menu" ? makeMenu() : ask();
-};
+}
+$("askForm").onsubmit = (e) => { e.preventDefault(); hideKbd(); document.body.classList.remove("editing"); submitBox(); };
 $("editBtn").onclick = () => { document.body.classList.toggle("editing"); if (document.body.classList.contains("editing")) $("prompt").focus(); };
 
 
