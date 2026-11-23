@@ -76,6 +76,28 @@ WATCH = {"peanut": "peanut", "tree nut": "tree nut", "sesame": "sesame", "fish":
 SESAME_RX = r"sesame|tahini|芝麻|참깨|참기름|ごま|胡麻"
 
 
+# Single-ingredient whole foods. None of them is (or contains) a peanut, tree nut, fish or sesame, which are
+# FDA major food allergens named on their own: https://www.fda.gov/food/buy-store-serve-safe-food/food-allergies-what-you-need-know
+WHOLE_SRC = "https://www.fda.gov/food/buy-store-serve-safe-food/food-allergies-what-you-need-know"
+WHOLE = {"salt", "egg", "eggs", "garlic", "onion", "onions", "shallot", "shallots", "lamb", "beef", "pork", "chicken",
+         "turkey", "potato", "potatoes", "carrot", "carrots", "celery", "lemon", "lemons", "lime", "limes", "apple",
+         "apples", "squash", "ginger", "scallion", "scallions", "thyme", "rosemary", "sage", "parsley", "water",
+         "milk", "cream", "sugar"}
+
+
+def is_whole(p) -> bool:
+    """True for one plain food, named last ("Diamond Crystal Kosher Salt", "Vital Farms Large Eggs",
+    "Bone-in leg of lamb"). Not "garlic powder", "egg noodles", "salted caramel" or anything with a multi-part label."""
+    import re
+    name = prod_name(p).lower()
+    label = p.get("label", "") if isinstance(p, dict) else ""
+    words = re.findall(r"[a-z]+", re.split(r",| - | – ", re.sub(r"\(.*?\)", " ", name))[0])
+    while words and words[-1] in {"ct", "count", "oz", "lb", "lbs", "g", "kg", "dozen", "pack", "box", "bag",
+                                  "jar", "carton", "fl", "large", "medium", "small", "whole", "fresh"}:
+        words.pop()          # "Large Eggs 12 ct", "Kosher Salt 3 lb box"
+    return bool(words) and words[-1] in WHOLE and "," not in label
+
+
 def term_status(p, r: dict | None) -> dict[str, str]:
     """{"peanut": "found"|"safe"|"unsure", ...} for one product.
 
@@ -90,6 +112,7 @@ def term_status(p, r: dict | None) -> dict[str, str]:
     cited = str(d.get("source") or "").startswith("https://")
     listed = set(d.get("contains") or [])
     checks = (r or {}).get("checks", {})
+    whole = is_whole(p)
     out = {}
     for t in WATCH:
         v = (checks.get(TERMS[t]) or {}).get("verdict", "unsure")
@@ -102,6 +125,9 @@ def term_status(p, r: dict | None) -> dict[str, str]:
             out[t] = "found"
         elif check and t != "peanut" and "may contain" in label.lower():
             out[t] = "found"                       # "may contain fish" counts as a NO for an allergy
+        elif whole and not name_hits(prod_name(p), {"peanut": "peanuts", "tree nut": "tree nuts",
+                                                    "fish": "fish"}.get(t, t))["contains"]:
+            out[t] = "safe"                         # plain salt, eggs, lamb...: not a nut, peanut, fish or sesame (FDA)
         elif check or not (cited or v == "safe"):
             out[t] = "unsure"
         else:
@@ -117,7 +143,7 @@ def item_lines(products: list[tuple[str, object]], results: dict[str, dict]) -> 
         src = [p["source"]] if isinstance(p, dict) and p.get("source") else []
         for c in ((results.get(prod_name(p)) or {}).get("checks") or {}).values():   # Search API links per allergen
             src += [u for u in (c.get("sources") or []) if u and u not in src]
-        src = src[:4]
+        src = ([WHOLE_SRC] if is_whole(p) else []) + src[:4]
         if isinstance(p, dict) and p.get("brand"):
             out.append({"name": f"{p.get('tag') or dish} ({p['brand']})", "item": p["item"], "terms": st,
                         "sources": src})
