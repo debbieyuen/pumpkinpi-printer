@@ -998,7 +998,7 @@ function cardSteps(j) {
   const s = [];
   if (j.where === "reader") s.push("Take the microSD out of the Pi's card reader. Put it in the printer.");
   s.push("Clear the bed. Only the paper card goes on it. No food.");
-  s.push("Tape the card down on all 4 edges. Long side front to back, front-left corner 34 mm from the left, hanging 4 mm off the front. Keep the middle clear.");
+  s.push("Put 3–4 loops of tape (sticky side out) under the card so the middle stays flat. Tape all 4 edges, overlapping the paper. Long side front to back, front-left corner 34 mm from the left, hanging 4 mm off the front. Keep the middle clear.");
   s.push("Raise the syringe so its tip is above the nozzle.");
   s.push(`On the printer screen: Print → <b>${j.sd_file}</b> → start.`);
   s.push(`It heats to 200 °C, touches the card to find it, then draws 2 thin layers.${j.minutes ? ` About ${j.minutes} min.` : ""} Stay nearby.`);

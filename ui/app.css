@@ -306,8 +306,9 @@ body[data-view="cards"] .ask,body[data-view="cards"] #sendBtn{display:none}
 .cardbar .chip.on{background:var(--teal);border-color:var(--teal);color:var(--on-teal)}
 .cardnote{display:flex;align-items:center;gap:1rem;font-size:.9rem}
 .cardnote .confirm{display:flex;align-items:center;gap:.45rem}
-.cardframe{flex:1 1 auto;min-height:0;display:grid;place-items:center}
-#cardSvg{height:100%;width:auto;max-width:100%;filter:drop-shadow(0 6px 18px rgba(9,23,23,.14))}
+/* the preview always fits the space it gets; long step lists scroll instead of pushing it off screen */
+.cardframe{flex:1 1 auto;min-height:0;min-width:0;position:relative;overflow:hidden}
+#cardSvg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 6px 18px rgba(9,23,23,.14))}
 #cardSvg .paper{fill:#fbf8f1;stroke:var(--line);stroke-width:.4}
 #cardInk path{fill:none;stroke:#e07020;stroke-width:.6;stroke-linecap:round;stroke-linejoin:round}
 .menuhead{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
@@ -407,11 +408,12 @@ h1{font-size:1.15rem;white-space:nowrap}
 .toast{bottom:4rem}
 .pick,.guestpick,.btn.sm{height:2.4rem}
 @media (orientation:landscape){
-  .screen.cards:not([hidden]){display:grid;grid-template-columns:1fr 15rem;grid-template-rows:auto auto 1fr;gap:.6rem 1rem}
+  .screen.cards:not([hidden]){display:grid;grid-template-columns:1fr 15rem;grid-template-rows:auto minmax(0,1fr);gap:.6rem 1rem;overflow:hidden}
   .cards .cardbar{grid-column:2;grid-row:1;flex-direction:column;align-items:stretch}
   .cards .cardbar .guestpick{flex:none}
-  .cards .cardnote{grid-column:2;grid-row:2;flex-direction:column;align-items:flex-start;gap:.3rem}
-  .cards .cardframe{grid-column:1;grid-row:1/4}
+  .cards .cardnote{grid-column:2;grid-row:2;flex-direction:column;align-items:flex-start;gap:.3rem;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  .cards .cardframe{grid-column:1;grid-row:1/3}
+  .cards .cardsteps{font-size:.88rem;line-height:1.3}
 }
 @media (orientation:portrait){
   html{font-size:clamp(18px,3.4vw,34px)}
