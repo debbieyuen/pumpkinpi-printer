@@ -145,7 +145,7 @@ def item_lines(products: list[tuple[str, object]], results: dict[str, dict]) -> 
             src += [u for u in (c.get("sources") or []) if u and u not in src]
         src = ([WHOLE_SRC] if is_whole(p) else []) + src[:4]
         if isinstance(p, dict) and p.get("brand"):
-            out.append({"name": f"{p.get('tag') or dish} ({p['brand']})", "item": p["item"], "terms": st,
+            out.append({"name": f"{p.get('tag') or dish} ({p['brand']})", "item": p["item"], "brand": p["brand"], "terms": st,
                         "sources": src})
         else:
             fresh.append((prod_name(p), st, src))
@@ -463,12 +463,22 @@ def dessert_verdict(cfg: dict, lines: list[dict], guest: str) -> str:
     return "YES"
 
 
+def product_name(ln: dict) -> str:
+    """The real product for the chart ("Libby's 100% Pure Pumpkin", "McCormick Pumpkin Pie Spice"), not the dish."""
+    item = re.split(r",| - | – ", ln.get("item") or "")[0].strip()
+    item = re.sub(r"\s+\d+(\.\d+)?\s*(oz|fl oz|lb|lbs|g|kg|ct|count|ml|l)\b.*$", "", item, flags=re.I).strip()
+    brand = (ln.get("brand") or "").strip()
+    if not item or ln.get("each"):
+        return ln["name"]
+    return item if not brand or item.lower().startswith(brand.lower()) else f"{brand} {item}"
+
+
 def chart(cfg: dict, lines: list[dict]) -> dict:
     """Ingredient x guest chart: "ok" or "no" per cell (unsure counts as no), with what's in it."""
     guests = [g for g, a in (cfg.get("allergies") or {}).items() if a]
     rows = []
     for ln in lines:
-        for it in ln.get("each") or [{"name": ln["name"], "terms": ln.get("terms", {})}]:
+        for it in ln.get("each") or [{"name": product_name(ln), "terms": ln.get("terms", {})}]:
             cells = {}
             for g in guests:
                 mine = cfg["allergies"][g]

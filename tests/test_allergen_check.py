@@ -85,3 +85,20 @@ def test_design_tidy_keeps_products_in_step():
               "products": [{"ingredient": "b", "brand": "Clover Sonoma", "product": "Cream", "size": "1 pint", "store": "Safeway", "upc": ""}]})
     assert p["shape"] == "text" and p["font"] == "print"
     assert [x["ingredient"] for x in p["products"]] == ["A", "B"] and p["products"][1]["brand"] == "Clover Sonoma"
+
+
+def _lean(rel, p):
+    from pumpkinpi.allergen_check import check_ingredient
+
+    def handler(request):
+        if request.url.path == "/search":
+            return httpx.Response(200, json={"results": [{"title": "Libby's", "url": "https://libbys.example", "snippet": "Ingredients: pumpkin."}]})
+        return httpx.Response(200, json={"answers": {
+            "about_product": {"noul": rel}, "natural_flavor": {"noul": 0.05}, "a0": {"noul": p}}})
+    return check_ingredient(httpx.Client(transport=httpx.MockTransport(handler)), "Libby's 100% Pure Pumpkin", ["fish"])["checks"]["fish"].verdict
+
+
+def test_label_found_and_decider_leans_no_is_safe():
+    assert _lean(0.9, 0.2) == "safe"        # exact label found, 20% -> OK
+    assert _lean(0.5, 0.2) == "unsure"      # not this product's label -> still NO
+    assert _lean(0.9, 0.4) == "unsure"      # too close to call -> still NO

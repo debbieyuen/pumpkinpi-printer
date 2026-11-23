@@ -79,6 +79,7 @@ def check_product(client: httpx.Client, product: str, allergen: str) -> Check:
 
 
 RELEVANT_AT = 0.7   # evidence must describe this exact product before anything is green
+LEAN_SAFE_AT = 0.3  # found this exact product's label and the Decider leans no -> safe (cited to that label)
 FLAVOR_AT = 0.5     # "natural flavor" can hide coconut and other removed tree nuts -> yellow
 
 
@@ -196,6 +197,8 @@ def check_ingredient(client: httpx.Client, product: str, allergens: list[str], l
         p = float(ans[f"a{i}"]["noul"])
         v = verdict_for(p)
         note = ""
+        if v == "unsure" and p < LEAN_SAFE_AT and rel >= RELEVANT_AT:
+            v = "safe"          # the label for this exact product was found and doesn't list it
         if v == "safe" and rel < RELEVANT_AT:
             v, note = "unsure", "no label found for this exact product"
         elif v == "safe" and flav >= FLAVOR_AT:
