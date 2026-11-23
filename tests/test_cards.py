@@ -30,10 +30,10 @@ def test_card_fits_and_gcode_stays_on_card():
     p = cards.Pla()
     g = cards.card_gcode(st, p)
     # standalone file: bed off, heat, home ON the card, then prime off the card before drawing
-    assert g.index("M140 S50") < g.index("M190 S50") < g.index("G28") < g.index("M109 S200") < g.index("M106 S255")
+    assert g.index("M140 S0") < g.index("G28") < g.index("M109 S200") < g.index("M106 S255")
     assert g.index("G1 Z0.10 F600") < g.index("M106 S255")      # fan off on the first layer
     assert g.index("G28") < g.index("G29") < g.index("M109 S200") and "M420 S1" not in g
-    assert g[0] == "M140 S50" and "M104 S150" in g[:3]          # nozzle 150 C while probing: no ooze
+    assert g[3 - 3] == "M140 S0" and "M104 S150" in g[:3]          # nozzle 150 C while probing: no ooze
     assert g.index("M501") > g.index("M104 S0")                     # saved mesh restored at the end
     assert "M104 S0" in g[-9:] and g[-1] == "M117 Card done"
     zs = [float(w[1:]) for ln in g if ln.startswith(("G0", "G1")) for w in ln.split()[1:] if w[0] == "Z"]

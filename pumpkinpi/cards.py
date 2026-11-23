@@ -687,7 +687,7 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
 @dataclass
 class Pla:
     nozzle: float = 200.0          # PLA. Video uses 190 C; 200 C soaks into watercolor paper better (first test didn't stick)
-    bed: float = 50.0              # warm bed: the first card (best one) ran on a still-warm bed; video uses off
+    bed: float = 0.0               # paper: bed heater off
     fan: int = 255                 # part fan 100 % (layer 2+)
     first_fan: int = 0             # layer 1: fan off. 50 % cooled the PLA before it grabbed the paper (it curled up)
     card_x: float = 15.0           # printer X/Y of the card's front-left corner (6x9: run scripts/paper_6x9.py)
@@ -728,7 +728,6 @@ class Pla:
 def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
     """One file the printer runs on its own from the microSD: heat, home ON the card, prime off it, draw."""
     out = [f"M140 S{p.bed:.0f}", f"M104 S{p.probe_temp:.0f}", "M107", "G90", "M83",
-           *([f"M190 S{p.bed:.0f}"] if p.bed > 0 else []),   # wait for the warm bed before probing the paper
            "G28",                                     # CR Touch taps the card at the bed center: Z0 = paper top
            # Probe the PAPER in a 4x4 grid. One tap at the center wasn't enough: away from it the nozzle was too
            # high and the PLA curled in the air. The mesh stays in memory only; M501 at the end restores yours.
