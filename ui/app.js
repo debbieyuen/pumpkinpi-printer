@@ -285,7 +285,7 @@ async function ask() {
     state.plan = null; state.strokes = []; drawPreview(); renderRecipe();
     $("ingCol").innerHTML = `<p class="msg">Couldn't make that: ${esc(e.message)}</p>`;
   } finally {
-    state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate();
+    state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate(); renderTiles();
   }
 }
 
@@ -336,12 +336,14 @@ async function revise(said) {
       const plan = samplePlan(change, state.plan);
       res = { plan, strokes: strokesFor(plan), layers: state.layers };
     }
-    if (res.question) { window.Pie3D?.thinking(false); drawPreview(); $("prompt").value = ""; state.change = ""; syncClear(); showAnswer(res.question); show("recipe"); return; }
+    if (res.question) { window.Pie3D?.thinking(false); drawPreview(); $("prompt").value = ""; state.change = ""; syncClear(); showAnswer(res.question);
+      state.busy = false; $("askBtn").textContent = "Update"; renderDesign(); updateGate(); renderTiles();
+      log("That sounded like a question. The answer is on Recipe. Try a change like \"make it a star\"."); return; }
     applyDesign(res);
     $("prompt").value = ""; state.change = ""; syncClear();
     await checkMissing();   // only new ingredients need a new check
   } catch (e) { window.Pie3D?.thinking(false); drawPreview(); log(`Couldn't change it: ${e.message}`); }
-  state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate();
+  state.busy = false; $("askBtn").textContent = boxMode === "make" ? "Make" : "Update"; renderDesign(); updateGate(); renderTiles();
 }
 // Design is just the pie, plus a note when the design is too much for a syringe (pumpkinpi/detail.py).
 function renderDesign() {
@@ -481,14 +483,11 @@ function renderRecipe() {
   const p = state.plan;
   if (!p && state.answer && !state.busy) {   // just a question, no design yet
     const q = state.answer;
-    $("ingCol").innerHTML = `<h3>Answer</h3>${answerCard(q)}`;
-    $("stepCol").innerHTML = (q.recipe || []).length ? `<h3>Steps</h3><ol class="steps">${q.recipe.map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("")}</ol>` : "";
-    $("srcCol").innerHTML = ""; return;
+    $("stepCol").innerHTML = `<h3>Answer</h3>${answerCard(q)}${(q.recipe || []).length ? `<h3>Steps</h3><ol class="steps">${q.recipe.map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("")}</ol>` : ""}`;
+    $("ingCol").innerHTML = ""; $("srcCol").innerHTML = ""; renderTiles(); return;
   }
   if (!p) {
-    $("ingCol").innerHTML = state.busy ? `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity is writing the recipe…</p>`
-      : "";
-    $("stepCol").innerHTML = ""; $("srcCol").innerHTML = ""; return;
+    $("ingCol").innerHTML = ""; $("stepCol").innerHTML = ""; $("srcCol").innerHTML = ""; renderTiles(); return;
   }
   const rows = p.ingredients.map((ing) => {
     const c = state.checks[ing] || { status: "wait" };
@@ -514,14 +513,17 @@ function renderRecipe() {
       <span class="sicon ${c.status}">${st}</span></button>${detail}`;
   }).join("");
   const dnote = p.design_note ? `<p class="dnote2">${esc(p.design_note)}</p>` : "";
-  $("ingCol").innerHTML = `${state.answer ? answerCard(state.answer) : ""}<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>
-      <span><b>${esc(p.makes || p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${dnote}${rows}`;
   const steps = (p.recipe || []).map((t, i) => `<li><span class="sico">${stepIcon(t)}<i>${i + 1}</i></span><span>${esc(t)}</span></li>`).join("");
-  $("stepCol").innerHTML = `<h3>Steps</h3><ol class="steps">${steps}</ol>
-    ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}
-    <h3 class="srch">Sources</h3>${renderSources(p)}
+  const ings = (p.products || []).length ? p.products.map((x) => `<li>${esc(x.brand ? `${x.brand} ${x.product}` : x.ingredient)}${x.size ? ` <span class="muted">${esc(x.size)}</span>` : ""}</li>`).join("")
+    : p.ingredients.map((x) => `<li>${esc(x)}</li>`).join("");
+  $("stepCol").innerHTML = `${state.answer ? answerCard(state.answer) : ""}<div class="hero"><span class="bowl" style="--c:${swatch((p.topping || "").toLowerCase())}"></span>
+      <span><b>${esc(p.makes || p.topping || "Topping")}</b><span class="muted">${p.ingredients.length} ingredients · ${(p.recipe || []).length} steps</span></span></div>${dnote}
+    <h3>Ingredients</h3><ul class="inglist">${ings}</ul><h3>Steps</h3><ol class="steps">${steps}</ol>
+    ${p.diet_notes ? `<p class="tip"><b>Diet</b> ${esc(p.diet_notes)}</p>` : ""}`;
+  $("ingCol").innerHTML = `<h3>Each ingredient</h3>${rows}${renderWatch()}`;
+  $("srcCol").innerHTML = `<h3>Sources</h3>${renderSources(p)}
     <p class="muted small by"><img src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity search + Decider${state.live ? "" : " · sample"}</p>`;
-  $("srcCol").innerHTML = renderWatch();
+  renderTiles();
 }
 
 // ---------- allergy watch ----------
@@ -554,10 +556,10 @@ function renderWatch() {
   }).join("");
   return `<h3>Allergies and Dietary Restrictions</h3>${banner}<div class="watch">${cards}</div>`;
 }
-$("srcCol").onclick = (e) => {
+$("rpCols").addEventListener("click", (e) => {
   const b = e.target.closest(".wcard"); if (!b) return;
   state.openWatch = state.openWatch === b.dataset.w ? null : b.dataset.w; renderRecipe();
-};
+});
 
 // Sources grouped: the recipe, each allergen (allergy groups + nut searches), then product labels.
 function renderSources(p) {
@@ -833,26 +835,61 @@ $("sendBtn").onclick = async () => {
 
 // ---------- dinner menu: prompt -> branded products (Agent API) -> every label checked (Search + Decider) ----------
 function renderMenu() {
-  const box = $("menuView");
-  if (state.mode !== "menu") { box.innerHTML = ""; return; }
-  if (state.menuBusy) {
-    box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Picking exact brands, then checking every label… about a minute.</p>`;
-    return;
-  }
-  if (!cards.title || !state.menuShown) { box.innerHTML = ""; return; }   // start with only the prompt
-  const secs = Object.entries(cards.simple).map(([t, ls]) => `<div class="msec"><h3>${esc(t)}</h3>${ls.map((l) => `<p>${esc(l)}</p>`).join("")}</div>`).join("");
+  if (state.mode !== "menu") return;
+  renderTiles();
+  if (state.menuBusy || !cards.title || !state.menuShown) { for (const id of ["stepCol", "ingCol", "srcCol"]) $(id).innerHTML = ""; return; }
+  const dishes = (cards.menu || []).map((d) => `<li><b>${esc(d.name)}</b>${d.recipe ? `<span>${esc(d.recipe)}</span>` : ""}</li>`).join("");
+  const secs = Object.entries(cards.simple).map(([t, ls]) => `<h3>${esc(t)}</h3>${ls.map((l) => `<p class="mline">${esc(l)}</p>`).join("")}`).join("");
+  $("stepCol").innerHTML = `<h2 class="rph">${esc(cards.title)}</h2>${secs}${dishes ? `<h3>How to make it</h3><ol class="dishes">${dishes}</ol>` : ""}`;
   const nos = Object.entries(cards.avoid).map(([g, ls]) => `<div class="mguest"><b>${esc(g)}</b>${ls.length
-    ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "Nothing to avoid"}${ls.length ? "<br><span class=\"yes\">OK</span> Everything else is okay. But double check labels." : ""}</div>`).join("");
-  box.innerHTML = `<div class="mhead"><h2>${esc(cards.title)}</h2>${cards.prompt ? `<span class="muted">“${esc(cards.prompt)}”</span>` : ""}</div>
-    <div class="mbody"><div class="mmenu">${secs}</div><div class="mnos"><h3>Allergens</h3>${cards.lines.length ? nos : "<p class=\"muted\">Not checked yet.</p>"}</div></div>`;
-  moreCue(box);
+    ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "Nothing to avoid"}${ls.length ? `<br><span class="yes">OK</span> Everything else is okay. But double check labels.` : ""}</div>`).join("");
+  $("ingCol").innerHTML = `<h2 class="rph">Allergies</h2>${cards.lines.length ? nos : `<p class="muted">Not checked yet.</p>`}`;
+  const seen = new Set();
+  const srcs = (cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 1).map((u) => [ln.name, u]))
+    .filter(([, u]) => u && !seen.has(u) && seen.add(u));
+  $("srcCol").innerHTML = `<h2 class="rph">Sources</h2><ol class="srcs">${srcs.map(([n, u]) => `<li class="srcitem">${favicon(u)}<span class="st"><b>${esc(n)}</b><span class="url">${esc(host(u))}</span></span></li>`).join("")}</ol>
+    <p class="muted small by"><img src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity Agent API, Search API + Decider</p>`;
 }
-// Long menus scroll: fade the bottom edge and say so, so nothing looks cut off.
-function moreCue(box) {
-  const set = () => box.classList.toggle("more", box.scrollHeight - box.scrollTop - box.clientHeight > 4);
-  box.onscroll = set; requestAnimationFrame(set);
+const menuSources = () => new Set((cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 1))).size;
+
+// ---------- Recipe tiles: three short tiles; tap (or swipe in the popup) for details ----------
+const TILE_ICON = [I('<path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h4"/>'),
+  I('<path d="M12 3 3 20h18z"/><path d="M12 10v4M12 17h.01"/>'), I('<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>')];
+function renderTiles() {
+  const box = $("tiles");
+  let subs = null;
+  if (state.mode === "menu") {
+    if (state.menuBusy) { box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Picking brands, checking labels…</p>`; return; }
+    if (cards.title && state.menuShown) {
+      const n = Object.values(cards.avoid).reduce((a, ls) => a + ls.length, 0);
+      const items = Object.values(cards.simple).reduce((a, ls) => a + ls.length, 0);
+      subs = [`${items} dishes`, !cards.lines.length ? "Not checked" : n ? `${n} to avoid` : "Nothing to avoid", `${menuSources()} links`];
+    }
+  } else {
+    const p = state.plan;
+    if (state.busy) { box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity is writing the recipe…</p>`; return; }
+    if (p) {
+      const cs = p.ingredients.map((i) => (state.checks[i] || {}).status || "wait");
+      const red = cs.filter((c) => c === "red").length, yel = cs.filter((c) => c === "yellow").length;
+      const nsrc = $("srcCol").querySelectorAll(".srcitem").length;
+      subs = [`${(p.recipe || []).length} steps`, cs.includes("wait") ? "Checking…" : red ? `${red} allergens` : yel ? `${yel} to check` : "All safe", `${nsrc} links`];
+    } else if (state.answer) subs = [`${(state.answer.recipe || []).length} steps`, "No design yet", `${(state.answer.sources || []).length} links`];
+  }
+  if (!subs) { box.innerHTML = ""; return; }
+  const tone = /allergen|avoid/.test(subs[1]) ? "red" : /check|Not/.test(subs[1]) ? "yellow" : /safe|Nothing/.test(subs[1]) ? "green" : "";
+  box.innerHTML = ["Recipe", "Allergies", "Sources"].map((t, i) => `<button type="button" class="tile ${i === 1 ? tone : ""}" data-i="${i}">
+    <span class="ticon">${TILE_ICON[i]}</span><b>${t}</b><span class="tsub">${esc(subs[i])}</span></button>`).join("");
 }
-window.addEventListener("resize", () => { const b = $("menuView"); if (b) moreCue(b); });
+$("tiles").onclick = (e) => { const b = e.target.closest(".tile"); if (b) openPop(+b.dataset.i); };
+function openPop(i) {
+  $("recPop").hidden = false;
+  const cols = $("rpCols"); cols.scrollTo({ left: cols.clientWidth * i, behavior: "instant" }); markPop(i);
+}
+function markPop(i) { $("rpTabs").querySelectorAll(".rpt").forEach((b) => b.classList.toggle("on", +b.dataset.i === i)); }
+$("rpTabs").onclick = (e) => { const b = e.target.closest(".rpt"); if (!b) return; const c = $("rpCols"); c.scrollTo({ left: c.clientWidth * +b.dataset.i, behavior: "smooth" }); markPop(+b.dataset.i); };
+$("rpCols").onscroll = () => { const c = $("rpCols"); markPop(Math.round(c.scrollLeft / Math.max(1, c.clientWidth))); };
+$("rpClose").onclick = () => { $("recPop").hidden = true; };
+$("recPop").onclick = (e) => { if (e.target.id === "recPop") $("recPop").hidden = true; };
 async function makeMenu() {
   const prompt = $("prompt").value.trim();
   if (!prompt || state.menuBusy) return;
@@ -873,7 +910,7 @@ async function loadCards() {
   try {
     const c = await apiJson("/api/cards");
     cards.guests = c.guests || []; cards.lines = c.lines || [];
-    Object.assign(cards, { title: c.title || "", simple: c.simple || {}, avoid: c.avoid || {}, prompt: c.prompt || "" });
+    Object.assign(cards, { title: c.title || "", simple: c.simple || {}, avoid: c.avoid || {}, prompt: c.prompt || "", menu: c.menu || [] });
     if (!state.menuPrompt && cards.prompt) state.menuPrompt = cards.prompt;
     const one = ["one", "simple"].includes((c.card || {}).style);               // one-page card: no back side to pick
     $("cardSide").hidden = one; if (one) cards.side = "front";
@@ -972,6 +1009,7 @@ $("kbd").onclick = (e) => {
 };
 $("askForm").onsubmit = (e) => {
   e.preventDefault(); hideKbd(); document.body.classList.remove("editing");
+  if (document.body.dataset.view === "design" && state.plan) return revise();
   boxMode === "change" ? revise() : boxMode === "menu" ? makeMenu() : ask();
 };
 $("editBtn").onclick = () => { document.body.classList.toggle("editing"); if (document.body.classList.contains("editing")) $("prompt").focus(); };
@@ -990,7 +1028,7 @@ function renderLoad() {
   box.className = `load ${ok ? "ok" : ""}`;
   box.innerHTML = ok
     ? `<b>${esc(t.label)} loaded</b><span>${esc(setLine(k))}</span>${state.workEnd ? `<span class="${left < 120 ? "warn" : ""}">${left > 0 ? `Pipe within ${mmss(left)}` : "May be too thick now. Rewarm it."}</span>` : ""}`
-    : `<button class="btn" type="button" id="loadOpen">${state.loaded ? "Swap syringe" : "Load syringe"}: ${esc(t.short || t.label)}</button>`;
+    : `<button class="btn" type="button" id="loadOpen">${state.loaded ? "Swap syringe" : "Load syringe"}</button>`;
   $("loadTitle").textContent = `${state.loaded ? "Swap syringe" : "Load syringe"}: ${t.label}`;
   $("loadText").textContent = `${t.tip[0].toUpperCase()}${t.tip.slice(1)}. ${t.prep}`;
   $("dripSet").textContent = `${t.short || TOPS[k].short}: ${setLine(k)}`;

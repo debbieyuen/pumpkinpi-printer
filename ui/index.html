@@ -31,12 +31,8 @@
   <!-- Recipe: diet chips, ingredients (allergen checks), steps, sources -->
   <section class="screen recipe" id="recipeView">
     <div class="chips" id="diets" role="group" aria-label="Diet options"></div>
-    <div class="menuwrap"><div class="menuview" id="menuView"></div><span class="morehint">Scroll for more ↓</span></div>
-    <div class="cols">
-      <div class="col" id="ingCol"></div>
-      <div class="col" id="stepCol"></div>
-      <div class="col srccol" id="srcCol"></div>
-    </div>
+    <!-- Three tiles (Recipe, Allergies, Sources), a few words each. Tap or swipe for the details. -->
+    <div class="tiles" id="tiles"></div>
   </section>
 
   <!-- Design: the exact path the printer will pipe (read back from the G-code). Change it by typing in the top box. -->
@@ -62,20 +58,21 @@
       <div class="sheet clipsheet" id="clipSheet" hidden><video id="clipVid" controls playsinline></video>
         <div class="cliprow"><span class="muted small" id="clipInfo"></span><button class="btn ghost sm" id="clipClose" type="button">Close</button></div></div>
     </div>
+    <!-- One step after the next, top to bottom, then Send to Printer -->
     <div class="side">
       <div class="more" id="more" hidden></div>
-      <div class="load" id="load" aria-live="polite"></div>
+      <ol class="flow">
+        <li><span class="sn">1</span><button class="btn" id="labelBtn" type="button">Scan label</button></li>
+        <li><span class="sn">2</span><div class="load" id="load" aria-live="polite"></div></li>
+        <li><span class="sn">3</span><button class="btn" id="dripBtn" type="button">Drip test</button></li>
+        <li class="sub"><div class="drip" id="dripBox" hidden aria-live="polite"></div></li>
+        <li><span class="sn">4</span><button class="btn" id="readyBtn" type="button">Check food</button></li>
+        <li><span class="sn">5</span><button class="btn" id="dryBtn" type="button" disabled>Dry run</button></li>
+        <li><span class="sn">6</span><button class="btn" id="recBtn" type="button">Record</button></li>
+      </ol>
       <p class="cammsg" id="camMsg">Put the food on the bed, then check it.</p>
-      <button class="btn" id="readyBtn" type="button">Check it</button>
-      <div class="drip" id="dripBox" hidden aria-live="polite"></div>
-      <details class="moremenu" id="moreMenu"><summary class="btn">More</summary>
-        <button class="btn" id="dryBtn" type="button" disabled>Dry run</button>
-        <button class="btn" id="dripBtn" type="button">Drip test</button>
-        <button class="btn" id="labelBtn" type="button">Scan label</button>
-        <button class="btn" id="recBtn" type="button">Record</button>
-        <button class="btn ghost" id="clipBtn" type="button" hidden>Last clip</button>
-        <p class="muted small" id="dripSet"></p>
-      </details>
+      <button class="btn ghost" id="clipBtn" type="button" hidden>Last clip</button>
+      <p class="muted small" id="dripSet"></p>
     </div>
   </section>
 
@@ -157,6 +154,20 @@
   <div class="popcard"><h2 id="loadTitle"></h2><p id="loadText"></p>
     <div class="popbtns"><button class="btn ghost" id="loadCancel" type="button">Not yet</button>
       <button class="btn go" id="loadedBtn" type="button">Loaded</button></div></div>
+</div>
+
+<!-- Recipe details: swipe between Recipe, Allergies and Sources -->
+<div class="popwrap recpop" id="recPop" hidden role="dialog" aria-label="Recipe details">
+  <div class="popcard">
+    <div class="rphead"><div class="rptabs" id="rpTabs">
+      <button type="button" class="rpt on" data-i="0">Recipe</button><button type="button" class="rpt" data-i="1">Allergies</button><button type="button" class="rpt" data-i="2">Sources</button></div>
+      <button type="button" class="btn ghost sm" id="rpClose">Close</button></div>
+    <div class="cols" id="rpCols">
+      <div class="col" id="stepCol"></div>
+      <div class="col" id="ingCol"></div>
+      <div class="col srccol" id="srcCol"></div>
+    </div>
+  </div>
 </div>
 
 <div class="kbd" id="kbd" hidden aria-label="On-screen keyboard"></div>

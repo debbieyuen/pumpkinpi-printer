@@ -367,7 +367,6 @@ body[data-view="design"]:not(.editing) .ask{display:none}
 .popbtns .btn{height:3rem;padding:0 1.4rem}
 
 /* dinner menu (Recipe step 1) */
-body[data-mode="menu"] #recipeView .cols{display:none}
 .menuview:empty{display:none}
 .menuview{padding:.3rem var(--pad);overflow:auto;font-size:.92rem;flex:1;min-height:0}
 .menuview .menuhint{font-size:1.1rem;max-width:40ch}
@@ -424,3 +423,49 @@ h1{font-size:1.15rem;white-space:nowrap}
   .cardbar .btn{flex:1}
 }
 .menuwrap:has(.menuview:empty){display:none}
+
+/* Recipe tiles: three short tiles; details in a swipeable popup */
+.tiles{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;align-content:center;padding:0 var(--pad) .4rem}
+.tiles:empty{display:none}
+.tiles .msg{grid-column:1/-1;justify-self:center;font-size:1.1rem}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.35rem;min-height:9rem;padding:1rem;border:2px solid var(--line);
+  border-radius:1.1rem;background:var(--surface,#fff);font:inherit;color:var(--fg);cursor:pointer}
+.tile:active{transform:scale(.98)}
+.tile .ticon{width:2.4rem;height:2.4rem;color:var(--teal)}
+.tile .ticon svg{width:100%;height:100%}
+.tile b{font-size:1.35rem}
+.tile .tsub{font-size:1rem;color:var(--muted);font-weight:600}
+.tile.red{border-color:#b3261e}.tile.red .tsub,.tile.red .ticon{color:#b3261e}
+.tile.yellow{border-color:#c58a00}.tile.yellow .tsub,.tile.yellow .ticon{color:#8a6200}
+.tile.green{border-color:#1b6e3a}.tile.green .tsub,.tile.green .ticon{color:#1b6e3a}
+.recpop .popcard{width:min(60rem,94vw);height:min(86vh,40rem);max-width:none;display:flex;flex-direction:column;gap:.6rem;padding:.9rem 1.1rem}
+.rphead{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
+.rptabs{display:flex;gap:.35rem;background:var(--line);border-radius:999px;padding:.25rem}
+.rpt{border:0;background:transparent;font:inherit;font-size:.95rem;font-weight:600;padding:.35rem 1rem;border-radius:999px;color:var(--muted);cursor:pointer}
+.rpt.on{background:#fff;color:var(--fg);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+#rpCols{flex:1;min-height:0;display:flex;gap:0;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none}
+#rpCols::-webkit-scrollbar{display:none}
+#rpCols .col{flex:0 0 100%;scroll-snap-align:start;overflow-y:auto;padding:0 .3rem .6rem;font-size:.95rem}
+.rph{font-size:1.3rem;margin:.1rem 0 .3rem}
+.mline{margin:.1rem 0}
+.dishes{padding-left:1.2rem;margin:.2rem 0}.dishes li{margin:.3rem 0}.dishes li span{display:block;color:var(--muted);font-size:.9rem}
+.inglist{padding-left:1.2rem;margin:.2rem 0}
+.recpop .mguest{margin:.2rem 0 .7rem;line-height:1.45}.recpop .mguest b{display:block}
+.recpop .no{font-weight:700;color:#b3261e}.recpop .yes{font-weight:700;color:#1b6e3a}
+@media (orientation:portrait){.tiles{grid-template-columns:1fr;align-content:start}.tile{min-height:5rem;flex-direction:row}}
+
+/* Camera: numbered steps, one after the next */
+.flow{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem}
+.flow li{display:flex;align-items:center;gap:.4rem}
+.flow li.sub{padding-left:1.8rem}.flow li.sub:has(> [hidden]){display:none}
+.flow .sn{flex:none;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--teal);color:#fff;font-size:.8rem;font-weight:700;display:grid;place-items:center}
+.flow li > .btn,.flow li > .load{flex:1;min-width:0}
+.camera .side .flow .btn{height:2.3rem}
+.camera .side{width:13rem}
+.flow .load:not(.ok){padding:0;border:0}
+.flow .load:not(.ok) .btn{width:100%}
+.camera .side .flow .load .btn{height:2.3rem;font-size:inherit}
+.flow li > .btn,.flow li > .load{width:0;flex:1 1 0}
+.camera .side .flow .btn,.camera .side .flow .load .btn{font-size:1.05rem}
+.flow .load.ok{font-size:.8rem}
+.camera .side .flow li > .btn{width:0;flex:1 1 0;padding-left:.4rem;padding-right:.4rem}
