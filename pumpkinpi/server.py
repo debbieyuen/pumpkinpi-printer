@@ -65,6 +65,38 @@ app = FastAPI(title="PumpkinPi")
 BOOT = str(time.time())   # changes on every restart, so open screens reload the new UI
 
 
+def _version() -> str:
+    """Short git commit the server is running (shown on screen so you can tell the UI is current)."""
+    import subprocess
+    try:
+        return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True,
+                              text=True, timeout=5).stdout.strip() or "dev"
+    except Exception:  # noqa: BLE001
+        return "dev"
+
+
+VERSION = _version()
+
+
+@app.middleware("http")
+async def no_cache(request, call_next):
+    """The screen's browser must never keep an old app.js/app.css after a git pull."""
+    resp = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+def index():
+    from fastapi.responses import HTMLResponse
+    html = (ROOT / "ui" / "index.html").read_text()
+    html = html.replace('href="app.css"', f'href="app.css?v={VERSION}"').replace(
+        'src="app.js"', f'src="app.js?v={VERSION}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
 @app.middleware("http")
 async def no_stale_ui(request, call_next):
     """The kiosk browser stays open for days: make it re-check UI files instead of using an old copy."""
@@ -208,7 +240,7 @@ def status():
     connected = printer_connected()
     # Only names and allergens go to the screen; health notes stay off camera.
     return {"event": g.get("event"), "printer": connected, "diets": DIETS,
-            "camera": shutil.which("rpicam-vid") is not None, "preview": PREVIEW, "boot": BOOT,
+            "camera": shutil.which("rpicam-vid") is not None, "preview": PREVIEW, "boot": BOOT, "version": VERSION,
             "guests": [{"name": x["name"], "avoid": x.get("avoid", [])} for x in g["guests"]]}
 
 

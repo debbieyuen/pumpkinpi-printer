@@ -183,6 +183,7 @@ const apiJson = async (path, body) => (await api(path, body)).json();
 
 // ---------- printer connection: gray out the app until the Pi sees the printer on USB ----------
 let statusTimer = null;
+const UI_VERSION = new URL(document.currentScript?.src || location.href).searchParams.get("v") || "";
 async function refreshStatus() {
   let printer = false;
   try {
@@ -190,6 +191,12 @@ async function refreshStatus() {
     state.live = state.everLive = true; state.guests = s.guests; printer = !!s.printer; state.noCamera = s.camera === false;
     // Server restarted (e.g. after git pull): load the new UI, but never in the middle of piping.
     if (s.boot && state.boot && s.boot !== state.boot && !state.job) return location.reload();
+    // Screen running older code than the Pi (cached app.js): reload. Shows the version top left.
+    if (s.version && UI_VERSION && s.version !== UI_VERSION && !state.job && !sessionStorage.triedVer) {
+      sessionStorage.triedVer = 1; return location.reload();
+    }
+    if (s.version === UI_VERSION) delete sessionStorage.triedVer;
+    $("ver").textContent = s.version === UI_VERSION ? `v ${UI_VERSION}` : `screen ${UI_VERSION || "?"} / Pi ${s.version}`;
     state.boot = s.boot;
   } catch {
     // Never fall back to sample "Safe" results once the real Pi server has been seen.
