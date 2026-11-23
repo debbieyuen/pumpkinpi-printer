@@ -25,12 +25,14 @@ FILAMENTS = {
     # Grip: bed 75 C (PETG range 70-80), layer 1 at 10 mm/s so each short stroke has time to press into the
     # plate, 100 % plastic (110 % pushed the extra up the sides of the nozzle). Not lower: PETG squished too close
     # sticks to the nozzle instead.
-    # 1.5 mm lift so a blob on the tip clears letters already printed.
+    # Strings: the printer lifts at only ~5 mm/s (M203 Z5), so a short 0.5 mm lift pulls less thread up out of
+    # the letter; 0.1 s pause after the wipe (PETG keeps oozing while the nozzle waits); 200 mm/s moves between
+    # letters snap the string thin.
     "petg": {"nozzle": 235, "bed": 75, "fan": 90, "layers": 2, "retract": 1.2, "retract_feed": 2400,
-             "unretract_feed": 1800, "wipe": 1.5, "hop": 1.5, "line_w": 0.6, "end_pause": 0.3,
+             "unretract_feed": 1800, "wipe": 1.5, "hop": 0.5, "line_w": 0.6, "end_pause": 0.1, "travel": 12000,
              "first_feed": 600, "first_flow": 1.0},
     "pla": {"nozzle": 210, "bed": 50, "fan": 255, "layers": 3, "retract": 0.8, "retract_feed": 2700,
-            "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8, "line_w": 0.45, "end_pause": 0.15,
+            "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8, "line_w": 0.45, "end_pause": 0.15, "travel": 6000,
             "first_feed": 1200, "first_flow": 1.0},
 }
 kind = (sys.argv[1] if len(sys.argv) > 1 else "petg").lower()
