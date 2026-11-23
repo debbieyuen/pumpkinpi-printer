@@ -714,7 +714,8 @@ def cards_info():
             "menu": [{"name": d["name"], "recipe": d.get("recipe"), "products": d["products"]} for d in cfg["menu"]],
             "steps": cfg.get("steps", []), "sauces": cfg.get("sauces", []), "allergies": cfg.get("allergies", {}),
             "lines": lines, "title": cfg.get("menu_title", ""), "prompt": cfg.get("menu_prompt", ""),
-            "simple": cfg.get("simple", {}),
+            "simple": cfg.get("simple", {}), "recipes": cfg.get("recipes", []),
+            "chart": cards.chart(cfg, lines) if lines else {"guests": [], "rows": []},
             "pla": asdict(cards.Pla.load())}
 
 

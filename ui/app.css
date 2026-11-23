@@ -478,3 +478,17 @@ select.pick,select.guestpick{-webkit-appearance:none;appearance:none;padding-rig
 .srcitem.fact .st{display:flex;flex-direction:column;gap:.15rem}
 .srcitem.fact .st > span:not(.url){font-size:.92rem;line-height:1.35}
 #srcCol h3{margin:.7rem 0 .35rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.rcp{border:1px solid var(--line);border-radius:.9rem;padding:.6rem .9rem;margin:.5rem 0;background:#fff}
+.rcp h3{margin:.1rem 0 .4rem;font-size:1.1rem;text-transform:none;letter-spacing:0;color:var(--fg)}
+.rcp h4{margin:.2rem 0;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.rcpcols{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:1rem}
+.rcpsrc{display:inline-flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--teal);margin-top:.3rem}
+.rcpsrc img{width:1rem;height:1rem}
+.achart{width:100%;border-collapse:collapse;font-size:.95rem}
+.achart th,.achart td{border-bottom:1px solid var(--line);padding:.45rem .5rem;text-align:left;vertical-align:top}
+.achart thead th{font-size:.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.achart td{width:9rem;font-weight:700}
+.achart td.ok{color:#1b6e3a}.achart td.no{color:#b3261e}
+.achart td small{display:block;font-weight:500;font-size:.78rem;color:#7a2a24}
+@media (orientation:portrait){.rcpcols{grid-template-columns:1fr}}
+.rsteps{padding-left:1.3rem;margin:.2rem 0}.rsteps li{margin:.25rem 0;line-height:1.4}

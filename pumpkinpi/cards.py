@@ -127,7 +127,8 @@ def item_lines(products: list[tuple[str, object]], results: dict[str, dict]) -> 
         rank = {"found": 2, "unsure": 1, "safe": 0}
         st = {t: max((f[1][t] for f in fresh), key=rank.get) for t in WATCH}
         out.append({"name": "Fresh veg + spices", "item": ", ".join(f[0] for f in fresh), "terms": st,
-                    "sources": sorted({u for f in fresh for u in f[2]})})
+                    "sources": sorted({u for f in fresh for u in f[2]}),
+                    "each": [{"name": f[0][:1].upper() + f[0][1:], "terms": f[1]} for f in fresh]})
     for ln in out:
         ln["text"] = line_text(ln, None)
         ln["unsure"] = [WATCH[t] for t, v in ln["terms"].items() if v == "unsure"]
@@ -434,6 +435,24 @@ def dessert_verdict(cfg: dict, lines: list[dict], guest: str) -> str:
     if any(x == "check label" for x in v):
         return "check label"
     return "YES"
+
+
+def chart(cfg: dict, lines: list[dict]) -> dict:
+    """Ingredient x guest chart: "ok" or "no" per cell (unsure counts as no), with what's in it."""
+    guests = [g for g, a in (cfg.get("allergies") or {}).items() if a]
+    rows = []
+    for ln in lines:
+        for it in ln.get("each") or [{"name": ln["name"], "terms": ln.get("terms", {})}]:
+            cells = {}
+            for g in guests:
+                mine = cfg["allergies"][g]
+                found = [t for t in mine if it["terms"].get(t) == "found"]
+                maybe = [t for t in mine if it["terms"].get(t) == "unsure"]
+                cells[g] = {"v": "no" if found or maybe else "ok",
+                            "why": ", ".join(found + [f"may have {t}" for t in maybe])}
+            mt = re.match(r"(.+?) \((.+?)\)$", it["name"])        # "broth (Haidilao)" -> "Haidilao broth"
+            rows.append({"name": f"{mt[2]} {mt[1]}" if mt else it["name"], "part": ln.get("part", ""), "cells": cells})
+    return {"guests": guests, "rows": rows}
 
 
 def simple_avoid(cfg: dict, lines: list[dict], guest: str) -> list[str]:

@@ -837,12 +837,17 @@ $("sendBtn").onclick = async () => {
 function renderMenu() {
   if (state.mode !== "menu") return;
   if (state.menuBusy || !cards.title || !state.menuShown) { for (const id of ["stepCol", "ingCol", "srcCol"]) $(id).innerHTML = ""; renderTiles(); return; }
-  const dishes = (cards.menu || []).map((d) => `<li><b>${esc(d.name)}</b>${d.recipe ? `<span>${esc(d.recipe)}</span>` : ""}</li>`).join("");
-  const secs = Object.entries(cards.simple).map(([t, ls]) => `<h3>${esc(t)}</h3>${ls.map((l) => `<p class="mline">${esc(l)}</p>`).join("")}`).join("");
-  $("stepCol").innerHTML = `<h2 class="rph">${esc(cards.title)}</h2>${secs}${dishes ? `<h3>How to make it</h3><ol class="dishes">${dishes}</ol>` : ""}`;
-  const nos = Object.entries(cards.avoid).map(([g, ls]) => `<div class="mguest"><b>${esc(g)}</b>${ls.length
-    ? ls.map((l) => `<span class="no">NO</span> ${esc(l)}`).join("<br>") : "Nothing to avoid"}${ls.length ? `<br><span class="yes">OK</span> Everything else is okay. But double check labels.` : ""}</div>`).join("");
-  $("ingCol").innerHTML = `<h2 class="rph">Allergies</h2>${cards.lines.length ? nos : `<p class="muted">Not checked yet.</p>`}`;
+  const recs = (cards.recipes || []).map((r) => `<section class="rcp"><h3>${esc(r.dish)}${r.serves ? ` <span class="muted">· serves ${esc(r.serves)}</span>` : ""}</h3>
+    <div class="rcpcols"><div><h4>Ingredients</h4><ul class="inglist">${r.ingredients.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+    <div><h4>Steps</h4><ol class="rsteps">${r.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol></div></div>
+    ${r.url ? `<a class="rcpsrc" href="${esc(r.url)}" target="_blank" rel="noopener">${favicon(r.url)} ${esc(host(r.url))}</a>` : ""}</section>`).join("");
+  $("stepCol").innerHTML = `<h2 class="rph">${esc(cards.title)}</h2>${recs || `<p class="muted">No recipe yet. Tap Make again to get one.</p>`}`;
+  const ch = cards.chart || { guests: [], rows: [] };
+  const cell = (c) => c.v === "ok" ? `<td class="ok">✓ OK</td>` : `<td class="no">✗ NO${c.why ? `<small>${esc(c.why)}</small>` : ""}</td>`;
+  const table = ch.rows.length ? `<table class="achart"><thead><tr><th>Ingredient</th>${ch.guests.map((g) => `<th>${esc(g)}</th>`).join("")}</tr></thead>
+    <tbody>${ch.rows.map((r) => `<tr><th scope="row">${esc(r.name)}</th>${ch.guests.map((g) => cell(r.cells[g] || { v: "no" })).join("")}</tr>`).join("")}</tbody></table>
+    <p class="muted small">NO includes "may have": no clear label. Everything else is okay. But double check labels.</p>` : "";
+  $("ingCol").innerHTML = `<h2 class="rph">Allergies</h2>${cards.lines.length ? table : `<p class="muted">Not checked yet.</p>`}`;
   const seen = new Set();
   const srcs = (cards.lines || []).flatMap((ln) => (ln.sources || []).slice(0, 2).map((u) => [ln.name, u]))
     .filter(([, u]) => u && !seen.has(u) && seen.add(u));
@@ -866,8 +871,8 @@ function renderTiles() {
     if (state.menuBusy) { box.innerHTML = `<p class="msg"><img class="think" src="brand/perplexity-symbol-ink.svg" alt=""> Perplexity Search and Decider models are checking every label…</p>`; return; }
     if (cards.title && state.menuShown) {
       const n = Object.values(cards.avoid).reduce((a, ls) => a + ls.length, 0);
-      const items = Object.values(cards.simple).reduce((a, ls) => a + ls.length, 0);
-      subs = [`${items} dishes`, !cards.lines.length ? "Not checked" : n ? `${n} to avoid` : "Nothing to avoid", state.science?.busy && !menuSources() ? "Researching…" : `${menuSources()} links`];
+      const nr = (cards.recipes || []).length;
+      subs = [nr ? `${nr} recipe${nr > 1 ? "s" : ""}` : "No recipe yet", !cards.lines.length ? "Not checked" : n ? `${n} to avoid` : "Nothing to avoid", state.science?.busy && !menuSources() ? "Researching…" : `${menuSources()} link${menuSources() === 1 ? "" : "s"}`];
     }
   } else {
     const p = state.plan;
@@ -914,7 +919,8 @@ async function loadCards() {
   try {
     const c = await apiJson("/api/cards");
     cards.guests = c.guests || []; cards.lines = c.lines || [];
-    Object.assign(cards, { title: c.title || "", simple: c.simple || {}, avoid: c.avoid || {}, prompt: c.prompt || "", menu: c.menu || [] });
+    Object.assign(cards, { title: c.title || "", simple: c.simple || {}, avoid: c.avoid || {}, prompt: c.prompt || "", menu: c.menu || [],
+      recipes: c.recipes || [], chart: c.chart || { guests: [], rows: [] } });
     if (!state.menuPrompt && cards.prompt) state.menuPrompt = cards.prompt;
     const one = ["one", "simple"].includes((c.card || {}).style);               // one-page card: no back side to pick
     $("cardSide").hidden = one; if (one) cards.side = "front";

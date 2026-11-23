@@ -29,6 +29,10 @@ sold in US grocery stores (San Francisco Bay Area): brand + product name + size,
 - tag: 1-2 lowercase words for the card ("beef", "broth", "apple pie").
 - At most 14 main products, 6 dessert products and 8 sauces.
 - title: 1-3 words naming the meal ("Hot pot", "Roast chicken").
+- recipes: one home recipe per dish the user asked for (e.g. "Baked lamb", "Pumpkin pie"). Use the products
+  you picked. ingredients: amount + ingredient ("2 lb bone-in lamb leg", "1 can Libby's pumpkin, 15 oz").
+  steps: 4-8 short steps with temperatures and times. url: the recipe page you based it on (a real page
+  from your web search). Keep sugar modest where you can; never claim the dish is allergen-free.
 If the request is not a meal, return no products and say why in note."""
 
 SCHEMA = {
@@ -36,6 +40,16 @@ SCHEMA = {
     "properties": {
         "title": {"type": "string"},
         "note": {"type": "string"},
+        "recipes": {"type": "array", "items": {
+            "type": "object",
+            "properties": {
+                "dish": {"type": "string"}, "serves": {"type": "string"},
+                "ingredients": {"type": "array", "items": {"type": "string"}},
+                "steps": {"type": "array", "items": {"type": "string"}},
+                "url": {"type": "string"},
+            },
+            "required": ["dish", "ingredients", "steps", "url"],
+        }},
         "products": {"type": "array", "items": {
             "type": "object",
             "properties": {
@@ -46,7 +60,7 @@ SCHEMA = {
             "required": ["item", "brand", "tag", "part", "section"],
         }},
     },
-    "required": ["title", "products"],
+    "required": ["title", "products", "recipes"],
 }
 
 
@@ -83,14 +97,30 @@ def to_cards(plan: dict) -> dict:
     simple = {sec: pack([card_word(x) for x in items]) for sec, items in menu.items()}
     return {"title": plan.get("title", "").strip() or "Dinner", "prompt": plan.get("prompt", ""),
             "menu": [{"name": sec, "products": items} for sec, items in menu.items()],
-            "dessert": None, "more": [], "sauces": sauces, "simple": simple, "avoid_extra": []}
+            "dessert": None, "more": [], "sauces": sauces, "simple": simple, "avoid_extra": [],
+            "recipes": clean_recipes(plan.get("recipes") or [], plan.get("_urls"))}
+
+
+def clean_recipes(recipes: list[dict], urls: set[str] | None = None) -> list[dict]:
+    """Short, tidy recipes; a link is kept only if the web search really returned it."""
+    out = []
+    for r in recipes[:6]:
+        u = (r.get("url") or "").strip()
+        if urls is not None and u.rstrip("/") not in urls:
+            u = ""
+        out.append({"dish": (r.get("dish") or "").strip()[:60], "serves": (r.get("serves") or "").strip()[:30],
+                    "ingredients": [x.strip()[:90] for x in r.get("ingredients") or [] if x.strip()][:16],
+                    "steps": [x.strip()[:220] for x in r.get("steps") or [] if x.strip()][:10],
+                    "url": u if u.startswith("http") else ""})
+    return [r for r in out if r["dish"] and r["steps"]]
 
 
 def plan_menu(client, prompt: str, allergies: dict[str, list[str]]) -> dict:
-    text, _ = pplx.agent(client, instructions=INSTRUCTIONS, name="pumpkinpi_menu", schema=SCHEMA,
-                         input=f"Guests' allergies: {json.dumps(allergies)}\n\nRequest: {prompt}")
+    text, results = pplx.agent(client, instructions=INSTRUCTIONS, name="pumpkinpi_menu", schema=SCHEMA,
+                               input=f"Guests' allergies: {json.dumps(allergies)}\n\nRequest: {prompt}")
     plan = json.loads(text)
     plan["prompt"] = prompt
+    plan["_urls"] = {r.get("url", "").rstrip("/") for r in results if r.get("url")} or None
     if not plan.get("products"):
         raise ValueError(plan.get("note") or "That doesn't look like a meal. Try: hot pot with beef and shrimp.")
     return to_cards(plan)
