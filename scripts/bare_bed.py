@@ -20,10 +20,12 @@ FILAMENTS = {
     # PETG strings: retract like the OrcaSlicer profile (1.2 mm at 40 mm/s, back in at 30 mm/s), wipe the tip back
     # along the line before lifting, 235 C (bottom of Creality's 230-250 range: less ooze, still bonds on a 70 C
     # bed), 2 layers so the nozzle crosses the letters less often. Fan ~35 % from layer 2.
+    # Bold 0.6 mm lines (0.4 mm nozzle): ~1/3 more plastic on the plate, tougher letters, still open counters at
+    # 5 mm. 0.3 s pause after the wipe so the end of the stroke sets before the lift (longer just grows a blob).
     "petg": {"nozzle": 235, "bed": 70, "fan": 90, "layers": 2, "retract": 1.2, "retract_feed": 2400,
-             "unretract_feed": 1800, "wipe": 1.5, "hop": 1.0},
+             "unretract_feed": 1800, "wipe": 1.5, "hop": 1.0, "line_w": 0.6, "end_pause": 0.3},
     "pla": {"nozzle": 210, "bed": 50, "fan": 255, "layers": 3, "retract": 0.8, "retract_feed": 2700,
-            "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8},
+            "unretract_feed": 2700, "wipe": 0.0, "hop": 0.8, "line_w": 0.45, "end_pause": 0.15},
 }
 kind = (sys.argv[1] if len(sys.argv) > 1 else "petg").lower()
 if kind not in FILAMENTS:
@@ -42,7 +44,7 @@ pla.update({"surface": "bed", "filament": kind, **FILAMENTS[kind], "first_fan": 
             # Card text is mostly strokes under 4 mm, each printing ~0.15 mm of filament. A 1.5 mm retract and a
             # slow 4 mm lift on every one starves the start of the next stroke and drags the last one off the bed.
             # Small retract, short pause so the line sets, low hop: the string breaks instead of pulling.
-            "end_pause": 0.15, "hop_feed": 1200})
+            "hop_feed": 1200})
 path.write_text(json.dumps(data, indent=1) + "\n")
 f = FILAMENTS[kind]
 print(f"machine.json: {kind.upper()} on the bare bed, nozzle {f['nozzle']} C, bed {f['bed']} C, {f['layers']} layers. "

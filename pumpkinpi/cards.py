@@ -24,6 +24,7 @@ Printing (PLA, the stock hot end; the syringe stays mounted but must sit ABOVE t
 """
 from __future__ import annotations
 
+import functools
 import re
 import argparse
 import json
@@ -240,24 +241,37 @@ def check_menu(client, cfg: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------- layout (mm, card's front-left corner = 0,0)
-def text_line(s: str, h: float, font: str = "print") -> list[Stroke]:
-    """Single-stroke text, capital letters h mm tall, left edge at x=0, baseline at y=0 (descenders go below)."""
+@functools.lru_cache(maxsize=None)
+def _font(font: str):
+    """The Hershey font, loaded once (loading it for every line made one card take a minute on the Pi)."""
     from HersheyFonts import HersheyFonts
+    f = HersheyFonts()
+    f.load_default_font(FONTS.get(font, "futural"))
+    ref = [y for st in f.strokes_for_text("H") for _, y in st]
+    return f, max(ref), (max(ref) - min(ref)) or 1
+
+
+@functools.lru_cache(maxsize=4096)
+def _unit_text(s: str, font: str) -> tuple:
+    """Strokes for s with capitals 1 unit tall, left edge at x=0, baseline at y=0 (cached: layout measures the
+    same words many times while it wraps and packs lines)."""
     import unicodedata
     # The Hershey fonts have no accented letters and silently drop them ("Nestlé" -> "Nestl"): print the plain
     # letter instead (é -> e, ñ -> n).
     s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
     if not s.strip():
-        return []
-    f = HersheyFonts()
-    f.load_default_font(FONTS.get(font, "futural"))
-    ref = [y for st in f.strokes_for_text("H") for _, y in st]
-    base, k = max(ref), h / ((max(ref) - min(ref)) or 1)   # raw Hershey y points down
+        return ()
+    f, base, span = _font(font)
     st = [list(x) for x in f.strokes_for_text(s)]
     if not st:
-        return []
+        return ()
     x0 = min(x for s_ in st for x, _ in s_)
-    return [[((x - x0) * k, (base - y) * k) for x, y in s_] for s_ in st]
+    return tuple(tuple(((x - x0) / span, (base - y) / span) for x, y in s_) for s_ in st)
+
+
+def text_line(s: str, h: float, font: str = "print") -> list[Stroke]:
+    """Single-stroke text, capital letters h mm tall, left edge at x=0, baseline at y=0 (descenders go below)."""
+    return [[(x * h, y * h) for x, y in st] for st in _unit_text(s, font)]
 
 
 def width(strokes: list[Stroke]) -> float:
@@ -722,9 +736,14 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
         tries = ([(k, True, False, True) for k in (1, .92, .85, .78, .72, .66, .6)]
                  + [(k, False, False, True) for k in (1, .9)] + [(k, False, True, True) for k in (1, .9)]
                  + [(k, False, False, False) for k in (1, .9)])
+        seen = set()
         for i, (k, ing, sh, mn) in enumerate(tries):
-            c = {**cfg, "card": {**card, "simple_mm": card.get("simple_mm", 5.5) * k,
-                                 "simple_avoid_mm": card.get("simple_avoid_mm", 5.0) * k}}
+            hk = max(card.get("simple_mm", 5.5) * k, SIMPLE_MIN_MM)
+            ak = max(card.get("simple_avoid_mm", 5.0) * k, SIMPLE_AVOID_MIN_MM)
+            if (hk, ak, ing, sh, mn) in seen and i < len(tries) - 1:
+                continue                          # same sizes after the minimum clamp: same result, skip
+            seen.add((hk, ak, ing, sh, mn))
+            c = {**cfg, "card": {**card, "simple_mm": hk, "simple_avoid_mm": ak}}
             try:                                  # start right under the top margin: room for labels + allergens
                 return draw_rows(simple_rows(c, lines, guest, ingredients=ing, menu=mn, short=sh),
                                  W, H, m, top=True)[0]
