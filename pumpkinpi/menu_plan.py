@@ -8,6 +8,7 @@ the Search API + Decider in cards.check_menu, and anything without a clear label
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from . import pplx
@@ -20,6 +21,12 @@ INSTRUCTIONS = """You plan a home dinner menu for a printed place card.
 Turn the request into the dishes it names and, for every packaged product, pick ONE exact retail product
 sold in US grocery stores (San Francisco Bay Area): brand + product name + size, e.g.
 "Haidilao Mushroom Hot Pot Soup Base, 5.3 oz". Use web search to confirm the product exists.
+- item: the full name exactly as printed on the package, with brand and size, e.g. "Libby's 100% Pure Pumpkin,
+  15 oz" (never a made-up name like "Libby's pumpkin pie"). It must be a product that brand really sells.
+- ingredients: the ingredient list copied exactly from that product's package label (from a retailer or brand
+  page you found), plus its "Contains:" line if it has one. label_url: that page. "" if you could not find it.
+- Every dessert product must be a branded packaged product. Desserts must never contain fish or fish
+  ingredients (no fish gelatin, anchovy, fish sauce, isinglass). Pick another brand if a label mentions fish.
 - Keep the user's dishes. Do not swap a dish for another one.
 - Where brands differ, prefer a product whose label avoids the guests' allergens and has no
   shared-facility warning for them. Never claim a product is safe; a separate checker reads every label.
@@ -69,6 +76,7 @@ SCHEMA = {
             "type": "object",
             "properties": {
                 "item": {"type": "string"}, "brand": {"type": "string"}, "tag": {"type": "string"},
+                "ingredients": {"type": "string"}, "label_url": {"type": "string"},
                 "part": {"type": "string", "enum": ["main", "dessert", "sauce"]},
                 "section": {"type": "string"},
             },
@@ -79,10 +87,16 @@ SCHEMA = {
 }
 
 
+SIZE_RX = re.compile(r"(,\s*|\s+)\(?\d[\d.,/ ]*\s*(fl\.? ?oz|oz|lb|lbs|g|kg|ml|l|ct|count|pack|in)\b\.?\)?\s*$", re.I)
+
+
 def card_word(p: dict) -> str:
-    """'Sky Ranch beef' for branded products, 'Bok choy' for fresh ones."""
-    tag = (p.get("tag") or p["item"]).strip()
-    return f"{p['brand'].strip()} {tag}" if p.get("brand", "").strip() else tag[:1].upper() + tag[1:]
+    """The exact product name, without the package size: "Libby's 100% Pure Pumpkin". Fresh food: "Bok choy"."""
+    item, brand = p["item"].strip(), p.get("brand", "").strip()
+    if not brand:
+        return item[:1].upper() + item[1:]
+    name = SIZE_RX.sub("", item).strip(" ,")
+    return name if brand.lower().split()[0] in name.lower() else f"{brand} {name}"
 
 
 def pack(words: list[str], n: int = LINE_CHARS) -> list[str]:
@@ -98,12 +112,21 @@ def pack(words: list[str], n: int = LINE_CHARS) -> list[str]:
 
 def to_cards(plan: dict) -> dict:
     """Agent plan -> the keys cards.py reads (menu, sauces, simple), replacing the saved example menu."""
+    urls = plan.get("_urls")
     menu: dict[str, list[dict]] = {}
     sauces: list[dict] = []
     for p in plan.get("products", []):
         prod = {"item": p["item"].strip(), "tag": p.get("tag", "").strip() or p["item"].strip()}
         if p.get("brand", "").strip():
             prod["brand"] = p["brand"].strip()
+        prod["card"] = card_word(prod)
+        # The Agent's copy of the label is printed under the product and handed to the Decider as evidence.
+        # It is NOT a cited source: it never makes anything safe by itself (term_status needs the Decider).
+        if (p.get("ingredients") or "").strip():
+            prod["ingredients"] = p["ingredients"].strip()[:400]
+        u = (p.get("label_url") or "").strip().rstrip("/")
+        if u.startswith("http") and (urls is None or u in urls):
+            prod["label_url"] = u
         if p.get("part") == "sauce":
             sauces.append(prod)
         else:

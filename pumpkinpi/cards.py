@@ -65,10 +65,10 @@ def prod_name(p) -> str:
 
 def prod_label(p) -> dict | None:
     """The exact label we wrote down, handed to the Decider as evidence (never makes anything green alone)."""
-    if not isinstance(p, dict) or not p.get("label"):
+    if not isinstance(p, dict) or not (p.get("label") or p.get("ingredients")):
         return None
-    return {"source": "recipe", "name": p["item"], "ingredients": p["label"],
-            "allergens": p.get("contains") or [], "url": p.get("source")}
+    return {"source": "recipe", "name": p["item"], "ingredients": p.get("label") or p["ingredients"],
+            "allergens": p.get("contains") or [], "url": p.get("source") or p.get("label_url")}
 
 
 # What every card line answers, guest by guest. key = TERMS key, value = word printed on the card.
@@ -108,7 +108,7 @@ def term_status(p, r: dict | None) -> dict[str, str]:
     from .allergens import name_hits
     d = p if isinstance(p, dict) else {}
     # "No addition of peanut" / "no added peanuts" is not a hit
-    label = re.sub(r"\bno (addition of|added)\s+\w+", " ", d.get("label", ""), flags=re.I)
+    label = re.sub(r"\bno (addition of|added)\s+\w+", " ", d.get("label") or d.get("ingredients") or "", flags=re.I)
     cited = str(d.get("source") or "").startswith("https://")
     listed = set(d.get("contains") or [])
     checks = (r or {}).get("checks", {})
@@ -145,7 +145,7 @@ def item_lines(products: list[tuple[str, object]], results: dict[str, dict]) -> 
             src += [u for u in (c.get("sources") or []) if u and u not in src]
         src = ([WHOLE_SRC] if is_whole(p) else []) + src[:4]
         if isinstance(p, dict) and p.get("brand"):
-            out.append({"name": f"{p.get('tag') or dish} ({p['brand']})", "item": p["item"], "brand": p["brand"], "terms": st,
+            out.append({"name": p.get("card") or f"{p.get('tag') or dish} ({p['brand']})", "item": p["item"], "brand": p["brand"], "terms": st,
                         "sources": src})
         else:
             fresh.append((prod_name(p), st, src))
@@ -338,12 +338,14 @@ def back_rows(cfg: dict) -> list[tuple]:
     return rows
 
 
-def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.0) -> tuple[list[Stroke], float]:
-    """Rows of (text, height, font, centered, step to next baseline), block centered top to bottom."""
+def draw_rows(rows: list[tuple], W: float, H: float, m: float, extra: float = 0.0,
+              top: bool = False) -> tuple[list[Stroke], float]:
+    """Rows of (text, height, font, centered, step to next baseline), block centered top to bottom
+    (or starting right under the top margin with top=True)."""
     total = sum(r[4] for r in rows[:-1]) + rows[-1][1] + extra
     if total > H - 2 * m:
         raise ValueError(f"Doesn't fit the card ({total:.0f} mm of {H - 2 * m:.0f}). Use fewer dishes or smaller text.")
-    y = H - (H - total) / 2 - rows[0][1]
+    y = H - (m if top else (H - total) / 2) - rows[0][1]
     out: list[Stroke] = []
     for i, (txt, h, font, center, step) in enumerate(rows):
         st = fit_line(txt, h, W - 2 * m, font)
@@ -418,7 +420,10 @@ def avoid_lines(cfg: dict, lines: list[dict], guest: str) -> list[str]:
             out.append(f"{name}: {verdict[2:].strip() or 'no'}")
         elif verdict == "check label" or (ln.get("unsure") and not verdict.startswith("YES")):
             why = (products.get(ln.get("item")) or {}).get("why", {})   # e.g. {"tree nut": "coconut"}
-            out.append(f"{name}: " + ", ".join(why.get(u, f"may have {u}") for u in ln.get("unsure") or ["?"]))
+            uns = ln.get("unsure") or ["?"]
+            rest = [u for u in uns if u not in why]
+            out.append(f"{name}: " + ", ".join([why[u] for u in uns if u in why]
+                                               + ([f"may have {', '.join(rest)}"] if rest else [])))
     mine = set((cfg.get("allergies") or {}).get(guest) or [])
     for x in cfg.get("avoid_extra", []):              # e.g. "Peanut topping on pie" for peanut-allergic guests
         if mine & set(x.get("terms", [])):
@@ -512,10 +517,15 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
     rows = []
     if guest:
         rows.append((guest, 8, "cursive", True, 14))
-    for title, items in (cfg.get("simple") or {}).items():
+    ih = h * 0.72                    # label ingredients under each product, a bit smaller
+    for title, items in simple_items(cfg).items():
         rows.append((f"{title}:", h + 0.6, "print", False, p + 1))
-        for t in items:
+        for t, ing in items:
             rows += [(x, h, "print", False, p) for x in wrap(t, h, W - 2 * m)]
+            if ing:
+                rows[-1] = rows[-1][:4] + (h * 1.35,)
+                rows += [(x, ih, "print", False, ih * 1.45) for x in wrap(" " + ing, ih, W - 2 * m)]
+                rows[-1] = rows[-1][:4] + (p + 1,)
         rows[-1] = rows[-1][:4] + (p + 5,)
     rows.append(("Allergens:", h + 0.6, "print", False, p + 1))
     if not (cfg.get("allergies") or {}).get(guest):
@@ -529,6 +539,15 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
 
 
 OK_LINES = ("Everything else is okay.", "But double check labels.")
+
+
+def simple_items(cfg: dict) -> dict[str, list[tuple[str, str]]]:
+    """{section: [(exact product name, label ingredients or "")]}. Menus planned from a prompt carry the
+    exact name ("card") and label per product; older configs only have the packed "simple" lines."""
+    menu = [d for d in cfg.get("menu") or [] if any(isinstance(x, dict) and x.get("card") for x in d["products"])]
+    if not menu:
+        return {k: [(t, "") for t in v] for k, v in (cfg.get("simple") or {}).items()}
+    return {d["name"]: [(x.get("card") or x["item"], x.get("ingredients", "")) for x in d["products"]] for d in menu}
 
 
 def one_page_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
@@ -623,13 +642,14 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
     if card.get("style", "short") == "simple":
-        for k in (1, .92, .85, .78, .72):         # a longer menu: smaller letters until it fits one side
+        ks = (1, .92, .85, .78, .72, .66, .6)
+        for k in ks:                              # a longer menu: smaller letters until it fits one side
             c = {**cfg, "card": {**card, "simple_mm": card.get("simple_mm", 4.4) * k,
                                  "simple_avoid_mm": card.get("simple_avoid_mm", 3.8) * k}}
-            try:
-                return draw_rows(simple_rows(c, lines, guest), W, H, m)[0]
+            try:                                  # start right under the top margin: room for labels + allergens
+                return draw_rows(simple_rows(c, lines, guest), W, H, m, top=True)[0]
             except ValueError:
-                if k == .72:
+                if k == ks[-1]:
                     raise
     if card.get("style", "short") == "one":
         return draw_rows(one_page_rows(cfg, lines, guest), W, H, m)[0]

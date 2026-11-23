@@ -272,3 +272,20 @@ def test_saved_check_from_old_menu_is_ignored(tmp_path, monkeypatch):
     f.write_text(json.dumps({"key": "other", "lines": [{"text": "old"}]}))
     server.state.pop("cards_key")
     assert server.card_lines() == []
+
+
+def test_simple_card_prints_exact_products_with_ingredients_from_the_top():
+    cfg = cards.load(use_menu=False)
+    cfg["menu"] = [{"name": "Dessert", "products": [
+        {"item": "Libby's 100% Pure Pumpkin, 15 oz", "brand": "Libby's", "card": "Libby's 100% Pure Pumpkin",
+         "ingredients": "Pumpkin."}]}]
+    cfg["sauces"] = []
+    ln = {"name": "Libby's 100% Pure Pumpkin", "item": "Libby's 100% Pure Pumpkin, 15 oz", "part": "menu",
+          "terms": {t: "unsure" for t in cards.WATCH}, "unsure": list(cards.WATCH.values())}
+    t = [r[0] for r in cards.simple_rows(cfg, [ln], "Debbie")]
+    assert "Libby's 100% Pure Pumpkin" in t and any("Pumpkin." in x for x in t)
+    assert "Libby's 100% Pure Pumpkin: may have peanut, tree nut, sesame, fish" in " ".join(x.strip() for x in t)
+    st = cards.layout(cfg, [ln], "Debbie", "front")
+    top = max(y for s_ in st for _, y in s_)
+    H, m = cfg["card"].get("h", 178), cfg["card"].get("margin", 10)
+    assert top > H - m - 3                     # text starts right under the top margin
