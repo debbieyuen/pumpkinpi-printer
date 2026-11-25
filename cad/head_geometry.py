@@ -1,7 +1,7 @@
-"""Ender-3 V3 SE print head geometry, read from Michael Hilton's reference STEP model.
+"""Ender-3 V3 SE print head geometry, read from a community reference STEP model.
 
-Source: "Open source Ender 3 V3 SE Reference Models (.STEP FILES)" by Michael Hilton,
-https://www.printables.com/model/672045 , licensed CC BY (Creative Commons Attribution).
+Source: "Open source Ender 3 V3 SE Reference Models (.STEP FILES)" by Ally the Sentry,
+https://www.printables.com/model/672045 . The files are not included in this repo; see cad/reference/README.md.
 The author describes it as a "somewhat accurate" model, so print cad/out/fit_test.stl first.
 
 Coordinates used by every PumpkinPi part (mm):
