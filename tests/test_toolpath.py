@@ -8,15 +8,15 @@ from pumpkinpi.toolpath import Machine, OutOfBounds, to_gcode
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_every_shape_fits_the_pie(shape):
-    for words in ["", "Michael", "WWWWWWWWWWWW"]:
+    for words in ["", "Alex", "WWWWWWWWWWWW"]:
         for font in ["print", "cursive"]:
             for st in strokes_for({"shape": shape, "text": words, "font": font}):
                 assert all(math.hypot(x, y) <= MAX_R + 0.01 for x, y in st)
 
 
 def test_cursive_differs_from_print():
-    a = strokes_for({"shape": "text", "text": "Debbie", "font": "print"})
-    b = strokes_for({"shape": "text", "text": "Debbie", "font": "cursive"})
+    a = strokes_for({"shape": "text", "text": "Sam", "font": "print"})
+    b = strokes_for({"shape": "text", "text": "Sam", "font": "cursive"})
     assert a != b
 
 
@@ -50,15 +50,15 @@ def test_food_mode_blocks_homing():
 def test_long_words_wrap_to_two_lines_whole_words_only():
     from pumpkinpi.shapes import split_lines
     assert split_lines("happy thanksgiving") == ["happy", "thanksgiving"]
-    assert split_lines("Happy Thanksgiving Debbie") == ["Happy", "Thanksgiving"]   # drops a word, never cuts one
-    assert split_lines("Debbie") == ["Debbie"]
+    assert split_lines("Happy Thanksgiving Sam") == ["Happy", "Thanksgiving"]   # drops a word, never cuts one
+    assert split_lines("Sam") == ["Sam"]
     assert split_lines("") == []
 
 
 def test_every_shape_and_text_fits_the_pie():
     from pumpkinpi.shapes import MAX_R, SHAPES, strokes_for
     for shape in SHAPES:
-        for words in ("", "Debbie", "Happy Thanksgiving"):
+        for words in ("", "Sam", "Happy Thanksgiving"):
             for font in ("print", "cursive"):
                 pts = [p for st in strokes_for({"shape": shape, "text": words, "font": font}) for p in st]
                 assert pts and max((x * x + y * y) ** 0.5 for x, y in pts) <= MAX_R + 0.01

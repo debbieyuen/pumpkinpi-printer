@@ -38,7 +38,7 @@ def test_plan_menu_uses_agent_and_rejects_non_meals(monkeypatch):
         seen.update(k)
         return json.dumps(PLAN), []
     monkeypatch.setattr(menu_plan.pplx, "agent", agent)
-    m = menu_plan.plan_menu(None, "roast chicken", {"Debbie": ["fish"]})
+    m = menu_plan.plan_menu(None, "roast chicken", {"Sam": ["fish"]})
     assert m["prompt"] == "roast chicken" and "fish" in seen["input"] and seen["schema"] is menu_plan.SCHEMA
     monkeypatch.setattr(menu_plan.pplx, "agent", lambda c, **k: (json.dumps({"title": "", "products": [], "note": "Not food"}), []))
     with pytest.raises(ValueError, match="Not food"):
@@ -80,7 +80,7 @@ def test_menu_endpoint(tmp_path, monkeypatch):
     assert r.status_code == 200 and r.json()["title"] == "Roast chicken" and r.json()["lines"]
     info = tc.get("/api/cards").json()
     assert info["title"] == "Roast chicken" and info["prompt"] == "roast chicken; pumpkin pie"
-    assert any("Red Boat" in x and "fish" in x for x in info["avoid"]["Debbie"])
+    assert any("Red Boat" in x and "fish" in x for x in info["avoid"]["Sam"])
     monkeypatch.setattr(menu_plan.pplx, "agent", lambda c, **k: (json.dumps({"title": "", "products": []}), []))
     assert tc.post("/api/menu", json={"prompt": "a bicycle"}).status_code == 400
 

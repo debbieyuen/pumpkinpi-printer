@@ -47,7 +47,7 @@ def test_sizes_before_and_after_calibration(tmp_path, monkeypatch):
 
 
 def test_design_shrinks_to_fit_never_grows():
-    plan = {"shape": "smiley", "text": "Debbie"}
+    plan = {"shape": "smiley", "text": "Sam"}
     full = extent(strokes_for(plan))
     assert abs(extent(strokes_for({**plan, "fit_r": 20})) - 20) < 0.01
     assert abs(extent(strokes_for({**plan, "fit_r": 80})) - full) < 0.01

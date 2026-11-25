@@ -8,7 +8,7 @@ Every card lists the dishes, one short line each, with the allergens Perplexity 
     Mushroom broth: soy, wheat
     Beef slices: none
     Sesame dip: sesame ?
-    ? = ask Debbie
+    ? = ask the host
 
 How each line is made (cards.json, copy cards.example.json):
   1. Every dish lists the exact products that go in it (brand + product + size).

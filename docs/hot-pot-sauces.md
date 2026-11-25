@@ -1,6 +1,6 @@
 # Hot pot sauces: nuts, peanuts, sesame, fish
 
-For Debbie (no tree nuts, peanuts or fish; shellfish OK). Read the jar in your hand: labels change between versions and countries.
+Example research for a guest who avoids tree nuts, peanuts and fish (shellfish OK). Not a safety guarantee. Read the jar in your hand: labels change between versions and countries.
 
 ## Common sauces to skip
 
@@ -19,7 +19,7 @@ For Debbie (no tree nuts, peanuts or fish; shellfish OK). Read the jar in your h
 | Lee Kum Kee Chiu Chow Chili Crisp Oil | sesame oil (no nuts, no fish) | [LKK USA](https://usa.lkk.com/en/products/chiu-chow-style-chili-oil) |
 | Fish balls, beef balls, meatball mixes | beef balls can hide fish sauce | [WASO, Oriental Kitchen beef balls](https://waso.uk/items/Oriental-Kitchen-Beef-Meatballs-250g) |
 
-OK for Debbie (shellfish only, no nuts, sesame or fish on the label): Lee Kum Kee XO Sauce ([LKK USA](https://usa.lkk.com/en/products/xo-sauce-extra-hot)), Lee Kum Kee Seasoned Soy Sauce for Seafood ([LKK USA](https://usa.lkk.com/en/products/seasoned-soy-sauce-for-seafood)). Note the Hong Kong "Seafood XO Hot and Savoury" adds anchovy fish extract ([LKK HK](https://hk.lkk.com/en/products/seafood-xo-sauce-hot-and-savoury)): buy the US jar.
+OK for that guest (shellfish only, no nuts, sesame or fish on the label): Lee Kum Kee XO Sauce ([LKK USA](https://usa.lkk.com/en/products/xo-sauce-extra-hot)), Lee Kum Kee Seasoned Soy Sauce for Seafood ([LKK USA](https://usa.lkk.com/en/products/seasoned-soy-sauce-for-seafood)). Note the Hong Kong "Seafood XO Hot and Savoury" adds anchovy fish extract ([LKK HK](https://hk.lkk.com/en/products/seafood-xo-sauce-hot-and-savoury)): buy the US jar.
 
 Recall: Wangzhihe Hot Pot Sauce was recalled on 3/11/2025 for undeclared peanut, soy, sesame and wheat ([FDA recall data](https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/datatables-data?randparam=650859&page&_format=xlsx)).
 

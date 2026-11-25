@@ -22,7 +22,7 @@ def test_research_uses_high_effort_and_verified_domains(monkeypatch):
         return '{"facts": []}', []
     monkeypatch.setattr(ms.pplx, "agent", fake)
     ms.research(None, {"menu": [{"name": "Hot pot", "products": [{"item": "Kikkoman Ponzu"}]}]},
-                [{"name": "Debbie", "avoid": ["fish"]}, {"name": "Dad", "limit": ["sugar"]}])
+                [{"name": "Sam", "avoid": ["fish"]}, {"name": "Dad", "limit": ["sugar"]}])
     assert seen["effort"] == "high"
     assert "cdc.gov" in seen["domains"] and "fda.gov" in seen["domains"] and "pubmed.ncbi.nlm.nih.gov" in seen["domains"]
     assert "Kikkoman Ponzu" in seen["input"] and "sugar" in seen["input"]

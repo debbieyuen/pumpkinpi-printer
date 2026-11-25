@@ -90,7 +90,7 @@ def strict(strip=False):
 
 
 def card_lines():
-    st = cards.layout(cards.load(), [{"text": "Pumpkin pie: may have tree nut", "unsure": []}], "Debbie")
+    st = cards.layout(cards.load(), [{"text": "Pumpkin pie: may have tree nut", "unsure": []}], "Sam")
     return card_file(cards.card_gcode(st, cards.Pla(card_x=34, card_y=-4)), "card_11_22_print01.gcode")
 
 
@@ -142,7 +142,7 @@ def test_server_print_card_puts_full_file_on_printer(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "_printer", p)
     monkeypatch.setattr(server, "GCODE_DIR", tmp_path)
     monkeypatch.setattr("pumpkinpi.printer.sd_mounts", lambda: [])
-    st = cards.layout(cards.load(), [{"text": "Pie: none", "unsure": []}], "Debbie")
+    st = cards.layout(cards.load(), [{"text": "Pie: none", "unsure": []}], "Sam")
     lines = cards.card_gcode(st, cards.Pla(card_x=34, card_y=-4))
     server.state["job"] = {"running": True}
     server.run_card(lines)

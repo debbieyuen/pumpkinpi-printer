@@ -126,7 +126,7 @@ def numbered(n: int, line: str) -> str:
 
 
 def sd_mounts() -> list[str]:
-    """microSD cards plugged into the Pi (USB card reader), e.g. /media/debbiepumpkinpi/3D PRINTER.
+    """microSD cards plugged into the Pi (USB card reader), e.g. /media/<user>/3D PRINTER.
     PUMPKINPI_SD_DIR overrides (any folder)."""
     if os.environ.get("PUMPKINPI_SD_DIR"):
         return [os.environ["PUMPKINPI_SD_DIR"]]

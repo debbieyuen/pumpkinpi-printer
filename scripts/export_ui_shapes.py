@@ -1,7 +1,7 @@
 """Export shapes.py art and the two Hershey fonts to ui/shapes.json.
 
 The touchscreen uses this only when it is NOT connected to the Pi (sample mode, e.g. the published
-web preview), so a typed design such as "a cat with Debbie in cursive" still draws the right pie.
+web preview), so a typed design such as "a cat with Sam in cursive" still draws the right pie.
 On the Pi the strokes always come from shapes.py + the real G-code.
 
     python scripts/export_ui_shapes.py
