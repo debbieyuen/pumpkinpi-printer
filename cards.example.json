@@ -2,7 +2,7 @@
  "event": {
   "title": "Family Hot Pot",
   "when": "Thu Nov 26  3 PM",
-  "for": "Debbie: no tree nuts, peanuts or fish (shellfish OK)",
+  "for": "Sam: no tree nuts, peanuts or fish (shellfish OK)",
   "unsure_note": "Brands checked by Perplexity"
  },
  "card": {
@@ -23,11 +23,11 @@
   "simple_avoid_mm": 3.4
  },
  "guests": [
-  "Debbie",
+  "Sam",
   "Dad",
   "Mom",
-  "Kathy",
-  "Michael",
+  "Jordan",
+  "Alex",
   "Lily",
   "Omar",
   "Grace",
@@ -100,7 +100,7 @@
       "shellfish"
      ],
      "source": "https://www.costco.ca/p/-/kirkland-signature-frozen-tail-on-raw-shrimp/100547553",
-     "note": "shellfish is OK for Debbie",
+     "note": "shellfish is OK for Sam",
      "brand": "Kirkland",
      "tag": "Shrimp"
     }
@@ -224,12 +224,12 @@
   "4 Dip: soy, vinegar, garlic, chili"
  ],
  "allergies": {
-  "Debbie": [
+  "Sam": [
    "peanut",
    "tree nut",
    "fish"
   ],
-  "Michael": [
+  "Alex": [
    "tree nut"
   ]
  },
@@ -336,7 +336,7 @@
     "soy"
    ],
    "source": "https://usa.lkk.com/en/products/xo-sauce-extra-hot",
-   "note": "shellfish only: OK for Debbie"
+   "note": "shellfish only: OK for Sam"
   },
   {
    "item": "Lee Kum Kee Seasoned Soy Sauce for Seafood",

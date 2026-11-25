@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 import pumpkinpi.server as srv
 from pumpkinpi.allergen_check import Check
 
-PLAN = {"guest": "Michael", "shape": "smiley", "text": "Michael", "topping": "ganache",
+PLAN = {"guest": "Alex", "shape": "smiley", "text": "Alex", "topping": "ganache",
         "ingredients": ["chocolate chips", "heavy cream"],
         "products": [{"ingredient": "chocolate chips", "brand": "Enjoy Life", "product": "Semi-Sweet Mini Chips", "size": "9 oz", "store": "Safeway", "upc": ""},
                      {"ingredient": "heavy cream", "brand": "Clover Sonoma", "product": "Organic Heavy Whipping Cream", "size": "1 pint", "store": "Safeway", "upc": ""}],
@@ -39,7 +39,7 @@ class FakeRecorder:
 
 def setup(tmp_path, monkeypatch, verdict="safe"):
     f = tmp_path / "guests.json"
-    f.write_text(json.dumps({"event": "Test", "guests": [{"name": "Michael", "avoid": ["tree nuts"], "notes": "private"}]}))
+    f.write_text(json.dumps({"event": "Test", "guests": [{"name": "Alex", "avoid": ["tree nuts"], "notes": "private"}]}))
     monkeypatch.setattr(srv, "GUESTS_FILE", f)
     monkeypatch.setattr(srv, "printer", lambda: (_ for _ in ()).throw(RuntimeError("no printer")))
     monkeypatch.setattr(srv, "make_client", lambda: __import__("contextlib").nullcontext(None))
@@ -60,12 +60,12 @@ def test_status_hides_health_notes(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     s = c.get("/api/status").json()
     assert s["printer"] is False
-    assert s["guests"] == [{"name": "Michael", "avoid": ["tree nuts"]}]
+    assert s["guests"] == [{"name": "Alex", "avoid": ["tree nuts"]}]
 
 
 def test_design_hides_diet_notes_and_returns_strokes(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
-    r = c.post("/api/design", json={"prompt": "smiley in chocolate for Michael"}).json()
+    r = c.post("/api/design", json={"prompt": "smiley in chocolate for Alex"}).json()
     assert r["plan"]["diet_notes"] == "" and len(r["strokes"]) > 3
 
 
@@ -118,7 +118,7 @@ def test_vegan_diet_adds_a_gating_row(tmp_path, monkeypatch):
     r = c.post("/api/design", json={"prompt": "x", "diets": ["vegan", "low sugar"]}).json()
     assert r["plan"]["diets"] == ["vegan", "low sugar"]
     rows = c.post("/api/check", json={"product": "heavy cream", "diets": ["vegan", "low sugar"]}).json()["results"]
-    assert [x["name"] for x in rows] == ["Michael", "Vegan"]
+    assert [x["name"] for x in rows] == ["Alex", "Vegan"]
 
 
 def test_unknown_diet_rejected(tmp_path, monkeypatch):
@@ -190,7 +190,7 @@ def test_design_adds_product_photo_and_check_uses_label(tmp_path, monkeypatch):
 def test_edit_to_cat_in_cursive(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch)
     c.post("/api/design", json={"prompt": "x"})
-    r = c.post("/api/edit", json={"shape": "cat", "text": "Debbie", "font": "cursive"}).json()
+    r = c.post("/api/edit", json={"shape": "cat", "text": "Sam", "font": "cursive"}).json()
     assert r["plan"]["shape"] == "cat" and r["plan"]["font"] == "cursive" and len(r["strokes"]) > 8
     assert c.post("/api/edit", json={"font": "gothic"}).status_code == 400
 
@@ -224,9 +224,9 @@ def test_layers_keep_first_topping_and_use_its_settings(tmp_path, monkeypatch):
     seen = {}
     def second(cl, p, g, diets=None, topping_type=None, layers=None, **kw):
         seen.update(topping_type=topping_type, layers=layers)
-        return {**PLAN, "base": "pie", "shape": "text", "text": "Debbie", "topping_type": "frosting"}
+        return {**PLAN, "base": "pie", "shape": "text", "text": "Sam", "topping_type": "frosting"}
     monkeypatch.setattr(srv, "plan_design", second)
-    r = c.post("/api/design", json={"prompt": "Debbie in frosting", "topping_type": "frosting", "add_layer": True}).json()
+    r = c.post("/api/design", json={"prompt": "Sam in frosting", "topping_type": "frosting", "add_layer": True}).json()
     assert seen["topping_type"] == "frosting" and seen["layers"][0]["topping_type"] == "chocolate"
     assert r["plan"]["base"] == "cookie" and len(r["layers"]) == 1 and r["layers"][0]["strokes"]
     # a fresh design clears the layers

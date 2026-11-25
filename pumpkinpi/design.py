@@ -1,7 +1,7 @@
 """Prompt -> design plan, with the Perplexity Agent API (web search + JSON output).
 
-"a cat with Debbie's name in cursive" becomes:
-  {"guest": "Debbie", "shape": "cat", "text": "Debbie", "font": "cursive", "topping": "dark chocolate ganache",
+"a cat with Sam's name in cursive" becomes:
+  {"guest": "Sam", "shape": "cat", "text": "Sam", "font": "cursive", "topping": "dark chocolate ganache",
    "ingredients": ["Enjoy Life Semi-Sweet Mini Chips, 9 oz", "Clover Sonoma Organic Heavy Whipping Cream, 1 pint"],
    "products": [{"ingredient": ..., "brand": "Enjoy Life", "product": "Semi-Sweet Mini Chips", "size": "9 oz",
                  "store": "Safeway", "upc": "853522000009"}, ...], ...}
@@ -57,7 +57,7 @@ SCHEMA = {
         "too_detailed": {"type": "string", "description": "Empty if the request can be piped as a few lines. Else one short "
                          "sentence on why it is too detailed for a syringe, e.g. 'A family portrait needs shading a syringe can't pipe.'"},
         "simpler": {"type": "string", "description": "If too_detailed: one short idea that would pipe well, e.g. "
-                    "'A cat with Debbie in cursive'. Else empty."},
+                    "'A cat with Sam in cursive'. Else empty."},
     },
     "required": ["kind", "answer", "makes", "base", "topping_type", "guest", "shape", "text", "font", "topping", "ingredients", "products", "recipe", "piping_notes", "diet_notes", "allergy_notes", "caption", "too_detailed", "simpler"],
     "additionalProperties": False,
@@ -68,7 +68,7 @@ also has a printer that pipes a topping from an unheated 60 mL syringe onto a pi
 
 Answer what they actually asked, never a preset:
 - kind "question" when they only want information (e.g. "what does free-range mean on a turkey", "is organic
-  worth it", "how long to thaw a turkey", "is this safe for Debbie"). Put the answer in answer: short, plain,
+  worth it", "how long to thaw a turkey", "is this safe for Sam"). Put the answer in answer: short, plain,
   practical, grounded in your web search. For labels, safety and nutrition use regulators and research first
   (fsis.usda.gov, ams.usda.gov, fda.gov, foodsafety.gov, fdc.nal.usda.gov, certifiedhumane.org, university
   extension, pubmed) and say what the label legally means vs what it does not guarantee. For health questions
@@ -86,7 +86,7 @@ Design rules (when base is not none):
   words. shape must be one of {list(SHAPES)}. "kitty"/"kitten" is cat, "puppy" is dog. If they ask for two
   pictures (e.g. a cat and a dog), use the last one named. If the picture isn't in the list, pick the closest
   and say so in design_note.
-- text: the name or words they asked for (spell guest names as in the guest list, e.g. "Debbie"), or the guest's
+- text: the name or words they asked for (spell guest names as in the guest list, e.g. "Sam"), or the guest's
   name if the design is for a named guest, else empty. Whole words only, at most two lines of {MAX_LINE} letters (e.g.
   "Happy Thanksgiving" pipes as "Happy" / "Thanksgiving"). If the words are longer, shorten them and say so in design_note.
 - font: "cursive" if they ask for cursive, script or handwriting, else "print".
@@ -203,8 +203,8 @@ REVISE = INSTRUCTIONS + """
 
 You are changing an existing design. Apply only the requested change and keep everything else
 (topping, ingredients, recipe) the same unless the change asks for it. "No name" or "without
-Michael's name" means text is empty. "Only a heart" means shape heart; drop the text unless the
-change asks for words. "A cat with the name 'debbie' in cursive" means shape cat, text "Debbie",
+Alex's name" means text is empty. "Only a heart" means shape heart; drop the text unless the
+change asks for words. "A cat with the name 'sam' in cursive" means shape cat, text "Sam",
 font cursive. Words in quotes are the text to pipe. If they now ask a question instead of a change
 (e.g. "is organic turkey worth it?"), return kind "question" with the answer. If they ask for a different
 food ("make cookies instead"), plan that food from scratch."""
@@ -230,7 +230,7 @@ def revise_design(client: httpx.Client, plan: dict, change: str, guests: list[di
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Turn a prompt into a PumpkinPi design plan.")
-    ap.add_argument("prompt", help='e.g. "a smiley face in chocolate for Michael"')
+    ap.add_argument("prompt", help='e.g. "a smiley face in chocolate for Alex"')
     ap.add_argument("--guests", default="guests.json")
     args = ap.parse_args()
     guests = json.load(open(args.guests))["guests"]

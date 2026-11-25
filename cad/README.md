@@ -11,7 +11,9 @@ plus the camera, display and pie-locator parts. All of them fit on one 220 x 220
 - **Pusher v0.5:** 3.4 mm M3 clearance holes and M3 hex nut traps underneath. v0.4 had an invalid solid (edges filleted after the holes were cut), so the slicer filled the bore, holes and traps in. v0.5 fillets first and asserts the solid is valid.
 - **plateA3.gcode** prints both parts in one run: about 4 h 3 min (slicer estimate), 71 g PETG, no supports.
 
-## Print it tonight (no supports needed)
+## Print the parts (no supports needed)
+
+The pre-sliced G-code files below are on the GitHub Releases page (they are not stored in git). The `.3mf` and `.stl` files in `out/` are in the repo.
 
 Every part was sliced with automatic support detection turned on (40° threshold, stricter than
 the 30° default) and needed **zero** supports. Horizontal holes are teardrop-shaped for this reason.
@@ -66,7 +68,7 @@ Slicer: OrcaSlicer 2.5.1 with the stock Ender-3 V3 SE 0.4 profile. Generic PETG 
 ## Assumptions (check with calipers if anything binds)
 
 - These values are assumed: FLANGE_DEPTH 36, THUMB_PAD_THICK 2.0 and PLUNGER_STEM_WIDTH 27.5. The T8 nut sizes are typical values.
-- The head geometry comes from Michael Hilton's Ender-3 V3 SE model, which he describes as "somewhat accurate".
+- The head geometry comes from Ally the Sentry's Ender-3 V3 SE reference model, which the author describes as "somewhat accurate".
   The model puts the 2 right-side M3 holes 14.2 mm apart, center to center.
 - The plunger stroke is about 99 mm. With the 150 mm screw, about 24 mm of thread is left over at full fill. When the syringe is empty, the pusher stops about 1 mm above the coupler. The fully-in plunger length is an estimate, so don't drive the last few mm.
 - `check_fit.py` reports zero interference with the head, a dummy barrel, the flange, the motor and the coupler.
@@ -81,7 +83,7 @@ python3 check_fit.py && python3 plate.py && python3 render.py
 
 ## Credits and sources
 
-- Print head and frame reference: Michael Hilton, "Creality Ender 3 V3 SE", CC BY.
+- Print head and frame reference: Ally the Sentry, "Open source Ender 3 V3 SE Reference Models (.STEP FILES)" (not redistributed here; see `reference/README.md`).
   https://www.printables.com/model/672045 (files in `reference/`)
 - Design ideas: Allstruder, a 60 mL syringe extruder. https://shiwarskilab.com/allstruder/index.html
 - Touch Display 2 dimensions: https://www.raspberrypi.com/documentation/accessories/touch-display-2.html

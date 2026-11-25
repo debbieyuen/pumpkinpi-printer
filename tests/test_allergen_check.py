@@ -31,8 +31,8 @@ def test_thresholds():
 
 def test_one_call_per_allergen():
     seen = []
-    guests = [{"name": "Michael", "avoid": ["tree nuts"]},
-              {"name": "Debbie", "avoid": ["tree nuts", "fish"]}]
+    guests = [{"name": "Alex", "avoid": ["tree nuts"]},
+              {"name": "Sam", "avoid": ["tree nuts", "fish"]}]
     rows = check_for_guests(client_returning(0.02, seen), "Pumpkin puree", guests)
     assert len(seen) == 2 and len(rows) == 3
 
@@ -81,7 +81,7 @@ def test_label_is_extra_evidence_not_a_pass():
 
 def test_design_tidy_keeps_products_in_step():
     from pumpkinpi.design import tidy
-    p = tidy({"shape": "dragon", "font": "gothic", "text": "Debbie", "ingredients": ["A", "B"],
+    p = tidy({"shape": "dragon", "font": "gothic", "text": "Sam", "ingredients": ["A", "B"],
               "products": [{"ingredient": "b", "brand": "Clover Sonoma", "product": "Cream", "size": "1 pint", "store": "Safeway", "upc": ""}]})
     assert p["shape"] == "text" and p["font"] == "print"
     assert [x["ingredient"] for x in p["products"]] == ["A", "B"] and p["products"][1]["brand"] == "Clover Sonoma"

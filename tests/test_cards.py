@@ -77,7 +77,7 @@ def test_every_labeled_product_has_a_source_and_reaches_the_decider(monkeypatch)
     monkeypatch.setattr("pumpkinpi.allergen_check.check_ingredient", fake)
     lines = cards.check_menu(None, cfg)
     assert seen["Kikkoman Soy Sauce"]["ingredients"].startswith("Water, Soybeans, Wheat")
-    by = {ln["name"]: ln for ln in cards.guest_lines(cfg, lines, "Debbie")}
+    by = {ln["name"]: ln for ln in cards.guest_lines(cfg, lines, "Sam")}
     assert by["Satay (Lee Kum Kee)"]["text"] == "Satay (Lee Kum Kee): NO peanut, sesame"
     assert by["Sha cha (Bull Head)"]["text"] == "Sha cha (Bull Head): NO sesame, fish"   # "No addition of peanut"
     assert by["Hoisin (Lee Kum Kee)"]["text"] == "Hoisin (Lee Kum Kee): YES, sesame"
@@ -99,7 +99,7 @@ def test_decider_found_beats_clean_label():
 def test_back_has_sauces_and_steps():
     import pumpkinpi.allergen_check as ac
     cfg = cards.load()
-    texts = [r[0] for r in cards.sauce_rows(cfg, [], "Debbie")]
+    texts = [r[0] for r in cards.sauce_rows(cfg, [], "Sam")]
     assert texts[0] == "Sauces: can I eat it?" and texts[-1].startswith("YES = no peanut, tree nut or fish")
 
 
@@ -115,7 +115,7 @@ def test_two_sides_only_and_both_fit():
     W, H = cfg["card"]["w"], cfg["card"]["h"]
     cfg["card"]["style"] = "short"
     for side in ("front", "back"):
-        st = cards.layout(cfg, lines, "Debbie", side)
+        st = cards.layout(cfg, lines, "Sam", side)
         assert st and all(0 <= x <= W and 0 <= y <= H for s in st for x, y in s)
 
 
@@ -149,8 +149,8 @@ def test_each_item_printed_once_with_its_ingredients():
         lines = cards.check_menu(None, cfg)
     finally:
         ac.check_ingredient = orig
-    front = [r[0] for r in cards.entry_rows(cfg, cfg["menu"], [x for x in lines if x["part"] == "menu"], "Debbie")]
-    back = [r[0] for r in cards.entry_rows(cfg, [cfg["dessert"]], [x for x in lines if x["part"] == "dessert"], "Debbie")]
+    front = [r[0] for r in cards.entry_rows(cfg, cfg["menu"], [x for x in lines if x["part"] == "menu"], "Sam")]
+    back = [r[0] for r in cards.entry_rows(cfg, [cfg["dessert"]], [x for x in lines if x["part"] == "dessert"], "Sam")]
     heads = [t.split(":")[0] for t in front + back if not t.startswith(" ")]
     assert len(heads) == len(set(heads))
     i = front.index("Tofu (House Foods): YES")
@@ -169,23 +169,23 @@ def _lines(cfg):
 
 def test_short_card_back_lists_only_nos_for_debbie():
     cfg = cards.load()
-    bad = cards.avoid_lines(cfg, _lines(cfg), "Debbie")
+    bad = cards.avoid_lines(cfg, _lines(cfg), "Sam")
     assert "Satay (Lee Kum Kee): peanut, sesame" in bad
     assert "Ponzu (Kikkoman): fish" in bad
     assert not any("YES" in b or "Tofu" in b or "Crust" in b for b in bad)
-    texts = [r[0] for r in cards.short_back_rows(cfg, _lines(cfg), "Debbie")]
-    assert texts[0] == "Debbie: don't eat" and "Everything else is okay." in texts
+    texts = [r[0] for r in cards.short_back_rows(cfg, _lines(cfg), "Sam")]
+    assert texts[0] == "Sam: don't eat" and "Everything else is okay." in texts
 
 
 def test_unsure_counts_as_dont_eat():
     cfg = cards.load()
     ln = {"name": "Mystery (Brand)", "terms": {t: "unsure" for t in cards.WATCH}, "unsure": ["peanut"]}
-    assert "Mystery (Brand): may have peanut" in cards.avoid_lines(cfg, [ln], "Debbie")
+    assert "Mystery (Brand): may have peanut" in cards.avoid_lines(cfg, [ln], "Sam")
 
 
 def test_michael_unsure_sauces_are_a_no_with_reason():
     cfg = cards.load()
-    t = [r[0] for r in cards.simple_rows(cfg, _lines(cfg), "Michael")]
+    t = [r[0] for r in cards.simple_rows(cfg, _lines(cfg), "Alex")]
     assert "Lee Kum Kee Satay: coconut" in t and "Bull Head Sha cha: unnamed spices" in t
     assert not any("check label" in x.lower() for x in t if x not in cards.OK_LINES)
 
@@ -212,18 +212,18 @@ def test_short_card_both_sides_fit_for_every_guest():
 def test_pie_one_line_yes_and_peanut_topping_warning():
     cfg = cards.load()
     L = _lines(cfg)
-    assert cards.dessert_verdict(cfg, L, "Debbie") == "YES"
-    front = [r[0] for r in cards.short_front_rows(cfg, "Debbie", L)]
+    assert cards.dessert_verdict(cfg, L, "Sam") == "YES"
+    front = [r[0] for r in cards.short_front_rows(cfg, "Sam", L)]
     assert "Pumpkin pie: YES" in front
-    assert "Peanut topping on pie" in cards.avoid_lines(cfg, L, "Debbie")
-    assert "Peanut topping on pie" not in cards.avoid_lines(cfg, L, "Michael")   # peanuts are OK for him
+    assert "Peanut topping on pie" in cards.avoid_lines(cfg, L, "Sam")
+    assert "Peanut topping on pie" not in cards.avoid_lines(cfg, L, "Alex")   # peanuts are OK for him
 
 
 def test_pie_verdict_no_if_any_ingredient_no():
     cfg = cards.load()
     bad = {"name": "Crust (X)", "part": "dessert", "terms": {**{t: "safe" for t in cards.WATCH}, "peanut": "found"},
            "unsure": []}
-    assert cards.dessert_verdict(cfg, [bad], "Debbie") == "NO"
+    assert cards.dessert_verdict(cfg, [bad], "Sam") == "NO"
 
 
 def test_broth_is_haidilao_mushroom_with_label():
@@ -238,7 +238,7 @@ def test_one_page_has_menu_and_dont_eat():
     cfg = cards.load()
     cfg["card"]["style"] = "one"
     L = _lines(cfg)
-    t = [r[0] for r in cards.one_page_rows(cfg, L, "Debbie")]
+    t = [r[0] for r in cards.one_page_rows(cfg, L, "Sam")]
     assert "Pumpkin pie: YES" in t and "Don't eat" in t
     assert "Satay (Lee Kum Kee): peanut, sesame" in t and "Peanut topping on pie" in t
     assert "No food allergies on file" in [r[0] for r in cards.one_page_rows(cfg, L, "Dad")]
@@ -248,13 +248,13 @@ def test_simple_card_like_the_note():
     cfg = cards.load()
     assert cfg["card"]["style"] == "simple"
     L = _lines(cfg)
-    t = [r[0] for r in cards.simple_rows(cfg, L, "Debbie")]
-    assert t[0] == "Debbie" and "Hot Pot Menu:" in t and "Dessert:" in t and "Allergens:" in t
+    t = [r[0] for r in cards.simple_rows(cfg, L, "Sam")]
+    assert t[0] == "Sam" and "Hot Pot Menu:" in t and "Dessert:" in t and "Allergens:" in t
     assert "Lee Kum Kee Satay: peanut, sesame" in t
     assert not any("check label" in x.lower() for x in t if x not in cards.OK_LINES)         # every item decided YES/NO
     assert "Everything else is okay." in t and any("Little Sheep lamb" in x for x in t)
     assert any("Mrs. Smith" in x for x in t) and any("Straus" in x for x in t)
-    assert cards.layout(cfg, L, "Debbie", "front") and cards.layout(cfg, L, "Debbie", "back") == []
+    assert cards.layout(cfg, L, "Sam", "front") and cards.layout(cfg, L, "Sam", "back") == []
 
 
 def test_saved_check_from_old_menu_is_ignored(tmp_path, monkeypatch):
@@ -282,10 +282,10 @@ def test_simple_card_prints_exact_products_with_ingredients_from_the_top():
     cfg["sauces"] = []
     ln = {"name": "Libby's 100% Pure Pumpkin", "item": "Libby's 100% Pure Pumpkin, 15 oz", "part": "menu",
           "terms": {t: "unsure" for t in cards.WATCH}, "unsure": list(cards.WATCH.values())}
-    t = [r[0] for r in cards.simple_rows(cfg, [ln], "Debbie")]
+    t = [r[0] for r in cards.simple_rows(cfg, [ln], "Sam")]
     assert "Libby's 100% Pure Pumpkin" in t and any("Pumpkin." in x for x in t)
     assert "Libby's 100% Pure Pumpkin: may have peanut, tree nut, sesame, fish" in " ".join(x.strip() for x in t)
-    st = cards.layout(cfg, [ln], "Debbie", "front")
+    st = cards.layout(cfg, [ln], "Sam", "front")
     top = max(y for s_ in st for _, y in s_)
     H, m = cfg["card"].get("h", 178), cfg["card"].get("margin", 10)
     assert H - cards.TOP - 3 < top <= H - cards.TOP + 0.5      # starts TOP mm under the top edge, not at the edge

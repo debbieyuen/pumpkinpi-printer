@@ -231,3 +231,8 @@ machine.json
 gcode/
 camera_cal.json
 cards.json
+
+# PumpkinPi: large generated files (attach to GitHub Releases instead)
+cad/out/*.gcode
+cad/sd/*.gcode
+cad/reference/*.step

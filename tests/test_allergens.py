@@ -28,7 +28,7 @@ def test_peanut_is_not_a_tree_nut_but_has_its_own_names():
 
 def test_fish_names():
     assert name_hits("Worcestershire sauce", "fish")["contains"] == ["worcestershire"]
-    assert name_hits("shellfish stock", "fish")["contains"] == []   # shellfish is OK for Debbie
+    assert name_hits("shellfish stock", "fish")["contains"] == []   # shellfish is OK for Sam
 
 
 def test_scan_finds_nuts_in_steps():
@@ -70,9 +70,9 @@ def test_coconut_is_check_the_label():
 
 
 def test_guide_offline_has_cited_cards():
-    g = [{"name": "Michael", "avoid": ["tree nuts"]}, {"name": "Debbie", "avoid": ["tree nuts", "peanuts", "fish"]}]
+    g = [{"name": "Alex", "avoid": ["tree nuts"]}, {"name": "Sam", "avoid": ["tree nuts", "peanuts", "fish"]}]
     out = allergy_guide.offline(g)
     cards = {c["allergen"]: c for c in out["allergens"]}
-    assert cards["tree nuts"]["guests"] == ["Michael", "Debbie"] and cards["peanuts"]["guests"] == ["Debbie"]
+    assert cards["tree nuts"]["guests"] == ["Alex", "Sam"] and cards["peanuts"]["guests"] == ["Sam"]
     assert all(c["sources"] and c["names"] for c in cards.values())
     assert any("foodallergy.org" in s["url"] for s in cards["peanuts"]["sources"])

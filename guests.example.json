@@ -1,8 +1,8 @@
 {
-  "event": "Thanksgiving with family",
+  "event": "Thanksgiving dinner",
   "guests": [
-    {"name": "Michael", "avoid": ["tree nuts"], "notes": "peanuts OK"},
-    {"name": "Debbie", "avoid": ["tree nuts", "peanuts", "fish"], "notes": "shellfish OK"},
-    {"name": "Dad", "avoid": [], "limit": ["sugar"]}
+    {"name": "Alex", "avoid": ["tree nuts"], "notes": "peanuts OK"},
+    {"name": "Sam", "avoid": ["tree nuts", "peanuts", "fish"], "notes": "shellfish OK"},
+    {"name": "Jordan", "avoid": [], "limit": ["sugar"]}
   ]
 }

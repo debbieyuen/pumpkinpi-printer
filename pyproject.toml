@@ -1,0 +1,14 @@
+[project]
+name = "pumpkinpi"
+version = "1.0.0"
+description = "Raspberry Pi + Ender-3 V3 SE food printer that checks ingredients against guests' allergies with Perplexity, then pipes designs on desserts."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "Debbie Yuen" }]
+
+[project.urls]
+Repository = "https://github.com/debbieyuen/pumpkinpi-printer"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

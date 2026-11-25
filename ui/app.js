@@ -6,9 +6,9 @@ const $ = (id) => document.getElementById(id);
 const READY_AT = 0.9;
 
 const DEMO_GUESTS = [
-  { name: "Michael", avoid: ["tree nuts"] },
-  { name: "Debbie", avoid: ["tree nuts", "peanuts", "fish"] },
-  { name: "Dad", avoid: [] }, { name: "Mom", avoid: [] }, { name: "Kathy", avoid: [] },
+  { name: "Alex", avoid: ["tree nuts"] },
+  { name: "Sam", avoid: ["tree nuts", "peanuts", "fish"] },
+  { name: "Dad", avoid: [] }, { name: "Mom", avoid: [] }, { name: "Jordan", avoid: [] },
 ];
 // Sample mode (no Pi): real store products and labels from demo.json, and the pie drawn from your words
 // with the same shapes and single-stroke fonts as shapes.py (ui/shapes.json, from scripts/export_ui_shapes.py).
@@ -147,7 +147,7 @@ function samplePlan(said, cur, keepBase) {
   const notes = [SAMPLE.plan.allergy_notes];
   if (pie) notes.push("Low sugar for Dad and Mom: the Libby's recipe uses 3/4 cup sugar; many bakers cut it to 1/2 cup. Pillsbury crusts are made with lard (not vegan).");
   if (keys.includes("hersheys")) notes.unshift("Hershey's chips list natural flavor, so PumpkinPi asks you to check the label; Enjoy Life is the nut-free-facility swap.");
-  if (keys.includes("mms")) notes.unshift("M&M's Milk Chocolate says \"May contain peanuts\": not for Debbie.");
+  if (keys.includes("mms")) notes.unshift("M&M's Milk Chocolate says \"May contain peanuts\": not for Sam.");
   const shapeName = { cat: "cat", dog: "dog", heart: "heart", star: "star", smiley: "smiley", pumpkin: "pumpkin", leaf: "leaf", text: "name" }[d.shape];
   return { ...SAMPLE.plan, ...d, ingredients: prods.map((p) => p.ingredient), products: prods,
     topping_type: state.toppingType, pie, base: keepBase || base, makes: base !== "pie" ? `${base[0].toUpperCase()}${base.slice(1)} topping` : "", topping: pie ? `Pumpkin pie + ${TOPS[tt].label.toLowerCase()}` : TOPS[tt].label, sources: pie ? [...SAMPLE.pie.sources, ...(SAMPLE.plan.sources || [])] : SAMPLE.plan.sources,
@@ -1128,7 +1128,7 @@ $("more").onclick = (e) => {
   state.addLayer = true; state.toppingType = b.dataset.more; $("more").hidden = true;
   renderDiets(); show("recipe");
   const el = $("prompt"); el.value = ""; state.prompt = "";
-  el.placeholder = `What should the ${state.tops[b.dataset.more].label.toLowerCase()} add? e.g. Debbie in cursive`;
+  el.placeholder = `What should the ${state.tops[b.dataset.more].label.toLowerCase()} add? e.g. Sam in cursive`;
   syncClear(); el.focus();
 };
 

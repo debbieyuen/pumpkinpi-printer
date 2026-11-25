@@ -12,7 +12,7 @@ def run(plan):
 
 
 def test_simple_designs_are_ok():
-    for p in [dict(shape="cat", text="Debbie", font="cursive"), dict(shape="heart"), dict(shape="text", text="Michael"),
+    for p in [dict(shape="cat", text="Sam", font="cursive"), dict(shape="heart"), dict(shape="text", text="Alex"),
               dict(shape="text", text="Happy Thanksgiving")]:
         assert run(p) == {"level": "ok", "reasons": [], "try": ""}
 
@@ -31,7 +31,7 @@ def test_long_message_is_cut_and_reported():
 
 
 def test_tiny_letters_on_a_small_dish():
-    r = run(dict(shape="cat", text="Michael", fit_r=18))
+    r = run(dict(shape="cat", text="Alex", fit_r=18))
     assert r["level"] == "too_much" and "mm tall" in r["reasons"][0]
 
 

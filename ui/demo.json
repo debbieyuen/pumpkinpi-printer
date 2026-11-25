@@ -471,8 +471,8 @@
    {
     "allergen": "tree nuts",
     "guests": [
-     "Michael",
-     "Debbie"
+     "Alex",
+     "Sam"
     ],
     "names": [
      "almond milk",
@@ -532,7 +532,7 @@
    {
     "allergen": "peanuts",
     "guests": [
-     "Debbie"
+     "Sam"
     ],
     "names": [
      "arachis oil",
@@ -559,7 +559,7 @@
       "risk": "peanuts and tree nuts are often processed together"
      }
     ],
-    "tip": "Michael can have peanuts but Debbie can't, so the shared pie avoids them.",
+    "tip": "Alex can have peanuts but Sam can't, so the shared pie avoids them.",
     "sources": [
      {
       "title": "FARE: Food allergy field guide",
@@ -574,7 +574,7 @@
    {
     "allergen": "fish",
     "guests": [
-     "Debbie"
+     "Sam"
     ],
     "names": [
      "anchovy",
