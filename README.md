@@ -1,7 +1,7 @@
 # PumpkinPi
 
 [![tests](https://github.com/debbieyuen/pumpkinpi-food-printer/actions/workflows/tests.yml/badge.svg)](https://github.com/debbieyuen/pumpkinpi-food-printer/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-orange.svg)](LICENSE)
 
 A Thanksgiving food printer built from a Raspberry Pi 5 and a Creality Ender-3 V3 SE. Type what you want on the
 touchscreen ("a smiley face in chocolate for Alex"). [Perplexity](https://docs.perplexity.ai) plans the design and
@@ -224,6 +224,9 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md), [CODE_OF_CONDUCT.md](.github/COD
 
 ## License
 
-The code, CAD scripts and docs are under the [MIT License](LICENSE). Bundled third-party files (three.js, the Inter
-font, Open Food Facts photos and the Perplexity logos) keep their own licenses. See
-[licenses/README.md](licenses/README.md).
+The code, CAD scripts and docs are under the [GNU General Public License v3.0](LICENSE) or (at your option) any
+later version. You can use, change and share them, but if you share a changed version you have to release its
+source under the same license. Bundled third-party files (three.js, the Inter font, Open Food Facts photos and the
+Perplexity logos) keep their own licenses. See [licenses/README.md](licenses/README.md).
+
+Copyright (C) 2026 Debbie Yuen

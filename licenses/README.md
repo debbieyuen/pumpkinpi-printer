@@ -1,7 +1,7 @@
 # Third-party notices
 
-PumpkinPi's own code, CAD scripts and docs are under the [MIT License](../LICENSE). These bundled
-files keep their own licenses and are **not** covered by the MIT License:
+PumpkinPi's own code, CAD scripts and docs are under the [GNU GPL v3.0 or later](../LICENSE). These bundled
+files keep their own licenses and are **not** covered by the GPL:
 
 | Path | What | License |
 |---|---|---|
