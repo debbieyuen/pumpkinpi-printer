@@ -14,7 +14,7 @@ command -v chromium >/dev/null || command -v chromium-browser >/dev/null || sudo
 echo ">>> Python venv"
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-dev.txt
 
 echo ">>> Serial port access (takes effect after reboot)"
 sudo usermod -aG dialout "$USER"

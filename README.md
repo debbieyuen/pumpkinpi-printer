@@ -1,35 +1,70 @@
 # PumpkinPi
 
-A Thanksgiving food printer: type what you want on the Raspberry Pi touchscreen ("a smiley face in chocolate for Michael"), Perplexity plans the design, checks every ingredient against each guest's allergies, confirms the pie is in place, and then a syringe extruder on a Creality Ender 3 V3 SE pipes it onto a mini pumpkin pie.
+[![tests](https://github.com/debbieyuen/pumpkinpi-printer/actions/workflows/tests.yml/badge.svg)](https://github.com/debbieyuen/pumpkinpi-printer/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
+
+A Thanksgiving food printer built from a Raspberry Pi 5 and a Creality Ender-3 V3 SE. Type what you want on the
+touchscreen ("a smiley face in chocolate for Alex"). [Perplexity](https://docs.perplexity.ai) plans the design and
+checks every ingredient against each guest's allergies. The camera confirms the pie is in place, and then a 60 mL
+syringe extruder pipes the design onto a mini pumpkin pie. With the stock hot end, it can also print allergen
+menu cards for each guest in PLA on watercolor paper.
 
 The machine won't make your food until it has checked that it's safe for you.
 
+![Syringe carriage on the Ender-3 V3 SE print head](cad/out/assembly.png)
+
+> [!WARNING]
+> **The allergen check is an aid, not a guarantee.** It reads web pages and labels that can be wrong, out of date
+> or about a different version of the product. Always read the label on the package in your hand, and ask guests
+> about their allergies yourself. This project is not medical advice.
+>
+> **Food printing is at your own risk.** Only food-safe parts (the syringe and tips) should touch food. The printed
+> PETG carriage and pusher are not food contact parts. Keep food off the bed whenever the printer homes, probes or
+> heats.
+
 ## How it works
 
-1. **Prompt** – type on the touchscreen (built-in on-screen keyboard).
-2. **Plan** – Perplexity **Agent API** (`/v1/agent`, web search tool, JSON schema output) picks a shape (smiley, heart, star, text), the guest's name, topping, ingredient list and recipe that avoids every guest's allergens.
-3. **Check ingredients** – for each ingredient, the **Search API** (`/search`) finds label pages, then one **Decisions API** call (`/v1/decisions`) scores "is this evidence about this product", "natural flavor listed" and "contains / may contain" for each allergen. Green only when the evidence is relevant and every allergen is unlikely; otherwise yellow ("check the label") or red.
-4. **Pie ready** – the camera photo goes to the Decisions API; Start stays locked below 0.90.
-5. **Toolpath** – single-stroke Hershey font + shapes, kept inside a 45 mm radius, bounds-checked G-code.
-6. **You press Start** – dry run first (15 mm above the pie, no plunger). Heaters off, `M302 P1`, no homing in food mode. **STOP sends `M112` at any step.**
+1. **Prompt**: type on the touchscreen (built-in on-screen keyboard).
+2. **Plan**: the Perplexity **Agent API** (`/v1/agent`, web search tool, JSON schema output) picks a shape (smiley,
+   heart, star, text), the guest's name, topping, ingredient list and recipe that avoids every guest's allergens.
+3. **Check ingredients**: for each ingredient, the **Search API** (`/search`) finds label pages. Then one
+   **Decisions API** call (`/v1/decisions`) scores "is this evidence about this product", "natural flavor listed"
+   and "contains / may contain" for each allergen. It's green only when the evidence is relevant and every
+   allergen is unlikely. Otherwise it's yellow ("check the label") or red.
+4. **Pie ready**: the camera photo goes to the Decisions API. Start stays locked below 0.90.
+5. **Toolpath**: single-stroke Hershey fonts plus shapes, kept inside a 45 mm radius, with bounds-checked G-code.
+6. **You press Start**: dry run first (15 mm above the pie, no plunger). Heaters off, `M302 P1`, no homing in food
+   mode. **STOP sends `M112` at any step.**
 
-## Layout
+## Hardware
 
-| Path | What it is |
+| Part | Notes |
 |---|---|
-| `pumpkinpi/server.py` | Local web server + API for the touchscreen (127.0.0.1:8000) |
-| `pumpkinpi/pplx.py` | Perplexity Agent, Search and Decisions API client (key from env) |
-| `pumpkinpi/design.py` | Prompt → design plan (Agent API, structured output) |
-| `pumpkinpi/allergen_check.py` | Safety gate: Search API evidence + Decider per allergen |
-| `pumpkinpi/pie_ready.py` | Camera "pie in place" check |
-| `pumpkinpi/shapes.py` | Smiley / heart / star / name strokes |
-| `pumpkinpi/toolpath.py` | Strokes → G-code, bounds check, dry run, calibration |
-| `pumpkinpi/printer.py` | USB serial control, food-mode lockout (blocks G28/G29/heaters), M112 stop |
-| `pumpkinpi/doctor.py` | Preflight check (key, guests, serial, camera) |
-| `ui/` | Touchscreen app (HTML/JS/CSS); demo mode when opened without the server |
-| `scripts/setup_pi.sh` | One-time Pi setup: venv, service, kiosk |
-| `machine.example.json` | Pie position and syringe settings. Copy to `machine.json` |
-| `guests.example.json` | Example guest list. Copy to `guests.json` (git-ignored) |
+| [Creality Ender-3 V3 SE](https://www.creality.com/products/creality-ender-3-v3-se) | Stock Marlin firmware, CR Touch, 220 x 220 mm bed |
+| [Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/) (8 GB used) | Raspberry Pi OS with desktop |
+| [Raspberry Pi Touch Display 2](https://www.raspberrypi.com/documentation/accessories/touch-display-2.html) | Kiosk UI |
+| [Raspberry Pi Camera Module 3](https://www.raspberrypi.com/documentation/accessories/camera.html) | Fixed above the bed, not on the head |
+| NEMA 17 pancake stepper + Tr8x2 lead screw (150 mm) | Drives the plunger from the printer's E axis |
+| 60 mL Luer-lock syringe + tapered tips | Food contact parts |
+| Printed parts (PETG) | `cad/`: carriage, plunger pusher, camera post, display feet, pie locator |
+| M2/M3 screws and M3 nuts | See `cad/README.md` |
+
+The Pi talks to the printer over USB serial (115200 baud) with pyserial. No Klipper or OctoPrint needed.
+
+## Try it without a Pi
+
+The touchscreen app has a demo mode with sample data. Open `ui/index.html` in a browser, or run the server on any
+computer:
+
+```bash
+git clone https://github.com/debbieyuen/pumpkinpi-printer.git && cd pumpkinpi-printer
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -q             # offline: mocked API, no key, no printer
+cp .env.example .env                       # add PERPLEXITY_API_KEY to use the real APIs
+.venv/bin/python -m pumpkinpi.server       # http://127.0.0.1:8000
+```
+
+You need a [Perplexity API key](https://docs.perplexity.ai) for live planning and allergen checks.
 
 ## Setup on the Pi
 
@@ -37,17 +72,52 @@ The machine won't make your food until it has checked that it's safe for you.
 ssh <user>@pumpkinpi.local
 git clone https://github.com/debbieyuen/pumpkinpi-printer.git && cd pumpkinpi-printer
 bash scripts/setup_pi.sh
-nano .env            # PERPLEXITY_API_KEY=...   (never commit or show on camera)
+nano .env            # PERPLEXITY_API_KEY=...   (never commit it or show it on camera)
 nano guests.json     # names + allergies
 sudo reboot
 ```
 
-After reboot the server starts on its own and the touchscreen opens the app full screen. Rotate Touch Display 2 to landscape in **Preferences → Control Centre → Screens → DSI-1 → Orientation**.
+After reboot, the server starts on its own and the touchscreen opens the app full screen. To rotate Touch Display 2
+to landscape, go to **Preferences → Control Centre → Screens → DSI-1 → Orientation**.
 
 ```bash
-cd ~/pumpkinpi-printer && .venv/bin/python -m pumpkinpi.doctor
+cd ~/pumpkinpi-printer && .venv/bin/python -m pumpkinpi.doctor   # preflight: key, guests, serial, camera
 sudo systemctl status pumpkinpi     # server logs: journalctl -u pumpkinpi -f
 ```
+
+### Config files
+
+All of these are git-ignored. `setup_pi.sh` creates them from the `*.example.json` files.
+
+| File | What |
+|---|---|
+| `.env` | `PERPLEXITY_API_KEY`, optional `PRINTER_PORT`, `PUMPKINPI_SHOW_HEALTH` |
+| `guests.json` | Guest names, allergens to `avoid`, things to `limit`, private `notes` |
+| `machine.json` | Pie position, syringe and topping settings, PLA card settings |
+| `cards.json` | Menu, exact branded products and card layout (falls back to `cards.example.json`) |
+| `camera_cal.json` | Written by "Save as center" |
+
+## Code layout
+
+| Path | What it is |
+|---|---|
+| `pumpkinpi/server.py` | Local web server + API for the touchscreen (127.0.0.1:8000) |
+| `pumpkinpi/pplx.py` | Perplexity Agent, Search and Decisions API client (key from env) |
+| `pumpkinpi/design.py` | Prompt → design plan (Agent API, structured output) |
+| `pumpkinpi/allergen_check.py` | Safety gate: Search API evidence + Decisions API per allergen |
+| `pumpkinpi/allergens.py`, `allergy_guide.py` | Allergen names, hidden sources and guest guide |
+| `pumpkinpi/label_scan.py` | Read an ingredient label from a camera photo |
+| `pumpkinpi/menu_plan.py`, `menu_science.py`, `products.py` | Menu planning, food science notes, product photos |
+| `pumpkinpi/pie_ready.py`, `vision.py` | "Pie in place" check and dish/crust detection (OpenCV) |
+| `pumpkinpi/shapes.py`, `toolpath.py`, `detail.py` | Shapes and fonts → G-code, bounds check, dry run, "too much detail" rules |
+| `pumpkinpi/cards.py` | PLA menu cards on paper |
+| `pumpkinpi/printer.py` | USB serial control, food-mode lockout (blocks G28/G29/G30/heaters), M112 stop, SD upload |
+| `pumpkinpi/camera.py`, `timelapse.py` | Camera stills and timelapse clips |
+| `pumpkinpi/doctor.py` | Preflight check |
+| `ui/` | Touchscreen app (HTML/JS/CSS); demo mode when opened without the server |
+| `cad/` | Parametric CadQuery models for the syringe add-on ([cad/README.md](cad/README.md)) |
+| `scripts/` | Pi setup, kiosk and card print presets |
+| `tests/` | Offline pytest suite |
 
 ## Too much detail
 
@@ -70,7 +140,7 @@ It offers a simpler idea ("Try that" sends it as a change) or "Keep mine". It ne
   Clips land in `captures/timelapse/` as a 4:3 MP4 and a 9:16 `-vertical.mp4` for the video. Copy them to a laptop:
 
   ```
-  scp debbiepumpkinpi@pumpkinpi.local:~/pumpkinpi-printer/captures/timelapse/*.mp4 .
+  scp <user>@pumpkinpi.local:~/pumpkinpi-printer/captures/timelapse/*.mp4 .
   ```
 
 - **Dish and crust**: Check pie takes one photo. Decider says if it's ready, the Agent API says what it is (pumpkin pie,
@@ -91,20 +161,7 @@ It offers a simpler idea ("Try that" sends it as a change) or "Keep mine". It ne
 4. Plunger rate: `.venv/bin/python -m pumpkinpi.toolpath --calibrate` and adjust `e_per_mm`.
 5. Then only cold, no-homing runs with food: always **Dry run** first.
 
-## Tests
-
-```bash
-.venv/bin/python -m pytest -q      # offline (mocked API, no key, no printer)
-```
-
-## Safety
-
-- Never home or run auto Z offset with food on the bed (food mode blocks `G28`, `G29`, `G30`, heater commands).
-- Frosting mode: heaters off, `M302 P1`, slow speed. STOP sends `M112`.
-- A person presses Start. The allergen check is an aid, not a guarantee. Always read the label.
-- Guests' diet/health notes are hidden on screen unless `PUMPKINPI_SHOW_HEALTH=1` (get consent first).
-
-### Toppings, pause and drip test
+## Toppings, pause and drip test
 
 Three syringes: **melted chocolate** (melted chips), **frosting** and **melted marshmallow**. Pick one with the chips on the Recipe screen. Each has its own starting settings in `pumpkinpi/toolpath.py` (`TOPPINGS`), and your measured values are saved per topping under `"toppings"` in `machine.json`:
 
@@ -120,3 +177,48 @@ These are estimates; tune them with the drip test.
 - **Drip test** (Camera tab): put a plate with parchment where the food goes, tap Drip test. It pipes one 4 cm line, pulls back with no pause and lifts 3 mm. Tap "Drip stopped" when the tip stops oozing; it suggests a pause (ooze time + 0.3 s, max 8 s, plus more pull-back if over 3 s). Tap Save.
 - **Layers**: after a topping is piped, tap "Add another topping" (e.g. frosting after chocolate). Swap the syringe, tap Loaded. Earlier layers stay on the preview, and Send stays locked until the right syringe is loaded.
 - **tip_offset**: if a nozzle is longer or shorter than the one you set `z_surface` with, measure the difference with an empty bed and save it as that topping's `tip_offset` (mm; positive = longer tip, so the carriage stays higher; negative = shorter tip).
+
+## Menu cards (PLA on paper)
+
+`pumpkinpi/cards.py` turns the menu in `cards.json` into a card for each guest. Each card lists every dish, with
+the allergens Perplexity found in its exact branded products. A `?` means "check the label". Nothing is ever printed
+as safe. Cards use the stock hot end with PLA, and the syringe must sit above the nozzle tip.
+
+```bash
+.venv/bin/python -m pumpkinpi.cards --check            # run the allergen check for the menu (uses the API)
+.venv/bin/python -m pumpkinpi.cards --guest Alex --gcode > card.gcode
+```
+
+Presets for `machine.json`:
+
+- `python3 scripts/paper_6x9.py`: 6 x 9 in, 140 lb watercolor paper (bed off, cool nozzle, fan 100 %, tape all edges).
+- `python3 scripts/measure_paper.py`: measures paper thickness with the CR Touch so the prime line reaches the bed.
+  Stop the server first (`sudo systemctl stop pumpkinpi`). Only paper on the bed.
+- `python3 scripts/bare_bed.py`: prints straight on the bare bed instead of paper.
+
+The Ender-3 V3 SE reads files from the top folder of its SD card. The server saves cards there and checks file names.
+
+## Safety
+
+- Never home or run auto Z offset with food on the bed. Food mode blocks `G28`, `G29`, `G30` and heater commands.
+- Frosting mode: heaters off, `M302 P1`, slow speed. STOP sends `M112`.
+- A person presses Start. The allergen check is an aid, not a guarantee. Always read the label.
+- Guests' diet and health notes stay hidden on screen unless `PUMPKINPI_SHOW_HEALTH=1`. Get consent first.
+
+## Tests
+
+```bash
+.venv/bin/python -m pytest -q      # offline (mocked API, no key, no printer)
+```
+
+GitHub Actions runs the same tests on every push and pull request.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md).
+
+## License
+
+The code, CAD scripts and docs are under the [MIT License](LICENSE). Bundled third-party files (three.js, the Inter
+font, Open Food Facts photos and the Perplexity logos) keep their own licenses. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
