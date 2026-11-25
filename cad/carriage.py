@@ -18,7 +18,7 @@ from head_geometry import right_plate
 
 PLATE_X, HOLES = right_plate()
 SPINE_T = 6.0
-# v1.2: the stock head screws are M2 (Debbie, 2026-11-21), so the head-mount holes are M2.
+# v1.2: the stock head screws are M2 (author, 2026-11-21), so the head-mount holes are M2.
 HOLE_D = 2.5                          # M2 clearance (ISO 273 medium = 2.4) + 0.1 for print shrink
 CBORE_D, CBORE_DEPTH = 4.6, 2.0       # M2 socket head is 3.8 mm -> new screw = stock screw + 4 mm
 HOLE_SLOT = 1.7                       # each hole is a short slot along the line between the two holes,

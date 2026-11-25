@@ -1,4 +1,4 @@
-"""Shaded previews: python3 cad/render.py  -> out/assembly.png, out/parts.png"""
+"""Previews: python3 cad/render.py -> out/assembly.png (via render_vtk.py) and out/plate.png"""
 import sys, tempfile
 from pathlib import Path
 import numpy as np, trimesh, cadquery as cq
@@ -31,33 +31,10 @@ def setup(ax, pts, elev, azim, title):
 
 
 def assembly():
+    """The hero image now comes from render_vtk.py (proper depth sorting, see-through barrel)."""
     sys.path.insert(0, str(HERE))
-    import carriage as C, plunger_pusher as P
-    from head_geometry import toolhead_solid
-    from params import BARREL_OD, FLANGE_WIDTH, FLANGE_DEPTH, FLANGE_THICK, MOTOR_W, MOTOR_LEN
-    head = mesh(toolhead_solid())
-    car = mesh(C.build())
-    cyl = lambda x, y, r, z0, z1: cq.Workplane("XY").workplane(offset=z0).center(x, y).circle(r).extrude(z1 - z0)
-    syr = mesh(cyl(C.SX, C.SY, BARREL_OD / 2, C.BARREL_Z0, C.FLANGE_Z)
-               .union(cyl(C.SX, C.SY, 3, C.BARREL_Z0 - 18, C.BARREL_Z0))
-               .union(C.box(C.SX - FLANGE_WIDTH / 2, C.SX + FLANGE_WIDTH / 2, C.SY - FLANGE_DEPTH / 2,
-                            C.SY + FLANGE_DEPTH / 2, C.FLANGE_Z, C.FLANGE_Z + FLANGE_THICK)))
-    zp = 200.0
-    plunger = mesh(cyl(C.SX, C.SY, 12, C.FLANGE_Z, zp + 5).union(cyl(C.SX, C.SY, 17, zp + 3, zp + 5)))
-    mot = mesh(C.box(C.MX - MOTOR_W / 2, C.MX + MOTOR_W / 2, C.MY - MOTOR_W / 2, C.MY + MOTOR_W / 2,
-                     C.MOTOR_PLATE_TOP - C.MOTOR_PLATE_T - MOTOR_LEN, C.MOTOR_PLATE_TOP - C.MOTOR_PLATE_T))
-    scr = mesh(cyl(C.MX, C.MY, 4, C.MOTOR_PLATE_TOP + 14, C.MOTOR_PLATE_TOP + 164)
-               .union(cyl(C.MX, C.MY, 10, C.MOTOR_PLATE_TOP + 1, C.MOTOR_PLATE_TOP + 26)))
-    push = mesh(P.build().translate((C.SX, C.SY, zp)))
-    fig = plt.figure(figsize=(14, 7.5))
-    for k, (el, az, t) in enumerate([(18, -60, "Front-right view"), (20, 30, "Back-right view")]):
-        ax = fig.add_subplot(1, 2, k + 1, projection="3d")
-        for m, col, a in [(head, "#9a9a9a", 1), (syr, "#cfe8ff", 0.55), (plunger, "#ffffff", 0.6),
-                          (mot, "#444444", 1), (scr, "#b8b8b8", 1), (car, "#f28c28", 1), (push, "#f2b028", 1)]:
-            draw(ax, m, col, a)
-        setup(ax, np.vstack([head.vertices, car.vertices, scr.vertices]), el, az, t)
-    fig.suptitle("PumpkinPi syringe carriage on the Ender-3 V3 SE print head (grey = reference model)", fontsize=12)
-    plt.tight_layout(); fig.savefig(OUT / "assembly.png", dpi=110); print(OUT / "assembly.png")
+    import render_vtk
+    render_vtk.views()
 
 
 def plate():

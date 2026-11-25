@@ -8,7 +8,7 @@ requires-python = ">=3.11"
 authors = [{ name = "Debbie Yuen" }]
 
 [project.urls]
-Repository = "https://github.com/debbieyuen/pumpkinpi-printer"
+Repository = "https://github.com/debbieyuen/pumpkinpi-food-printer"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

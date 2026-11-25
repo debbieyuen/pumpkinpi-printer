@@ -1,6 +1,6 @@
 """Piping strokes (mm, pie-centered) -> G-code for the syringe, with hard bounds checks.
 
-Machine numbers live in machine.json (git-ignored; copy machine.example.json). Measure them
+Machine numbers live in machine.json (git-ignored; copy examples/machine.example.json). Measure them
 with the bed EMPTY first, then once with the pie on, never homing with food on the bed:
 
   pie_x, pie_y   printer X/Y (from M114) when the SYRINGE TIP is over the pie center

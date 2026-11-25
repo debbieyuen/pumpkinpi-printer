@@ -12,15 +12,17 @@ ROOT = Path(__file__).resolve().parents[1]
 def update(name: str, key: str, values: dict) -> None:
     path = ROOT / name
     if not path.exists():
-        shutil.copy(ROOT / name.replace(".json", ".example.json"), path)
+        shutil.copy(ROOT / "examples" / name.replace(".json", ".example.json"), path)
     data = json.loads(path.read_text())
     data.setdefault(key, {}).update(values)
     path.write_text(json.dumps(data, indent=1) + "\n")
     print(f"{name} {key}: {values}")
 
 
-update("cards.json", "card", {"w": 152.4, "h": 228.6, "margin": 15})
+update("cards.json", "card", {"w": 152.4, "h": 228.6, "margin": 15, "simple_mm": 5.5, "simple_avoid_mm": 5.0})
 _m = ROOT / "machine.json"
 _paper = json.loads(_m.read_text()).get("pla", {}).get("paper_measured", 0.0) if _m.exists() else 0.0
-update("machine.json", "pla", {"surface": "paper", "first_flow": 1.3, "first_feed": 480, "paper_mm": _paper, "nozzle": 215, "bed": 0, "fan": 255, "card_x": 34, "card_y": -4, "layer": 0.2, "layers": 2, "z_adjust": 0.0, "first_z": 0.1})
+update("machine.json", "pla", {"surface": "paper", "first_flow": 1.3, "first_feed": 480, "paper_mm": _paper, "nozzle": 215, "bed": 0, "fan": 255, "card_x": 34, "card_y": -4, "layer": 0.2, "layers": 2, "z_adjust": 0.0, "first_z": 0.1,
+                               "retract": 1.5, "end_pause": 0.0, "hop": 4.0, "hop_feed": 1200,
+                               "retract_feed": 2700, "unretract_feed": 2700, "wipe": 0.0, "line_w": 0.45, "travel": 6000})
 print("Now: tape all 4 edges, front-left corner at X34 Y-4 (4 mm in front of the bed edge). The printer finds the paper itself when it homes.")

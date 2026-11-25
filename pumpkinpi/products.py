@@ -21,7 +21,7 @@ import httpx
 
 OFF = "https://world.openfoodfacts.org"
 OFF_SEARCH = "https://search.openfoodfacts.org/search"
-UA = "PumpkinPi/1.0 (github.com/debbieyuen/pumpkinpi-printer)"
+UA = "PumpkinPi/1.0 (github.com/debbieyuen/pumpkinpi-food-printer)"
 FIELDS = "code,product_name,brands,quantity,image_front_url,ingredients_text,allergens_tags,traces_tags"
 
 

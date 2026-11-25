@@ -1008,13 +1008,14 @@ function cardSteps(j) {
   return s.map((t) => `<li>${t}</li>`).join("");
 }
 function cardPop(mode, j = {}) {
-  const pop = $("cardPop"), up = mode === "copy", ok = mode === "ok";
+  // make: building the G-code (shown the moment Print card is pressed); copy: writing it to the SD card
+  const pop = $("cardPop"), make = mode === "make", up = mode === "copy" || make, ok = mode === "ok";
   pop.hidden = false; pop.dataset.mode = mode;
   $("cpIcon").textContent = up ? "" : ok ? "✓ 🎉" : "✗";
-  $("cpTitle").textContent = up ? "Copying to the printer's SD card…"
-    : ok ? "Uploaded to the SD card" : "Couldn't put it on the SD card";
+  $("cpTitle").textContent = make ? "Making the card…" : up ? "Copying to the printer's SD card…"
+    : ok ? "Uploaded to the SD card" : j.refused ? "Couldn't make the card" : "Couldn't put it on the SD card";
   $("cpName").innerHTML = j.sd_file ? `File: <b>${j.sd_file}</b>` : "";
-  $("cpBar").hidden = $("cpPct").hidden = !up;
+  $("cpBar").hidden = $("cpPct").hidden = mode !== "copy";
   $("cpFill").style.width = `${j.pct || 0}%`;
   $("cpPct").textContent = `${j.pct || 0}%`;
   $("cpSteps").hidden = true;
@@ -1028,6 +1029,7 @@ function cardPop(mode, j = {}) {
 $("cpDone").onclick = () => { $("cardPop").hidden = true; };
 async function plaJob(path, body, what) {
   $("cardSteps").hidden = true;
+  cardPop("make");                      // right away, so a press never looks like nothing happened
   try {
     await apiJson(path, { ...body, confirm: true });
     state.job = true; renderCards(); cardPop("copy");
@@ -1044,7 +1046,10 @@ async function plaJob(path, body, what) {
         break;
       }
     }
-  } catch (e) { log(`${what} refused: ${e.message}`); $("cardPop").hidden = true; }
+  } catch (e) {                         // e.g. allergen list too long for the card: say why, in the popup
+    log(`${what} refused: ${e.message}`);
+    cardPop("fail", { error: e.message, refused: true });
+  }
   state.job = false; renderCards();
 }
 $("cardBtn").onclick = () => plaJob("/api/cards/print", { guest: cards.guest, side: cards.side }, `Copying ${cards.guest}'s card to the SD card`);

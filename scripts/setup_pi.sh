@@ -14,15 +14,15 @@ command -v chromium >/dev/null || command -v chromium-browser >/dev/null || sudo
 echo ">>> Python venv"
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pip install -r requirements.txt
 
 echo ">>> Serial port access (takes effect after reboot)"
 sudo usermod -aG dialout "$USER"
 
 echo ">>> Private files (git-ignored)"
 [ -f .env ] || { cp .env.example .env; chmod 600 .env; echo "    created .env  -> add PERPLEXITY_API_KEY with: nano .env"; }
-[ -f guests.json ] || { cp guests.example.json guests.json; echo "    created guests.json -> edit names/allergies"; }
-[ -f machine.json ] || { cp machine.example.json machine.json; echo "    created machine.json -> measure pie_x / pie_y / z_surface"; }
+[ -f guests.json ] || { cp examples/guests.example.json guests.json; echo "    created guests.json -> edit names/allergies"; }
+[ -f machine.json ] || { cp examples/machine.example.json machine.json; echo "    created machine.json -> measure pie_x / pie_y / z_surface"; }
 
 echo ">>> PumpkinPi server as a service (starts at boot, localhost only)"
 sudo tee /etc/systemd/system/pumpkinpi.service >/dev/null <<UNIT

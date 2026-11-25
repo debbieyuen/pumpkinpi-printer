@@ -1,4 +1,14 @@
-"""Plunger pusher v0.5 (v0.4 geometry, fixed solid): carries the Tr8x2 brass nut and presses on the syringe thumb pad.
+"""Plunger pusher v0.6: carries the Tr8x2 brass nut and presses on the syringe thumb pad.
+
+v0.6 (2026-11-21): pad pocket now opens toward -X (the print head side), mirrored from v0.5.
+The Tr8x2 screw is right-hand, so driving the nut DOWN turns the screw counterclockwise (seen
+from above) and friction drags the pusher counterclockwise too. With the arm pointing +Y from the
+screw, that swings the pocket toward -X. In v0.5 the open side was +X, so the pad slid out
+(the author's hand test). Now the closed wall is on +X and catches the pad.
+Loading: swing the pusher toward the head, slide the syringe in from +X, then swing the pusher
+back (clockwise) until the wall touches the pad.
+
+v0.5: v0.4 geometry with a fixed (valid) solid.
 
 v0.4 (2026-11-21): nut flange holes are M3 clearance (3.4 mm) with hex nut traps on the bottom;
 use 4x M3x16 + 4x M3 nuts. Nut lobe is 3 mm thicker on the bottom. Screw axis now 47 mm from the
@@ -34,6 +44,7 @@ SY = SCREW_DY                               # screw at (0, SY)
 # v1.1: M3 clearance holes + nut traps (the 2.8 mm self-tap pilots printed too small to take a screw).
 # The nut lobe is DROP mm thicker on the bottom so an M3x16 passes the flange, the lobe and a full nut.
 DROP = 3.0
+OPEN_DIR = -1                               # v0.6: pocket opens toward -X
 NUT_TRAP_AF = M3_NUT_AF + 0.3               # 5.8 mm across flats: M3 nut presses in
 NUT_TRAP_D = M3_NUT_THICK + 0.2             # 2.6 mm deep, nut sits flush
 
@@ -43,14 +54,14 @@ def build():
             .union(cq.Workplane("XY").workplane(offset=-DROP).center(0, SY).circle(R_NUT).extrude(H + DROP))
             .union(cq.Workplane("XY").center(0, SY / 2).rect(2 * R_NUT, abs(SY)).extrude(H)))
     # v0.5: round the outline BEFORE cutting holes. Filleting after the hex traps made an invalid
-    # solid, and the slicer filled the holes and nut traps in (Debbie's print, 2026-11-21).
+    # solid, and the slicer filled the holes and nut traps in (the author's print, 2026-11-21).
     try:
         body = body.edges("|Z").fillet(0.8)
     except Exception:
         pass
-    # pad pocket + stem slot, both open to +X
+    # pad pocket + stem slot, both open to -X (v0.6, see docstring)
     body = body.cut(cq.Workplane("XY").workplane(offset=LIP).circle(POCKET_D / 2).extrude(POCKET_H)
-                    .union(cq.Workplane("XY").workplane(offset=LIP).center(R_SYR, 0)
+                    .union(cq.Workplane("XY").workplane(offset=LIP).center(OPEN_DIR * R_SYR, 0)
                            .rect(2 * R_SYR, POCKET_D).extrude(POCKET_H)))
     # nut bore + 4 pilot holes
     body = body.cut(cq.Workplane("XY").workplane(offset=-DROP - 1).center(0, SY)

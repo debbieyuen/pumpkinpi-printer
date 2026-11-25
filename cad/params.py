@@ -1,6 +1,6 @@
 """Shared dimensions for PumpkinPi printed parts (all in mm).
 
-MEASURED = taken with calipers by Debbie on 2026-11-21 (photos in the project files).
+MEASURED = taken with calipers by the author on 2026-11-21 (photos in the project files).
 TYPICAL  = common T8 nut / NEMA 17 values from seller listings; confirm with calipers.
 ASSUMED  = placeholder until measured. Update and re-run the part scripts.
 """
@@ -53,4 +53,4 @@ LUER_Z = 5.0        # end of the syringe's Luer tip, above the nozzle tip.
 SCREW_DY = -47.0    # lead screw axis offset from the syringe axis (toward the front).
                     # v1.1: was -42; moved 5 mm forward so the back motor screw heads clear the web.
 MOTOR_SCREW_HEAD_D = 5.5   # M3 socket head
-MOTOR_SCREW_WALL_GAP = 3.0 # v1.1: min gap from a motor screw head to any wall (Debbie, 2026-11-21)
+MOTOR_SCREW_WALL_GAP = 3.0 # v1.1: min gap from a motor screw head to any wall (author, 2026-11-21)

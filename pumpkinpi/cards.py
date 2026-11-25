@@ -10,7 +10,7 @@ Every card lists the dishes, one short line each, with the allergens Perplexity 
     Sesame dip: sesame ?
     ? = ask the host
 
-How each line is made (cards.json, copy cards.example.json):
+How each line is made (cards.json, copy examples/cards.example.json):
   1. Every dish lists the exact products that go in it (brand + product + size).
   2. Search API finds each product's label pages; one Decider call per product answers
      "contains X?" for each term in TERMS (same gate as the pie: allergen_check.check_ingredient).
@@ -24,6 +24,7 @@ Printing (PLA, the stock hot end; the syringe stays mounted but must sit ABOVE t
 """
 from __future__ import annotations
 
+import functools
 import re
 import argparse
 import json
@@ -240,20 +241,37 @@ def check_menu(client, cfg: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------- layout (mm, card's front-left corner = 0,0)
-def text_line(s: str, h: float, font: str = "print") -> list[Stroke]:
-    """Single-stroke text, capital letters h mm tall, left edge at x=0, baseline at y=0 (descenders go below)."""
+@functools.lru_cache(maxsize=None)
+def _font(font: str):
+    """The Hershey font, loaded once (loading it for every line made one card take a minute on the Pi)."""
     from HersheyFonts import HersheyFonts
-    if not s.strip():
-        return []
     f = HersheyFonts()
     f.load_default_font(FONTS.get(font, "futural"))
     ref = [y for st in f.strokes_for_text("H") for _, y in st]
-    base, k = max(ref), h / ((max(ref) - min(ref)) or 1)   # raw Hershey y points down
+    return f, max(ref), (max(ref) - min(ref)) or 1
+
+
+@functools.lru_cache(maxsize=4096)
+def _unit_text(s: str, font: str) -> tuple:
+    """Strokes for s with capitals 1 unit tall, left edge at x=0, baseline at y=0 (cached: layout measures the
+    same words many times while it wraps and packs lines)."""
+    import unicodedata
+    # The Hershey fonts have no accented letters and silently drop them ("Nestlé" -> "Nestl"): print the plain
+    # letter instead (é -> e, ñ -> n).
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    if not s.strip():
+        return ()
+    f, base, span = _font(font)
     st = [list(x) for x in f.strokes_for_text(s)]
     if not st:
-        return []
+        return ()
     x0 = min(x for s_ in st for x, _ in s_)
-    return [[((x - x0) * k, (base - y) * k) for x, y in s_] for s_ in st]
+    return tuple(tuple(((x - x0) / span, (base - y) / span) for x, y in s_) for s_ in st)
+
+
+def text_line(s: str, h: float, font: str = "print") -> list[Stroke]:
+    """Single-stroke text, capital letters h mm tall, left edge at x=0, baseline at y=0 (descenders go below)."""
+    return [[(x * h, y * h) for x, y in st] for st in _unit_text(s, font)]
 
 
 def width(strokes: list[Stroke]) -> float:
@@ -514,27 +532,64 @@ def simple_avoid(cfg: dict, lines: list[dict], guest: str) -> list[str]:
     return out
 
 
-def simple_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
-    """Plain list card: name, then each section ("Hot Pot Menu:", "Dessert:", "Allergens:") left-aligned."""
+# Smallest letters that print cleanly in PLA with a 0.4 mm nozzle. Below this the strokes are ~1-3 mm long,
+# the 0.45 mm line fills the letters in, and short strokes don't stick to the bed or the paper.
+LINE_PITCH = 1.75                # baseline to baseline, in letter heights (see simple_rows)
+SIMPLE_MIN_MM = 5.0              # product names and section titles
+SIMPLE_AVOID_MIN_MM = 4.5        # "Allergens:" lines
+INGREDIENT_MIN_MM = 4.0          # label ingredients under a product
+
+
+def simple_rows(cfg: dict, lines: list[dict], guest: str, ingredients: bool = True,
+                menu: bool = True, short: bool = False) -> list[tuple]:
+    """Plain list card: name, then each section ("Hot Pot Menu:", "Dessert:", "Allergens:") left-aligned.
+    When the card is too full, layout() cuts the least important text first, never the letter size:
+    ingredients=False leaves out the label lines under each product (they are on the back),
+    short=True prints "brand + tag" instead of the full product name (so they share lines),
+    menu=False replaces the menu list with one line. The guest name and allergen lines are never cut."""
     card = cfg.get("card", {})
     W, m = card.get("w", 127.0), card.get("margin", 10.0)
-    h = card.get("simple_mm", 4.4)
-    ah = card.get("simple_avoid_mm", 3.8)
-    p, ap = h * 1.55, ah * 1.5
+    h = max(card.get("simple_mm", 5.5), SIMPLE_MIN_MM)
+    ah = max(card.get("simple_avoid_mm", 5.0), SIMPLE_AVOID_MIN_MM)
+    # Line pitch: this font rises 1.05 h above the baseline and descends 0.33 h (g, p, y), so 1.75 h leaves a
+    # clear ~0.37 h gap between a line's descenders and the next line's capitals. 1.4 h made them touch.
+    p, ap = h * LINE_PITCH, ah * LINE_PITCH
     rows = []
     if guest:
-        rows.append((guest, 8, "cursive", True, 14))
-    ih = h * 0.72                    # label ingredients under each product, a bit smaller
-    for title, items in simple_items(cfg).items():
-        rows.append((f"{title}:", h + 0.6, "print", False, p + 1))
-        for t, ing in items:
-            rows += [(x, h, "print", False, p) for x in wrap(t, h, W - 2 * m)]
-            if ing:
-                rows[-1] = rows[-1][:4] + (h * 1.35,)
-                rows += [(x, ih, "print", False, ih * 1.45) for x in wrap(" " + ing, ih, W - 2 * m)]
-                rows[-1] = rows[-1][:4] + (p + 1,)
-        rows[-1] = rows[-1][:4] + (p + 5,)
-    rows.append(("Allergens:", h + 0.6, "print", False, p + 1))
+        rows.append((guest, 8, "cursive", True, 12))
+    ih = max(h * 0.8, INGREDIENT_MIN_MM)   # label ingredients under each product, a bit smaller
+    max_w = W - 2 * m
+
+    def packed(names: list[str]) -> list[str]:
+        """Plain items share lines ("Ginger, Garlic, Scallions") so big letters still fit; never split a name."""
+        out: list[str] = []
+        for n in names:
+            if out and width(text_line(f"{out[-1]}, {n}", h)) <= max_w:
+                out[-1] += f", {n}"
+            else:
+                out.append(n)
+        return out
+
+    if not menu:
+        rows.append(("Full menu on the back.", h, "print", False, p + 3))
+    for title, items in (simple_items(cfg, short) if menu else {}).items():
+        rows.append((f"{title}:", h + 0.6, "print", False, p))
+        plain: list[str] = []
+        for i, (t, ing) in enumerate(items):
+            if not (ing and ingredients):
+                plain.append(t)
+                nxt = items[i + 1] if i + 1 < len(items) else None
+                if nxt and not (nxt[1] and ingredients):
+                    continue                      # keep collecting plain items
+                rows += [(x, h, "print", False, p) for ln in packed(plain) for x in wrap(ln, h, max_w)]
+                plain = []
+                continue
+            rows += [(x, h, "print", False, p) for x in wrap(t, h, max_w)]
+            rows[-1] = rows[-1][:4] + (h * 0.33 + ih * 1.05 + 0.4 * ih,)
+            rows += [(x, ih, "print", False, ih * LINE_PITCH) for x in wrap(" " + ing, ih, max_w)]
+            rows[-1] = rows[-1][:4] + (p + 1,)
+        rows[-1] = rows[-1][:4] + (p + 2,)
+    rows.append(("Allergens:", h + 0.6, "print", False, p))
     if not (cfg.get("allergies") or {}).get(guest):
         rows.append(("No food allergies on file", ah, "print", False, ap))
     else:
@@ -548,13 +603,39 @@ def simple_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
 OK_LINES = ("Everything else is okay.", "But double check labels.")
 
 
-def simple_items(cfg: dict) -> dict[str, list[tuple[str, str]]]:
+# Words that describe packaging or marketing, not what the product is. Dropped from names on a full card.
+FILLER = {"premade", "refrigerated", "premium", "pure", "100%", "cane", "granulated", "large", "grade", "a",
+          "white", "brown", "organic", "extra", "original", "classic", "natural", "all", "fresh", "count",
+          "deep", "dish", "easy", "family", "size", "value", "pack", "the", "and", "of", "with"}
+
+
+def short_name(full: str, brand: str = "", tag: str = "") -> str:
+    """A shorter but still true product name for a full card ("C&H sugar", "Libby's Pumpkin").
+
+    The planner's tag is used only when its words are in the product name: a tag can name the dish instead
+    ("pumpkin pie" on evaporated milk), and the card must never name the wrong product."""
+    if not brand:
+        return full                  # plain produce ("Fresh ginger") is already short
+    low = full.lower()
+    if tag and all(w.rstrip("s") in low for w in tag.lower().split()):
+        return f"{brand} {tag}"
+    words = [w for w in re.sub(r",.*$", "", full).split() if w.lower() not in FILLER]
+    return " ".join(words) or full
+
+
+def simple_items(cfg: dict, short: bool = False) -> dict[str, list[tuple[str, str]]]:
     """{section: [(exact product name, label ingredients or "")]}. Menus planned from a prompt carry the
     exact name ("card") and label per product; older configs only have the packed "simple" lines."""
     menu = [d for d in cfg.get("menu") or [] if any(isinstance(x, dict) and x.get("card") for x in d["products"])]
     if not menu:
-        return {k: [(t, "") for t in v] for k, v in (cfg.get("simple") or {}).items()}
-    return {d["name"]: [(x.get("card") or x["item"], x.get("ingredients", "")) for x in d["products"]] for d in menu}
+        # old saved menus pack several items per line ("Sky Ranch beef, Little Sheep lamb"): one item each,
+        # so simple_rows can re-pack them for the current letter size without splitting a name
+        return {k: [(x.strip(), "") for t in v for x in t.split(", ") if x.strip()]
+                for k, v in (cfg.get("simple") or {}).items()}
+    def name(x: dict) -> str:
+        full = x.get("card") or x["item"]
+        return short_name(full, x.get("brand", ""), x.get("tag", "")) if short else full
+    return {d["name"]: [(name(x), x.get("ingredients", "")) for x in d["products"]] for d in menu}
 
 
 def one_page_rows(cfg: dict, lines: list[dict], guest: str) -> list[tuple]:
@@ -649,15 +730,27 @@ def layout(cfg: dict, lines: list[dict], guest: str = "", side: str = "front") -
     if guest:
         rows.append((guest, 8, "cursive", True, 12))
     if card.get("style", "short") == "simple":
-        ks = (1, .92, .85, .78, .72, .66, .6)
-        for k in ks:                              # a longer menu: smaller letters until it fits one side
-            c = {**cfg, "card": {**card, "simple_mm": card.get("simple_mm", 4.4) * k,
-                                 "simple_avoid_mm": card.get("simple_avoid_mm", 3.8) * k}}
+        # A longer menu: smaller letters until it fits, never below the SIMPLE_*_MIN_MM sizes (simple_rows clamps).
+        # Cut order (least important first): ingredient lines, then full product names become "brand + tag",
+        # then the menu list. Never the allergen lines.
+        tries = ([(k, True, False, True) for k in (1, .92, .85, .78, .72, .66, .6)]
+                 + [(k, False, False, True) for k in (1, .9)] + [(k, False, True, True) for k in (1, .9)]
+                 + [(k, False, False, False) for k in (1, .9)])
+        seen = set()
+        for i, (k, ing, sh, mn) in enumerate(tries):
+            hk = max(card.get("simple_mm", 5.5) * k, SIMPLE_MIN_MM)
+            ak = max(card.get("simple_avoid_mm", 5.0) * k, SIMPLE_AVOID_MIN_MM)
+            if (hk, ak, ing, sh, mn) in seen and i < len(tries) - 1:
+                continue                          # same sizes after the minimum clamp: same result, skip
+            seen.add((hk, ak, ing, sh, mn))
+            c = {**cfg, "card": {**card, "simple_mm": hk, "simple_avoid_mm": ak}}
             try:                                  # start right under the top margin: room for labels + allergens
-                return draw_rows(simple_rows(c, lines, guest), W, H, m, top=True)[0]
-            except ValueError:
-                if k == ks[-1]:
-                    raise
+                return draw_rows(simple_rows(c, lines, guest, ingredients=ing, menu=mn, short=sh),
+                                 W, H, m, top=True)[0]
+            except ValueError as e:
+                if i == len(tries) - 1:
+                    raise ValueError(f"Allergen list too long for one card at readable letter sizes "
+                                     f"({SIMPLE_AVOID_MIN_MM} mm): use a bigger card. ({e})") from e
     if card.get("style", "short") == "one":
         return draw_rows(one_page_rows(cfg, lines, guest), W, H, m)[0]
     if card.get("style", "short") == "short":
@@ -703,6 +796,13 @@ class Pla:
     travel: float = 6000.0
     retract: float = 1.5           # direct drive; pulls the string back before a lift
     hop: float = 4.0               # lift high so strings (dot of an i) snap off
+    hop_feed: float = 1200.0       # mm/min for the lift (the firmware caps Z speed anyway)
+    retract_feed: float = 2700.0   # mm/min pulling back (OrcaSlicer PETG: 2400)
+    unretract_feed: float = 2700.0 # mm/min pushing back before a stroke (OrcaSlicer PETG: 1800)
+    wipe: float = 0.0              # mm to move back along the stroke after the retract, nozzle still down: the
+                                   # tip wipes its ooze onto the line instead of pulling a string to the next one
+    end_pause: float = 0.0         # seconds to hold still after the retract, before lifting: the line sets
+                                   # and the ooze stops, so the lift doesn't pull a short stroke off the bed
     prime_x: float = 5.0           # prime blob off the card, on bare bed
     prime_y: float = 5.0
     x_min: float = 2.0
@@ -737,6 +837,18 @@ def prime_lines(p: "Pla") -> list[str]:
     return ["M211 S0", *line, "M211 S1"] if z < 0.05 else line
 
 
+def wipe_point(st: Stroke, dist: float) -> tuple[float, float]:
+    """The point dist mm back along the stroke from its end (or its start, if the stroke is shorter)."""
+    left = dist
+    for (bx, by), (ax, ay) in zip(st[::-1], st[-2::-1]):     # walk from the end towards the start
+        seg = math.hypot(bx - ax, by - ay)
+        if seg >= left and seg > 0:
+            t = left / seg
+            return bx + (ax - bx) * t, by + (ay - by) * t
+        left -= seg
+    return st[0]
+
+
 def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
     """One file the printer runs on its own from the microSD: heat, home ON the card, prime off it, draw."""
     out = [f"M140 S{p.bed:.0f}", f"M104 S{p.nozzle:.0f}", "M107", "G90", "M83",
@@ -762,11 +874,17 @@ def card_gcode(strokes: list[Stroke], p: Pla) -> list[str]:
                 continue
             x, y = st[0]
             out += [f"G0 X{p.card_x + x:.2f} Y{p.card_y + y:.2f} F{p.travel:.0f}", f"G1 Z{z:.2f} F600",
-                    f"G1 E{p.retract:.2f} F2700"]
+                    f"G1 E{p.retract:.2f} F{p.unretract_feed:.0f}"]
             for (ax, ay), (bx, by) in zip(st, st[1:]):
                 e = math.hypot(bx - ax, by - ay) * p.e_per_mm * flow
                 out.append(f"G1 X{p.card_x + bx:.2f} Y{p.card_y + by:.2f} E{e:.5f} F{feed:.0f}")
-            out += [f"G1 E-{p.retract:.2f} F2700", f"G0 Z{zt:.2f} F1200"]
+            out.append(f"G1 E-{p.retract:.2f} F{p.retract_feed:.0f}")
+            if p.wipe > 0:
+                wx, wy = wipe_point(st, p.wipe)
+                out.append(f"G1 X{p.card_x + wx:.2f} Y{p.card_y + wy:.2f} F{p.travel / 2:.0f}")
+            if p.end_pause > 0:
+                out.append(f"G4 P{round(p.end_pause * 1000)}")
+            out.append(f"G0 Z{zt:.2f} F{p.hop_feed:.0f}")
     out += ["M104 S0", "M140 S0", "M107", f"G0 Z{p.park_z:.1f} F600",
             f"G0 X{p.park_x:.1f} Y{p.park_y:.1f} F{p.travel:.0f}", "M400", "M84", "M117 Card done"]
     check_bounds(out, p)
@@ -800,7 +918,7 @@ def check_bounds(lines: list[str], p: Pla) -> None:
 def load(path: Path = CARDS_FILE, use_menu: bool = True) -> dict:
     """Guests, allergies and card settings from cards.json; the menu from the last prompt if there is one."""
     from . import menu_plan
-    p = path if path.exists() else ROOT / "cards.example.json"
+    p = path if path.exists() else ROOT / "examples" / "cards.example.json"
     cfg = json.loads(p.read_text())
     m = menu_plan.saved() if use_menu else None
     if m:

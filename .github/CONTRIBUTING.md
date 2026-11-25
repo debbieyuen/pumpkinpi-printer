@@ -5,9 +5,9 @@ Thanks for helping. Issues and pull requests are welcome.
 ## Set up
 
 ```bash
-git clone https://github.com/debbieyuen/pumpkinpi-printer.git && cd pumpkinpi-printer
+git clone https://github.com/debbieyuen/pumpkinpi-food-printer.git && cd pumpkinpi-food-printer
 python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest -q     # offline: mocked API, no key, no printer, no camera
 ```
 

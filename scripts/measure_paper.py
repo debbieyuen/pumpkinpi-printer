@@ -40,7 +40,7 @@ if not 0.05 <= mm <= 0.6:
     sys.exit("That doesn't look like paper (0.05-0.6 mm). Check the card is taped flat at the left edge. Not saved.")
 path = ROOT / "machine.json"
 if not path.exists():
-    shutil.copy(ROOT / "machine.example.json", path)
+    shutil.copy(ROOT / "examples" / "machine.example.json", path)
 data = json.loads(path.read_text())
 data.setdefault("pla", {}).update(paper_mm=mm, paper_measured=mm)
 path.write_text(json.dumps(data, indent=1) + "\n")
