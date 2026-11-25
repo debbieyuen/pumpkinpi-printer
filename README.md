@@ -11,7 +11,10 @@ menu cards for each guest in PLA on watercolor paper.
 
 The machine won't make your food until it has checked that it's safe for you.
 
-![60 mL syringe in the orange carriage on the Ender-3 V3 SE print head, front and back views](cad/out/assembly.png)
+<p align="center">
+  <img src="cad/out/assembly.png" width="42%" alt="60 mL syringe in the orange carriage on the Ender-3 V3 SE print head, front and back views">
+  <img src="cad/renders/syringe_parts.png" width="57%" alt="Labelled parts sheet: carriage v1.2, plunger pusher v0.6 top and bottom, why the pocket opens toward the head, and the plateA3 bed layout">
+</p>
 
 > [!WARNING]
 > **The allergen check is an aid, not a guarantee.** It reads web pages and labels that can be wrong, out of date
